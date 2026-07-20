@@ -345,6 +345,13 @@ Trennung bei.
 abgelaufen), `-2` (Wartung), `-3` (technischer Fehler), `-4` (nicht berechtigt).
 Diese Zustände sind für den Aufrufer nicht sinnvoll weiterverarbeitbar.
 
+Bei `rc = -1` wird **kein** automatischer neuer Login versucht. Die Bibliothek
+ist zustandslos und besitzt die Zugangsdaten nach dem Login nicht mehr; ein
+stiller Neu-Login würde außerdem verschleiern, dass ein Vorgang möglicherweise
+schon übermittelt wurde. Stattdessen wird ein eigener Fehlertyp geworfen, an dem
+der Aufrufer den Fall eindeutig erkennt und selbst entscheidet, ob er eine neue
+Session öffnet und den Vorgang wiederholt.
+
 **Es wird nicht geworfen bei fachlichen `rc`.** `B1` „Kasse bereits
 registriert", `43` „Beleg fehlerhaft" und die übrigen rund fünfzig Codes sind
 erwartbare Geschäftszustände. Sie kommen als typisiertes Ergebnis zurück:
@@ -424,8 +431,8 @@ Vorprüfung und amtliche Prüfung ohne Umbau nebeneinander darstellen.
   `Betrag-Satz-Besonders`). Am Belegformat ändert sich laut Ankündigung nichts.
   Vor Implementierung des Code-Parsers ist die geltende Fassung in RIS
   gegenzuprüfen.
-- Die Session-Lebensdauer ist nicht dokumentiert. Verhalten bei `rc = -1`
-  (automatischer neuer Login oder Weitergabe an den Aufrufer) ist im
-  Implementierungsplan zu entscheiden.
+- Die Session-Lebensdauer ist nicht dokumentiert. Das Verhalten bei `rc = -1`
+  ist entschieden (siehe 4.4), die tatsächliche Lebensdauer bleibt aber
+  unbekannt und sollte im Testbetrieb gemessen und hier festgehalten werden.
 - Geschlossene Gesamtsysteme (`registrierung_ggs` und Verwandte) sind in
   Ausbaustufe 1 nicht enthalten. Aufnahme prüfen, sobald Bedarf besteht.
