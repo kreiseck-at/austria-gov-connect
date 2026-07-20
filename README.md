@@ -1,6 +1,6 @@
-<img src="https://raw.githubusercontent.com/kreiseck-at/government-connect/main/assets/kreiseck_logo.png" alt="Kreiseck" width="280">
+<img src="https://raw.githubusercontent.com/kreiseck-at/austria-gov-connect/main/assets/kreiseck_logo.png" alt="Kreiseck" width="280">
 
-# government-connect
+# austria-gov-connect
 
 Anbindung an österreichische Behörden-Webservices für Node — FinanzOnline,
 Registrierkassen (RKSV) und später ELDA. Ein Paket pro Behördenkanal,

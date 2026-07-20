@@ -1,4 +1,4 @@
-# Design — government-connect
+# Design — austria-gov-connect
 
 Anbindung an österreichische Behörden-Webservices für Node. Dieses Dokument
 beschreibt das Gesamtvorhaben und spezifiziert die erste Ausbaustufe:
@@ -208,7 +208,7 @@ Weitere Regeln:
 ## 3. Architektur
 
 ```
-government-connect/                 npm workspaces
+austria-gov-connect/                 npm workspaces
 ├─ packages/
 │  ├─ finanzonline-core/            @kreiseck/finanzonline-core
 │  │  └─ src/
