@@ -21,6 +21,26 @@ function respond(xml: string, capture?: (body: string, action: string) => void):
 const loginOk = (id: string) =>
   `<Envelope><Body><loginResponse><id>${id}</id><rc>0</rc></loginResponse></Body></Envelope>`;
 
+const loginRc = (rc: number) =>
+  `<Envelope><Body><loginResponse><rc>${rc}</rc><msg>Serverhinweis</msg></loginResponse></Body></Envelope>`;
+
+test('createSession wirft für jeden negativen Session-rc (-1..-8) den passenden Fehlertyp', async () => {
+  // rc = -1 bekommt den eigenen Ablauf-Typ ...
+  await assert.rejects(
+    () => createSession({ ...VALID, transport: { fetchImpl: respond(loginRc(-1)) } }),
+    FonSessionExpiredError,
+  );
+  // ... -2 bis -8 sind generische FonSessionError, NICHT der Expired-Subtyp.
+  for (const rc of [-2, -3, -4, -5, -6, -7, -8]) {
+    await assert.rejects(
+      () => createSession({ ...VALID, transport: { fetchImpl: respond(loginRc(rc)) } }),
+      (err: unknown) =>
+        err instanceof FonSessionError && !(err instanceof FonSessionExpiredError) && err.rc === rc,
+      `rc ${rc} muss FonSessionError (nicht Expired) mit passendem rc werfen`,
+    );
+  }
+});
+
 test('createSession sendet loginRequest in bindender Feldreihenfolge', async () => {
   let body = '';
   let action = '';
