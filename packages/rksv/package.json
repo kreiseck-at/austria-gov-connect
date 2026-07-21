@@ -1,8 +1,26 @@
 {
   "name": "@kreiseck/rksv",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "FinanzOnline Registrierkassen-Webservice (RKSV) und Offline-Belegcode",
   "license": "Apache-2.0",
+  "author": "Kreiseck",
+  "homepage": "https://github.com/kreiseck-at/austria-gov-connect/tree/main/packages/rksv#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kreiseck-at/austria-gov-connect.git",
+    "directory": "packages/rksv"
+  },
+  "bugs": "https://github.com/kreiseck-at/austria-gov-connect/issues",
+  "keywords": [
+    "rksv",
+    "registrierkasse",
+    "finanzonline",
+    "bmf",
+    "österreich",
+    "austria",
+    "beleg",
+    "belegprüfung"
+  ],
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,15 +28,23 @@
     ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
     "./code": { "types": "./dist/code/index.d.ts", "default": "./dist/code/index.js" }
   },
-  "files": ["dist"],
-  "engines": { "node": ">=18.18" },
+  "files": [
+    "dist",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=18.18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "tsc -p tsconfig.test.json && node --test $(find test-dist -name '*.test.js')",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@kreiseck/finanzonline-core": "*"
+    "@kreiseck/finanzonline-core": "^0.1.0"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
