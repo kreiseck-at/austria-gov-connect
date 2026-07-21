@@ -67,3 +67,27 @@ test('wirft bei nicht geschlossenem Tag', () => {
 test('wirft bei fehlendem Wurzelelement', () => {
   assert.throws(() => parseXml('<!-- nur ein Kommentar -->'), /No root element/);
 });
+
+test('wirft bei mehreren Wurzelelementen', () => {
+  assert.throws(() => parseXml('<a></a><b></b>'), /Multiple root elements/);
+});
+
+test('wirft bei Fremdinhalt nach dem Wurzelelement', () => {
+  assert.throws(() => parseXml('<a></a>junk'), /content outside root/);
+});
+
+test('wirft bei Fremdinhalt vor dem Wurzelelement', () => {
+  assert.throws(() => parseXml('junk<a></a>'), /content outside root/);
+});
+
+test('erlaubt nachgestellten Whitespace nach dem Wurzelelement', () => {
+  const root = parseXml('<a>x</a>\n  ');
+  assert.equal(root.name, 'a');
+  assert.equal(root.text, 'x');
+});
+
+test('behält Namespace-Präfixe bei Attributen, statt sie zu kollidieren', () => {
+  const root = parseXml('<a xsi:type="t" other:type="u"/>');
+  assert.equal(root.attrs['xsi:type'], 't');
+  assert.equal(root.attrs['other:type'], 'u');
+});

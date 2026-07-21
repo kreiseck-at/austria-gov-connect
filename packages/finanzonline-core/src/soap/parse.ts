@@ -71,7 +71,7 @@ function parseStartTag(inner: string): XmlNode {
     const attrRaw = inner.slice(attrStart, k);
     while (k < len && isSpace(inner[k]!)) k++;
     if (inner[k] !== '=') {
-      if (attrRaw) attrs[splitName(attrRaw).name] = '';
+      if (attrRaw) attrs[attrRaw] = '';
       continue;
     }
     k++; // '='
@@ -89,7 +89,7 @@ function parseStartTag(inner: string): XmlNode {
       while (k < len && !isSpace(inner[k]!)) k++;
       value = inner.slice(valueStart, k);
     }
-    attrs[splitName(attrRaw).name] = decodeEntities(value);
+    attrs[attrRaw] = decodeEntities(value);
   }
 
   return { name, prefix, attrs, children: [], text: '' };
@@ -157,9 +157,10 @@ export function parseXml(xml: string): XmlNode {
   }
 
   if (stack.length !== 1) throw new Error('Unterminated element(s) in XML');
-  const top = root.children[0];
-  if (!top) throw new Error('No root element found');
-  return top;
+  if (root.children.length === 0) throw new Error('No root element found');
+  if (root.children.length > 1) throw new Error('Multiple root elements found');
+  if (root.text.trim().length > 0) throw new Error('Unexpected content outside root element');
+  return root.children[0]!;
 }
 
 export function firstChild(node: XmlNode, localName: string): XmlNode | undefined {
