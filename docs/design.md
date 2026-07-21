@@ -167,15 +167,35 @@ rkdbResponse
 ├─ fastnr?, paket_nr, art_uebermittlung?, ts_erstellung, info?
 └─ result (1..n)
    ├─ satznr, kundeninfo?
-   ├─ rkdbMessage (1..n): rc (String!), msg
+   ├─ rkdbMessage (1..n): rc, msg
    ├─ verificationResultList?   nur Belegprüfung
    └─ abfrage_ergebnis?          nur Statusabfrage
       └─ ts_registrierung, status, ts_status
 ```
 
-`rc` ist hier ein **String** (Werte wie `B1`, `V7`), nicht `int` wie beim
-Session-Service. Das ist eine echte Typabweichung zwischen den beiden Diensten
-und darf nicht vereinheitlicht werden.
+`rc` ist hier ein **`xs:string`** (minLength 1, maxLength 12; Werte wie `B1`,
+`V7`), nicht `int` wie beim Session-Service. Das ist eine echte Typabweichung
+zwischen den beiden Diensten und darf nicht vereinheitlicht werden. `msg` ist im
+`rkdbMessage` **Pflicht** (anders als die optionale `msg` beim Session-Dienst).
+
+Die Zuordnung Request↔Antwort läuft über `satznr`: jeder gesendete Vorgang trägt
+eine `satznr`, jedes `result` referenziert sie zurück. `paket_nr` (1–999999999)
+identifiziert die Gesamtübermittlung.
+
+`verificationResult` (in `verificationResultList`, aus `verification.xsd`) je
+Einzelprüfung, **rekursiv** verschachtelbar über ein weiteres
+`verificationResultList`:
+
+```
+verificationResult
+├─ verificationId, version, verificationName
+├─ verificationTextualDescription?
+├─ verificationState          PASS | FAIL | NOT_EXECUTED
+├─ verificationResultDetailedMessage?
+├─ input?, output?            xs:any
+├─ verificationTimestamp
+└─ verificationResultList?    verschachtelte Teilprüfungen
+```
 
 ### 2.6 Maschinenlesbarer Code (RKSV-Anlage)
 
@@ -443,11 +463,12 @@ Vorprüfung und amtliche Prüfung ohne Umbau nebeneinander darstellen.
 
 ## 7. Offene Punkte
 
-- Der BMF-Mustercode kündigte für Anfang März 2026 eine Novelle der
-  Detailspezifikation an (Umsatzsteuersatz 4,9 % im Feld
-  `Betrag-Satz-Besonders`). Am Belegformat ändert sich laut Ankündigung nichts.
-  Vor Implementierung des Code-Parsers ist die geltende Fassung in RIS
-  gegenzuprüfen.
+- ~~Novelle der Detailspezifikation (4,9 % USt).~~ **Geklärt (Stand
+  2026-07-21):** Die Ankündigung des BMF-Mustercode vom 13.03.2026 bestätigt,
+  dass der neue Satz 4,9 % im **bestehenden** Feld `Betrag-Satz-Besonders`
+  erfasst wird (gemeinsam mit 19 %) — **kein neues Segment, keine Änderung am
+  Belegformat**. Der 13-Segment-Aufbau nach 2.6 bleibt gültig; der Parser liest
+  den Betrag rein numerisch und ist vom Steuersatz unabhängig.
 - Die Session-Lebensdauer ist nicht dokumentiert. Das Verhalten bei `rc = -1`
   ist entschieden (siehe 4.4), die tatsächliche Lebensdauer bleibt aber
   unbekannt und sollte im Testbetrieb gemessen und hier festgehalten werden.
