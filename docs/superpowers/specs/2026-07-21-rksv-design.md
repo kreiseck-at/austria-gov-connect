@@ -158,7 +158,7 @@ const beleg = decodeBelegCode('_R1-AT1_KASSE-001_1_2026-07-20T14:23:34_10,00_…
 const ergebnis = pruefeBelegCode(beleg, { zertifikat });   // zertifikat optional
 // ergebnis.pruefungen[]: { name, status: 'PASS'|'FAIL'|'NOT_EXECUTED', detail? }
 
-pruefeVerkettung(vorherigerBeleg, beleg);                  // Startbeleg: Hash-Eingang = Kassen-ID
+pruefeVerkettung(beleg, vorherigerBeleg);   // Startbeleg: pruefeVerkettung(beleg)
 ```
 
 Ergebnisform spiegelt bewusst `verificationState` (`PASS`|`FAIL`|`NOT_EXECUTED`)
