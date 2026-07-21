@@ -21,7 +21,7 @@ function decodeEntities(input: string): string {
         body[1] === 'x' || body[1] === 'X'
           ? Number.parseInt(body.slice(2), 16)
           : Number.parseInt(body.slice(1), 10);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+      return Number.isFinite(code) && code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
     }
     const replacement = NAMED_ENTITIES[body];
     return replacement !== undefined ? replacement : match;

@@ -31,6 +31,11 @@ test('dekodiert Entities in Textinhalten', () => {
   assert.equal(root.text, 'a & b < c A B');
 });
 
+test('lässt numerische Entity außerhalb des Unicode-Bereichs unverändert statt zu werfen', () => {
+  const root = parseXml('<a>&#99999999;</a>');
+  assert.equal(root.text, '&#99999999;');
+});
+
 test('verarbeitet selbstschließende Elemente', () => {
   const root = parseXml('<a><b/><c>x</c></a>');
   assert.equal(root.children.length, 2);

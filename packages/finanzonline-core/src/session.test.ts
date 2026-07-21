@@ -108,3 +108,20 @@ test('logout sendet logoutRequest mit tid, benid, id', async () => {
   assert.ok(logoutBody.indexOf('<tid>') < logoutBody.indexOf('<benid>'));
   assert.ok(logoutBody.indexOf('<benid>') < logoutBody.indexOf('<id>'));
 });
+
+test('zweiter logout-Aufruf ist ein No-op und sendet keinen weiteren Request', async () => {
+  let call = 0;
+  const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+    call++;
+    if (call === 1) return new Response(loginOk('SESSION0001'), { status: 200 });
+    return new Response('<Envelope><Body><logoutResponse><rc>0</rc></logoutResponse></Body></Envelope>', {
+      status: 200,
+    });
+  }) as unknown as typeof fetch;
+
+  const session = await createSession({ ...VALID, transport: { fetchImpl } });
+  await session.logout();
+  const callsAfterFirstLogout = call;
+  await session.logout();
+  assert.equal(call, callsAfterFirstLogout);
+});
