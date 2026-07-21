@@ -38,25 +38,38 @@ die Basis der Implementierung; Abweichungen davon sind Fehler.
 
 ### 2.1 Session-Webservice
 
+- WSDL: `https://finanzonline.bmf.gv.at/fonws/ws/sessionService.wsdl`,
+  Schema: `https://finanzonline.bmf.gv.at/fonws/ws/session.xsd`
 - Endpoint: `https://finanzonline.bmf.gv.at:443/fonws/ws/session`
 - Namespace: `https://finanzonline.bmf.gv.at/fon/ws/session`
 - Binding: document/literal, `soapAction` = `login` bzw. `logout`
-- Operationen: `login`, `logout`
+- Operationen: `login`, `logout`. Die Message-Parts referenzieren **Elemente**;
+  das den SOAP-Body füllende Wurzelelement heißt daher `loginRequest` bzw.
+  `logoutRequest` (nicht `login`/`logout`). SOAP 1.1, `Content-Type:
+  text/xml; charset=utf-8`, `SOAPAction`-Header gesetzt.
 
 `loginRequest` (Feldreihenfolge ist bindend):
 
 | Feld | Restriktion | Bedeutung |
 |---|---|---|
 | `tid` | `[0-9A-Za-z]{8,12}` | Teilnehmer-Identifikation |
-| `benid` | 5–12 Zeichen | Benutzer-ID des Webservice-Benutzers |
+| `benid` | 5–12 Zeichen (nur Länge, kein Muster) | Benutzer-ID des Webservice-Benutzers |
 | `pin` | 5–128 Zeichen | PIN des Webservice-Benutzers |
 | `herstellerid` | `[0-9A-Za-z]{10,24}` | UID des **Softwareherstellers** |
 
-`loginResponse`: `id` (Session-ID), `rc` (int), `msg` (optional).
-`logoutRequest`: `tid`, `benid`, `id`.
+`loginResponse` (Reihenfolge): `id` (String, Session-ID), `rc` (int), `msg`
+(optional).
+
+`logoutRequest` (Feldreihenfolge ist bindend): `tid` (`[0-9A-Za-z]{8,12}`),
+`benid` (`[0-9A-Za-z]{5,12}` — hier **mit** Muster, anders als bei `login`),
+`id` (`[0-9A-Za-z]{10,24}`, die Session-ID).
+`logoutResponse` (Reihenfolge): `rc` (int), `msg` (optional) — **kein** `id`.
 
 Session-Returncodes: `0` ok · `-1` Session ungültig/abgelaufen · `-2`
-Wartungsarbeiten · `-3` technischer Fehler · `-4` Zugangsdaten ungültig.
+Wartungsarbeiten · `-3` technischer Fehler · `-4` Zugangsdaten ungültig ·
+`-5` Benutzer nach mehreren Fehlversuchen gesperrt · `-6` Benutzer gesperrt ·
+`-7` kein Webservice-Benutzer · `-8` Teilnehmer für FinanzOnline gesperrt bzw.
+nicht zur Webservice-Nutzung berechtigt.
 
 Die Lebensdauer einer Session ist vom BMF **nicht dokumentiert**. Die Bibliothek
 trifft daher keine Annahme darüber und läuft nicht in einen selbstgesetzten
@@ -341,9 +354,13 @@ enthält das Ergebnis. Die Methoden aus 4.2 sind dünne Hüllen hierum.
 Der Dienst trennt technische und fachliche Fehler; die Bibliothek behält diese
 Trennung bei.
 
-**Es wird geworfen bei:** Netzfehlern, SOAP-Faults, sowie `rc` `-1` (Session
-abgelaufen), `-2` (Wartung), `-3` (technischer Fehler), `-4` (nicht berechtigt).
-Diese Zustände sind für den Aufrufer nicht sinnvoll weiterverarbeitbar.
+**Es wird geworfen bei:** Netzfehlern, SOAP-Faults, sowie jedem negativen
+Session-`rc` — `-1` (abgelaufen), `-2` (Wartung), `-3` (technisch), `-4`
+(Zugangsdaten), `-5`/`-6` (Benutzer gesperrt), `-7` (kein Webservice-Benutzer),
+`-8` (Teilnehmer gesperrt/nicht berechtigt). Diese Zustände sind für den
+Aufrufer nicht sinnvoll weiterverarbeitbar. `rc = -1` bekommt einen eigenen
+Fehlertyp (siehe unten), damit der Aufrufer den Ablauf-Fall eindeutig von den
+übrigen unterscheiden kann.
 
 Bei `rc = -1` wird **kein** automatischer neuer Login versucht. Die Bibliothek
 ist zustandslos und besitzt die Zugangsdaten nach dem Login nicht mehr; ein
