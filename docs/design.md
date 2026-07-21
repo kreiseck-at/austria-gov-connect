@@ -324,29 +324,32 @@ import { createRksv } from '@kreiseck/rksv';
 const rksv = createRksv({ session, uebermittlung: 'test' });  // 'test' | 'echt'
 
 await rksv.see.registriere({
+  paketNr,
   artSe: 'HSM_DIENSTLEISTER',
   vdaId: 'AT9',
   zertifikatsseriennummer: '1a2b3c',
 });
 
 await rksv.kasse.registriere({
+  paketNr,
   kassenidentifikationsnummer: 'KASSE-001',
   benutzerschluessel: '<44 Zeichen Base64>',
 });
 
 await rksv.kasse.meldeAusfall({
+  paketNr,
   kassenidentifikationsnummer: 'KASSE-001',
   begruendung: 5,
   beginn: new Date(),
 });
 
-await rksv.kasse.meldeWiederinbetriebnahme({ /* … */ });
-await rksv.kasse.nimmAusserBetrieb({ kassenidentifikationsnummer: 'KASSE-001', begruendung: 6 });
+await rksv.kasse.meldeWiederinbetriebnahme({ paketNr, /* … */ });
+await rksv.kasse.nimmAusserBetrieb({ paketNr, kassenidentifikationsnummer: 'KASSE-001', begruendung: 6 });
 
-const status = await rksv.status.kasse('KASSE-001');
+const status = await rksv.status.kasse({ paketNr, kassenidentifikationsnummer: 'KASSE-001' });
 // → { status: 'IN_BETRIEB', tsRegistrierung, tsStatus }
 
-const pruefung = await rksv.beleg.pruefe('_R1-AT9_…');
+const pruefung = await rksv.beleg.pruefe({ paketNr, beleg: '_R1-AT9_…' });
 // → strukturiertes Prüfprotokoll
 ```
 
