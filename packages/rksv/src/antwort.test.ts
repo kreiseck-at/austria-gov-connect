@@ -47,11 +47,32 @@ test('Belegprüfung: verificationResult-Baum inkl. Teilprüfungen', () => {
   const pr = erg[0]?.belegpruefung;
   assert.ok(pr);
   assert.equal(pr.length, 2);
+  assert.equal(pr[0]?.id, '1');
   assert.equal(pr[0]?.name, 'Struktur');
   assert.equal(pr[0]?.status, 'PASS');
+  assert.equal(pr[0]?.teilpruefungen?.[0]?.id, '1.1');
   assert.equal(pr[0]?.teilpruefungen?.[0]?.name, 'Segmentzahl');
+  assert.equal(pr[1]?.id, '2');
   assert.equal(pr[1]?.status, 'FAIL');
   assert.equal(pr[1]?.detail, 'ungültig');
+});
+
+test('Belegprüfung: reale verificationId (MATCH_COMPANY) wird durchgereicht', () => {
+  const root = wrap(
+    '<result><satznr>1</satznr><rkdbMessage><rc>43</rc><msg>Der übermittelte Beleg ist fehlerhaft.</msg></rkdbMessage>' +
+    '<verificationResultList><verificationResult>' +
+      '<verificationId>VERIFICATION_FROM_CASHBOX</verificationId><version>1</version><verificationName>Prüfergebnis - Kasse</verificationName>' +
+      '<verificationState>FAIL</verificationState><verificationTimestamp>t</verificationTimestamp>' +
+      '<verificationResultList><verificationResult>' +
+        '<verificationId>MATCH_COMPANY</verificationId><version>1</version><verificationName>Firmenabgleich</verificationName>' +
+        '<verificationState>FAIL</verificationState><verificationTimestamp>t</verificationTimestamp>' +
+      '</verificationResult></verificationResultList>' +
+    '</verificationResult></verificationResultList></result>',
+  );
+  const pr = parseRkdbErgebnisse(root)[0]?.belegpruefung;
+  assert.equal(pr?.[0]?.id, 'VERIFICATION_FROM_CASHBOX');
+  assert.equal(pr?.[0]?.teilpruefungen?.[0]?.id, 'MATCH_COMPANY');
+  assert.equal(pr?.[0]?.teilpruefungen?.[0]?.status, 'FAIL');
 });
 
 test('Statusabfrage: abfrage_ergebnis wird gelesen', () => {

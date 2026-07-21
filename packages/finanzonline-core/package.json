@@ -1,13 +1,39 @@
 {
   "name": "@kreiseck/finanzonline-core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "FinanzOnline Session- und SOAP-Transport für Node",
   "license": "Apache-2.0",
+  "author": "Kreiseck",
+  "homepage": "https://github.com/kreiseck-at/austria-gov-connect/tree/main/packages/finanzonline-core#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kreiseck-at/austria-gov-connect.git",
+    "directory": "packages/finanzonline-core"
+  },
+  "bugs": "https://github.com/kreiseck-at/austria-gov-connect/issues",
+  "keywords": [
+    "finanzonline",
+    "bmf",
+    "österreich",
+    "austria",
+    "soap",
+    "webservice",
+    "session"
+  ],
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
-  "engines": { "node": ">=18.18" },
+  "files": [
+    "dist",
+    "REGISTRIERUNG.md",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=18.18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "tsc -p tsconfig.test.json && node --test $(find test-dist -name '*.test.js')",
