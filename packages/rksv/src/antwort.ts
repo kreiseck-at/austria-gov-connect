@@ -2,6 +2,8 @@ import { type XmlNode, firstChild, childText, findDescendant } from '@kreiseck/f
 import { rcInfo } from './returncodes';
 
 export interface Pruefung {
+  /** Maschinenlesbare Prüf-ID des Dienstes (`verificationId`), z. B. `MATCH_COMPANY`. */
+  id?: string;
   name: string;
   status: 'PASS' | 'FAIL' | 'NOT_EXECUTED';
   detail?: string;
@@ -38,6 +40,8 @@ function parsePruefungen(list: XmlNode): Pruefung[] {
       name: childText(vr, 'verificationName') ?? '',
       status: normalizeState(childText(vr, 'verificationState')),
     };
+    const id = childText(vr, 'verificationId');
+    if (id) p.id = id;
     const detail = childText(vr, 'verificationResultDetailedMessage');
     if (detail) p.detail = detail;
     if (teil) p.teilpruefungen = parsePruefungen(teil);
