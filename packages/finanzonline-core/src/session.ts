@@ -14,6 +14,8 @@ export interface SessionConfig {
 
 export interface Session {
   readonly id: string;
+  readonly tid: string;
+  readonly benid: string;
   logout(): Promise<void>;
 }
 
@@ -77,6 +79,8 @@ export async function createSession(config: SessionConfig): Promise<Session> {
   let loggedOut = false;
   return {
     id: sessionId,
+    tid: config.tid,
+    benid: config.benid,
     async logout(): Promise<void> {
       if (loggedOut) return;
       requireMatch(config.tid, TID, 'tid');

@@ -125,3 +125,12 @@ test('zweiter logout-Aufruf ist ein No-op und sendet keinen weiteren Request', a
   await session.logout();
   assert.equal(call, callsAfterFirstLogout);
 });
+
+test('createSession stellt tid und benid am Session-Objekt bereit', async () => {
+  const session = await createSession({
+    ...VALID,
+    transport: { fetchImpl: respond(loginOk('SESSION0001')) },
+  });
+  assert.equal(session.tid, VALID.tid);
+  assert.equal(session.benid, VALID.benid);
+});

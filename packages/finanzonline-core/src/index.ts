@@ -18,3 +18,6 @@ export { buildEnvelope, type EnvelopeField, type EnvelopeSpec } from './soap/env
 export { callSoap, type TransportOptions, type SoapCallSpec } from './transport';
 export { parseXml, type XmlNode } from './soap/parse';
 export { detectFault, type SoapFault } from './soap/fault';
+export { escapeXmlText } from './soap/escape';
+export { firstChild, childText, findDescendant } from './soap/parse';
+export { sessionErrorFor } from './errors';
