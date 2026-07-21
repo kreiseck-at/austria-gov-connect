@@ -213,9 +213,9 @@ also exakt 13 durch `_` getrennte Segmente mit führendem `_`.
 | 7 | Betrag-Satz-Ermaessigt-2 | wie oben |
 | 8 | Betrag-Satz-Null | wie oben |
 | 9 | Betrag-Satz-Besonders | wie oben |
-| 10 | Stand-Umsatz-Zaehler-AES256-ICM | Standard-Base64 (nicht URL-safe), 8 Byte |
+| 10 | Stand-Umsatz-Zaehler-AES256-ICM | Standard-Base64 (nicht URL-safe), 8 Byte; **`TRA`** bei Trainings-, **`STO`** bei Stornobuchung statt des Werts |
 | 11 | Zertifikat-Seriennummer | UTF-8-String |
-| 12 | Sig-Voriger-Beleg | Base64, SHA-256 des Vorbelegs, Bytes 0–7 |
+| 12 | Sig-Voriger-Beleg | Base64, SHA-256 des Vorbelegs, Bytes 0–7 (Eingang: siehe unten) |
 | 13 | Signaturwert | Base64, aus Base64-URL rückkodiert |
 
 Suite `R1-**`: Signatur **ES256**, Verkettungshash **SHA-256**, extrahierte
@@ -229,14 +229,28 @@ Weitere Regeln:
   (`BASE64URL(header).BASE64URL(payload).BASE64URL(signature)`, Header fix
   `eyJhbGciOiJFUzI1NiJ9`) und wird von Base64-URL nach Standard-Base64
   umkodiert, weil `_` sonst mit dem Segmenttrenner kollidiert.
-- Beim **Startbeleg** ist der Hash-Eingang für `Sig-Voriger-Beleg` der Wert von
-  `Kassen-ID`, nicht ein Vorbeleg.
+- **Signaturprüfung (ES256), verifiziert am BMF-Mustercode**: Signing-Input =
+  `eyJhbGciOiJFUzI1NiJ9` + `.` + `BASE64URL(payload-Bytes)`, wobei `payload` =
+  der maschinenlesbare Code **ohne** das letzte Segment (Signatur), also
+  Segmente 1–12 in kanonischer (Base64-)Form. Der Signaturwert (Segment 13,
+  Standard-Base64) wird zu 64 Byte `r‖s` dekodiert und mit ES256 (P-256/SHA-256)
+  gegen den öffentlichen Schlüssel des Zertifikats geprüft. In Node:
+  `crypto.verify('sha256', input, { key, dsaEncoding: 'ieee-p1363' }, sig)`,
+  Schlüssel aus `new crypto.X509Certificate(zertifikat).publicKey`.
+- **Verkettung (`Sig-Voriger-Beleg`), verifiziert an Detailspezifikation §2.4:**
+  Hash-Eingang ist die **kompakte JWS-Repräsentation des Vorbelegs**
+  (`header.payload.signature`, base64url), davon SHA-256, Bytes 0–7, Base64.
+  Beim **Startbeleg** ist der Eingang stattdessen die UTF-8-`Kassen-ID`
+  (Beispiel `A12347` → `OeSKQjO4zKI=`).
 - Bei **Ausfall der Signatureinheit** steht statt des Signaturwerts die
   Base64-URL-Kodierung der Zeichenkette `Sicherheitseinrichtung ausgefallen`.
 - **OCR-Variante** (Z 14): drei Felder — Signaturwert, Sig-Voriger-Beleg,
-  Stand-Umsatz-Zaehler — sind Base32 statt Base64.
-- Trainings- und Stornobuchungen tragen zusätzlich die Bezeichnung
-  `Trainingsbuchung` bzw. `Stornobuchung`.
+  Stand-Umsatz-Zaehler — sind Base32 statt Base64. Für die Signaturprüfung wird
+  zuerst in die kanonische Base64-Form normalisiert.
+- **Trainings-/Stornobuchung**: Kennzeichnung im Feld Stand-Umsatz-Zaehler
+  (Segment 10) durch den Literalwert `TRA` bzw. `STO` statt des verschlüsselten
+  Umsatzzählers (§2.5.1: bei diesen Belegtypen wird der Umsatzzähler nicht
+  beeinflusst).
 
 ## 3. Architektur
 
@@ -472,6 +486,9 @@ Vorprüfung und amtliche Prüfung ohne Umbau nebeneinander darstellen.
   erfasst wird (gemeinsam mit 19 %) — **kein neues Segment, keine Änderung am
   Belegformat**. Der 13-Segment-Aufbau nach 2.6 bleibt gültig; der Parser liest
   den Betrag rein numerisch und ist vom Steuersatz unabhängig.
+- ~~JWS-Signing-Input und Trainings-/Storno-Marker für den Offline-Parser.~~
+  **Geklärt (Stand 2026-07-21):** gegen BMF-Mustercode (`ManualJWSModule`,
+  `CashBoxUtils`) und Detailspezifikation V1.2 §2.4/§2.5 verifiziert; siehe 2.6.
 - Die Session-Lebensdauer ist nicht dokumentiert. Das Verhalten bei `rc = -1`
   ist entschieden (siehe 4.4), die tatsächliche Lebensdauer bleibt aber
   unbekannt und sollte im Testbetrieb gemessen und hier festgehalten werden.
