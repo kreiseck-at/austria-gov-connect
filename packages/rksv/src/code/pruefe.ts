@@ -58,20 +58,15 @@ export function pruefeBelegCode(beleg: Beleg, opts?: PruefOptionen): Pruefergebn
     return { pruefungen };
   }
 
-  let sigBytes: Buffer | undefined;
-  try {
-    sigBytes = Buffer.from(toStandardBase64(beleg.signatur), 'base64');
-  } catch {
-    sigBytes = undefined;
-  }
-  pruefungen.push(pruefe('Signaturlaenge', sigBytes?.length === 64, sigBytes ? `${sigBytes.length} Byte` : 'nicht dekodierbar'));
+  const sigBytes = Buffer.from(toStandardBase64(beleg.signatur), 'base64');
+  pruefungen.push(pruefe('Signaturlaenge', sigBytes.length === 64, `${sigBytes.length} Byte`));
 
   const key = verifyKey(opts);
   if (!key) {
     pruefungen.push({ name: 'Signatur', status: 'NOT_EXECUTED', detail: 'Kein Schlüssel/Zertifikat übergeben' });
     return { pruefungen };
   }
-  if (!sigBytes || sigBytes.length !== 64) {
+  if (sigBytes.length !== 64) {
     pruefungen.push({ name: 'Signatur', status: 'FAIL', detail: 'Signaturbytes ungültig' });
     return { pruefungen };
   }

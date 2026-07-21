@@ -438,7 +438,7 @@ const beleg = decodeBelegCode('_R1-AT1_KASSE-001_1_2026-07-20T14:23:34_…');
 const ergebnis = pruefeBelegCode(beleg, { zertifikat });  // Zertifikat optional
 // ergebnis.pruefungen[] → { name, status: 'PASS' | 'FAIL' | 'NOT_EXECUTED', detail? }
 
-pruefeVerkettung(vorherigerBeleg, beleg);
+pruefeVerkettung(beleg, vorherigerBeleg);   // Startbeleg: pruefeVerkettung(beleg)
 ```
 
 `pruefeBelegCode` prüft ohne Zertifikat nur Struktur und Formate: Segmentanzahl,
