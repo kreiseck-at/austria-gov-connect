@@ -1,6 +1,6 @@
-import { escapeXmlText } from '@kreiseck/finanzonline-core';
+import { escapeXmlText, FonError } from '@kreiseck/finanzonline-core';
 
-export class RksvError extends Error {
+export class RksvError extends FonError {
   constructor(message: string) {
     super(message);
     this.name = 'RksvError';

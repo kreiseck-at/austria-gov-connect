@@ -69,14 +69,14 @@ test('gemischte Vorgangsarten werfen RksvError vor dem Senden', async () => {
   assert.equal(called, false);
 });
 
-test('statusKasse liefert StatusErgebnis', async () => {
+test('status.kasse liefert StatusErgebnis', async () => {
   let body = '';
   const fetchImpl = respond(
     rkdbResp('<result><satznr>1</satznr><rkdbMessage><rc>0</rc><msg>m</msg></rkdbMessage><abfrage_ergebnis><ts_registrierung>r</ts_registrierung><status>IN_BETRIEB</status><ts_status>s</ts_status></abfrage_ergebnis></result>'),
     (b) => { body = b; },
   ) as unknown as typeof fetch;
   const rksv = createRksv({ session: fakeSession(), uebermittlung: 'test', transport: { fetchImpl } });
-  const st = await rksv.statusKasse({ paketNr: 42, kassenidentifikationsnummer: 'K1' });
+  const st = await rksv.status.kasse({ paketNr: 42, kassenidentifikationsnummer: 'K1' });
   assert.equal(st?.status, 'IN_BETRIEB');
   assert.match(body, /<status_kasse>/);
 });

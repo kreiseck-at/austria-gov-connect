@@ -63,6 +63,16 @@ test('ausfall_kasse mit falschem Begründungscode wird abgelehnt', () => {
   assert.throws(() => vorgangXml(v, 1), RksvError);
 });
 
+test('ausfall_se mit gültigem Begründungscode wird akzeptiert', () => {
+  const v: Vorgang = { art: 'ausfall_se', zertifikatsseriennummer: '1a2b', ausfall: { begruendung: 2, beginn: new Date('2026-07-20T10:00:00Z') } };
+  assert.match(vorgangXml(v, 1), /<ausfall><begruendung>2<\/begruendung>/);
+});
+
+test('ausfall_se mit falschem Begründungscode wird abgelehnt', () => {
+  const v = { art: 'ausfall_se', zertifikatsseriennummer: '1a2b', ausfall: { begruendung: 5 as unknown as 1|2|99, beginn: new Date() } } as Vorgang;
+  assert.throws(() => vorgangXml(v, 1), RksvError);
+});
+
 test('wiederinbetriebnahme_kasse setzt ende_ausfall', () => {
   const v: Vorgang = { art: 'wiederinbetriebnahme_kasse', kassenidentifikationsnummer: 'K1', ende: new Date('2026-07-21T09:00:00Z') };
   assert.match(vorgangXml(v, 1), /<ende_ausfall>2026-07-21T09:00:00Z<\/ende_ausfall>/);
