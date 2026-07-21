@@ -6,7 +6,7 @@ import {
   type TransportOptions,
 } from '@kreiseck/finanzonline-core';
 import { buildRkdbEnvelope, buildStatusEnvelope } from './request';
-import { parseRkdbErgebnisse, type Ergebnis, type StatusErgebnis, type Pruefung } from './antwort';
+import { parseRkdbErgebnisse, type Ergebnis, type Pruefung } from './antwort';
 import { RksvError, type ArtSe, type Vorgang } from './vorgaenge';
 import { rcIsTechnical } from './returncodes';
 import { makeKasse } from './kasse';
@@ -83,8 +83,8 @@ export interface Rksv {
     pruefe(args: { paketNr: number; beleg: string }): Promise<Pruefung[]>;
   };
   status: {
-    kasse(args: { paketNr: number; kassenidentifikationsnummer: string }): Promise<StatusErgebnis | undefined>;
-    see(args: { paketNr: number; zertifikatsseriennummer: string }): Promise<StatusErgebnis | undefined>;
+    kasse(args: { paketNr: number; kassenidentifikationsnummer: string }): Promise<Ergebnis>;
+    see(args: { paketNr: number; zertifikatsseriennummer: string }): Promise<Ergebnis>;
   };
 }
 
@@ -152,7 +152,7 @@ export function createRksv(config: RksvConfig): Rksv {
     beleg: makeBeleg(einzel),
 
     status: {
-      async kasse({ paketNr, kassenidentifikationsnummer }): Promise<StatusErgebnis | undefined> {
+      async kasse({ paketNr, kassenidentifikationsnummer }): Promise<Ergebnis> {
         const body = buildStatusEnvelope({
           tid: s.tid,
           benid: s.benid,
@@ -163,11 +163,12 @@ export function createRksv(config: RksvConfig): Rksv {
           tsErstellung: new Date(),
           ziel: { art: 'status_kasse', kassenidentifikationsnummer },
         });
-        const ergebnisse = await ruf(config, body);
-        return ergebnisse[0]?.status;
+        const erg = (await ruf(config, body))[0];
+        if (!erg) throw new RksvError('Statusabfrage ohne Ergebnis');
+        return erg;
       },
 
-      async see({ paketNr, zertifikatsseriennummer }): Promise<StatusErgebnis | undefined> {
+      async see({ paketNr, zertifikatsseriennummer }): Promise<Ergebnis> {
         const body = buildStatusEnvelope({
           tid: s.tid,
           benid: s.benid,
@@ -178,8 +179,9 @@ export function createRksv(config: RksvConfig): Rksv {
           tsErstellung: new Date(),
           ziel: { art: 'status_se', zertifikatsseriennummer },
         });
-        const ergebnisse = await ruf(config, body);
-        return ergebnisse[0]?.status;
+        const erg = (await ruf(config, body))[0];
+        if (!erg) throw new RksvError('Statusabfrage ohne Ergebnis');
+        return erg;
       },
     },
   };
