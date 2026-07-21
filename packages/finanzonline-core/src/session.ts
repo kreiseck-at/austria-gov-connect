@@ -24,15 +24,15 @@ const HERSTELLER = /^[0-9A-Za-z]{10,24}$/;
 const BENID_LOGOUT = /^[0-9A-Za-z]{5,12}$/;
 const SESSION_ID = /^[0-9A-Za-z]{10,24}$/;
 
-function requireMatch(value: string, re: RegExp, field: string): void {
+function requireMatch(value: string, re: RegExp, field: string, hinweis: string): void {
   if (!re.test(value)) {
-    throw new FonError(`Ungültiges Feld ${field}: entspricht nicht ${re.source}`);
+    throw new FonError(`Feld ${field} (${hinweis}) ungültig: erwartet Muster ${re.source}`);
   }
 }
 
-function requireLength(value: string, min: number, max: number, field: string): void {
+function requireLength(value: string, min: number, max: number, field: string, hinweis: string): void {
   if (value.length < min || value.length > max) {
-    throw new FonError(`Ungültiges Feld ${field}: Länge muss zwischen ${min} und ${max} liegen`);
+    throw new FonError(`Feld ${field} (${hinweis}) ungültig: Länge muss ${min}–${max} Zeichen sein`);
   }
 }
 
@@ -47,10 +47,10 @@ function readRc(root: XmlNode, responseElement: string): { rc: number; msg?: str
 }
 
 export async function createSession(config: SessionConfig): Promise<Session> {
-  requireMatch(config.tid, TID, 'tid');
-  requireLength(config.benid, 5, 12, 'benid');
-  requireLength(config.pin, 5, 128, 'pin');
-  requireMatch(config.herstellerid, HERSTELLER, 'herstellerid');
+  requireMatch(config.tid, TID, 'tid', 'Teilnehmer-Identifikation');
+  requireLength(config.benid, 5, 12, 'benid', 'Benutzer-ID des Webservice-Benutzers');
+  requireLength(config.pin, 5, 128, 'pin', 'PIN des Webservice-Benutzers');
+  requireMatch(config.herstellerid, HERSTELLER, 'herstellerid', 'UID des Softwareherstellers');
 
   const loginBody = buildEnvelope({
     namespace: SESSION_NAMESPACE,
@@ -83,9 +83,9 @@ export async function createSession(config: SessionConfig): Promise<Session> {
     benid: config.benid,
     async logout(): Promise<void> {
       if (loggedOut) return;
-      requireMatch(config.tid, TID, 'tid');
-      requireMatch(config.benid, BENID_LOGOUT, 'benid');
-      requireMatch(sessionId, SESSION_ID, 'id');
+      requireMatch(config.tid, TID, 'tid', 'Teilnehmer-Identifikation');
+      requireMatch(config.benid, BENID_LOGOUT, 'benid', 'Benutzer-ID des Webservice-Benutzers');
+      requireMatch(sessionId, SESSION_ID, 'id', 'Session-ID');
 
       const logoutBody = buildEnvelope({
         namespace: SESSION_NAMESPACE,
