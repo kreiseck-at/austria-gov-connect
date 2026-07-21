@@ -123,7 +123,7 @@ await rksv.kasse.registriere({ paketNr, kassenidentifikationsnummer, benutzersch
 await rksv.kasse.meldeAusfall({ paketNr, kassenidentifikationsnummer, begruendung, beginn });
 await rksv.kasse.meldeWiederinbetriebnahme({ paketNr, kassenidentifikationsnummer, ende });
 await rksv.kasse.nimmAusserBetrieb({ paketNr, kassenidentifikationsnummer, begruendung });
-const st = await rksv.status.kasse({ paketNr, kassenidentifikationsnummer }); // -> StatusErgebnis
+const erg = await rksv.status.kasse({ paketNr, kassenidentifikationsnummer }); // -> Ergebnis (erg.status?)
 const pr = await rksv.beleg.pruefe({ paketNr, beleg });                        // -> Pruefergebnis
 
 // SEE identisch, adressiert über zertifikatsseriennummer statt kassenidentifikationsnummer

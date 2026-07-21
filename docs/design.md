@@ -360,8 +360,9 @@ await rksv.kasse.meldeAusfall({
 await rksv.kasse.meldeWiederinbetriebnahme({ paketNr, /* … */ });
 await rksv.kasse.nimmAusserBetrieb({ paketNr, kassenidentifikationsnummer: 'KASSE-001', begruendung: 6 });
 
-const status = await rksv.status.kasse({ paketNr, kassenidentifikationsnummer: 'KASSE-001' });
-// → { status: 'IN_BETRIEB', tsRegistrierung, tsStatus }
+const erg = await rksv.status.kasse({ paketNr, kassenidentifikationsnummer: 'KASSE-001' });
+// erg: Ergebnis mit ok/rc/msg; erg.status → { status: 'IN_BETRIEB', tsRegistrierung, tsStatus }
+// nicht registriert → { ok: false, rc: 'B32', msg, status: undefined }
 
 const pruefung = await rksv.beleg.pruefe({ paketNr, beleg: '_R1-AT9_…' });
 // → strukturiertes Prüfprotokoll
