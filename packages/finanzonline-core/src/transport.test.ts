@@ -92,6 +92,23 @@ test('wirft FonTransportError bei Netzfehler und respektiert retries', async () 
   assert.equal(calls, 3); // 1 Versuch + 2 Wiederholungen
 });
 
+test('wirft FonTransportError bei Zeitüberschreitung', async () => {
+  const fetchImpl = ((_url: string | URL | Request, init?: RequestInit) =>
+    new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+    })) as unknown as typeof fetch;
+
+  await assert.rejects(
+    () =>
+      callSoap(
+        { endpoint: 'https://x.test', soapAction: 'login', body: '<x/>' },
+        { fetchImpl, timeoutMs: 10 },
+      ),
+    (err: unknown) =>
+      err instanceof FonTransportError && /Zeitüberschreitung/.test(err.message),
+  );
+});
+
 test('erfolgreiche Antwort wird nach rc-freiem Parsen weitergereicht', async () => {
   const root = await callSoap(
     { endpoint: 'https://x.test', soapAction: 'login', body: '<x/>' },
