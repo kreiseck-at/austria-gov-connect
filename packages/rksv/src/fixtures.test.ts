@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { type Session } from '@kreiseck/finanzonline-core';
+import { FonSessionExpiredError, FonSoapFaultError, type Session } from '@kreiseck/finanzonline-core';
 import { createRksv } from './index';
 
 // Regressionstests gegen ECHTE, redigierte FON-rkdb-Testantworten
@@ -49,7 +49,38 @@ const REG_KASSE_OK =
 const BELEG_PASS =
   '<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><ns0:rkdbResponse xmlns:ns0="https://finanzonline.bmf.gv.at/rkdb"><ns0:paket_nr>1</ns0:paket_nr><ns0:ts_erstellung>2026-07-22T04:12:09</ns0:ts_erstellung><ns0:result><ns0:satznr>1</ns0:satznr><ns0:rkdbMessage><ns0:rc>0</ns0:rc><ns0:msg/></ns0:rkdbMessage><ns0:verificationResultList><ns0:verificationResult><ns0:verificationId>VERIFICATION_FROM_CASHBOX</ns0:verificationId><ns0:version>1</ns0:version><ns0:verificationName>Prüfergebnis - Kasse</ns0:verificationName><ns0:verificationTextualDescription>Bei der Belegprüfung wird untersucht ...</ns0:verificationTextualDescription><ns0:verificationState>PASS</ns0:verificationState><ns0:verificationResultDetailedMessage>Die Registrierung Ihrer Registrierkasse und der Signatur-/Siegelerstellungseinheit war erfolgreich. Der vorliegende Startbeleg wurde gesetzeskonform erstellt.</ns0:verificationResultDetailedMessage><ns0:input><RECEIPT xmlns="https://finanzonline.bmf.gv.at/rkdb">_R1-AT1_KECK-2_KECK-2-ID-1_2026-07-22T04:11:18_0,00_0,00_0,00_0,00_0,00_QLSULaIS_32082A8F_mDUJ5OYs4oY=_VcMexjthBlgPCG3Hv6mFQAGwP1hX35+pMoz7WvdOLBovLhKOhgHHrNotDha5wjvam9QJ8FgYTdEKoVNKMdm/sg==</RECEIPT></ns0:input><ns0:verificationTimestamp>2026-07-22T04:12:10.003+02:00</ns0:verificationTimestamp></ns0:verificationResult></ns0:verificationResultList></ns0:result></ns0:rkdbResponse></SOAP-ENV:Body></SOAP-ENV:Envelope>';
 
+// Ungültige/abgelaufene Session: der rkdb-Dienst liefert rc -1 als rkdbMessage
+// (KEIN SOAP-Fault) — verifiziert live 2026-07-22.
+const INVALID_SESSION =
+  '<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><ns0:rkdbResponse xmlns:ns0="https://finanzonline.bmf.gv.at/rkdb"><ns0:paket_nr>1</ns0:paket_nr><ns0:ts_erstellung>2026-07-22T02:32:06Z</ns0:ts_erstellung><ns0:result><ns0:satznr>1</ns0:satznr><ns0:rkdbMessage><ns0:rc>-1</ns0:rc><ns0:msg>Die Session ID ist ungültig oder abgelaufen.</ns0:msg></ns0:rkdbMessage></ns0:result></ns0:rkdbResponse></SOAP-ENV:Body></SOAP-ENV:Envelope>';
+
+// Strukturell ungültiger Request: echter SOAP-Fault (HTTP 500), Detailtext im
+// verschachtelten <fon:ValidationError> — verifiziert live 2026-07-22.
+const VALIDATION_FAULT =
+  '<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><SOAP-ENV:Fault><faultcode>SOAP-ENV:Client</faultcode><faultstring xml:lang="en">Validation error</faultstring><detail><fon:ValidationError xmlns:fon="https://finanzonline.bmf.gv.at">cvc-complex-type.2.4.a: Invalid content was found starting with element art_uebermittlung. One of tid is expected.</fon:ValidationError></detail></SOAP-ENV:Fault></SOAP-ENV:Body></SOAP-ENV:Envelope>';
+
 const SEE_REG = { paketNr: 1, artSe: 'SIGNATURKARTE', vdaId: 'AT1', zertifikatsseriennummer: '32082A8F' } as const;
+
+test('Fixture ungültige Session: rc -1 -> FonSessionExpiredError (geworfen)', async () => {
+  const rksv = rksvMit(INVALID_SESSION);
+  await assert.rejects(
+    () => rksv.status.see({ paketNr: 1, zertifikatsseriennummer: '32082A8F' }),
+    FonSessionExpiredError,
+  );
+});
+
+test('Fixture Validierungs-Fault (HTTP 500) -> FonSoapFaultError mit Detailtext', async () => {
+  const fetchImpl = (async (_u: string | URL | Request, _i?: RequestInit) =>
+    new Response(VALIDATION_FAULT, { status: 500 })) as unknown as typeof fetch;
+  const rksv = createRksv({ session: fakeSession(), uebermittlung: 'test', transport: { fetchImpl } });
+  await assert.rejects(
+    () => rksv.status.see({ paketNr: 1, zertifikatsseriennummer: '32082A8F' }),
+    (e: unknown) =>
+      e instanceof FonSoapFaultError &&
+      e.faultcode === 'SOAP-ENV:Client' &&
+      /One of tid is expected/.test(e.detail ?? ''),
+  );
+});
 
 test('Fixture reg_se rc 0: leeres <msg/> -> ok, rc 0, msg leer', async () => {
   const erg = await rksvMit(REG_SE_OK).see.registriere(SEE_REG);
