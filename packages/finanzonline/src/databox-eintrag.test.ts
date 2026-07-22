@@ -37,7 +37,7 @@ test('eintrag sendet SOAPAction getDataboxEntry mit tid/benid/id/applkey', async
 });
 
 test('eintrag wirft FonProtocolError bei rc != 0', async () => {
-  const fehlerXml = `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxEntryResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>-1</rc><msg>Eintrag nicht gefunden</msg></ns:getDataboxEntryResponse></S:Body></S:Envelope>`;
+  const fehlerXml = `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxEntryResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>-3</rc><msg>technischer Fehler</msg></ns:getDataboxEntryResponse></S:Body></S:Envelope>`;
   const db = createDatabox(s, {
     transport: {
       fetchImpl: (async () => new Response(fehlerXml, { status: 200 })) as unknown as typeof fetch,
