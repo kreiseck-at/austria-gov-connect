@@ -125,12 +125,15 @@ export function createRksv(config: RksvConfig): Rksv {
       erzwingeAsynchron,
       vorgaenge,
     });
-    // Synchron vs. asynchron aus der ANTWORT ableiten, nicht aus dem Request:
-    // der FON-Dienst antwortet auch auf Mehrfach-Pakete synchron, wenn er die
-    // Ergebnisse mitschickt. Nur wenn keine `result`-Einträge zurückkommen, ist
-    // das Paket asynchron übernommen (Ergebnisprotokoll in der DataBox).
+    // Synchron vs. asynchron ist request-bestimmt (BMF-Handbuch, an realen
+    // Antworten 2026-07-22 verifiziert): genau ein Element -> synchron mit
+    // echtem Ergebnis; mehr als eines ODER erzwinge_asynchron -> asynchron, die
+    // Einzelergebnisse landen in der DataBox. Die SOAP-Antwort ist bei async nur
+    // eine Empfangsbestätigung (ein `result` mit rc 0) — KEIN Einzelergebnis;
+    // sie darf nicht als synchrones Ergebnis missdeutet werden.
+    const istAsync = vorgaenge.length > 1 || erzwingeAsynchron === true;
     const { ergebnisse, info } = await ruf(config, body);
-    if (ergebnisse.length === 0) {
+    if (istAsync) {
       return {
         verarbeitung: 'asynchron',
         hinweis: info ?? 'Paket asynchron übernommen; das Ergebnisprotokoll liegt in der DataBox.',

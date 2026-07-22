@@ -35,9 +35,12 @@ const STATUS_B33 =
 const BELEG_FAIL =
   '<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><ns0:rkdbResponse xmlns:ns0="https://finanzonline.bmf.gv.at/rkdb"><ns0:paket_nr>1</ns0:paket_nr><ns0:ts_erstellung>2026-07-22T03:25:36</ns0:ts_erstellung><ns0:result><ns0:satznr>1</ns0:satznr><ns0:rkdbMessage><ns0:rc>43</ns0:rc><ns0:msg>Der übermittelte Beleg ist fehlerhaft.</ns0:msg></ns0:rkdbMessage><ns0:verificationResultList><ns0:verificationResult><ns0:verificationId>VERIFICATION_FROM_CASHBOX</ns0:verificationId><ns0:version>1</ns0:version><ns0:verificationName>Prüfergebnis - Kasse</ns0:verificationName><ns0:verificationTextualDescription>Bei der Belegprüfung wird untersucht ...</ns0:verificationTextualDescription><ns0:verificationState>FAIL</ns0:verificationState><ns0:verificationResultDetailedMessage>Der vorliegende Beleg kann nicht gültig geprüft werden ...</ns0:verificationResultDetailedMessage><ns0:input><RECEIPT xmlns="https://finanzonline.bmf.gv.at/rkdb">_R1-AT1_KECK-1_KECK-1-ID-1_2025-06-04T16:17:58_0,00_0,00_0,00_0,00_0,00_nA+Ob7eF_32082A8F_AshR0Dg4KFE=_UXvitpZZhDR2FFFoTkIUvSpzH+SMnTJ264XZ5CGcEMQzDv3LCMJl09ayMhoWg/PWGShT0KPnn/eg8CiXmCWeKw==</RECEIPT></ns0:input><ns0:verificationTimestamp>2026-07-22T03:25:37.577+02:00</ns0:verificationTimestamp><ns0:verificationResultList><ns0:verificationResult><ns0:verificationId>EXISTS_CASHBOX</ns0:verificationId><ns0:version>1</ns0:version><ns0:verificationName>Überprüfung ob Kasse in FinanzOnline registriert wurde</ns0:verificationName><ns0:verificationState>FAIL</ns0:verificationState><ns0:verificationResultDetailedMessage>... keiner registrierten Kasse zugeordnet ...</ns0:verificationResultDetailedMessage><ns0:verificationTimestamp>2026-07-22T03:25:37.586+02:00</ns0:verificationTimestamp></ns0:verificationResult></ns0:verificationResultList></ns0:verificationResult></ns0:verificationResultList></ns0:result></ns0:rkdbResponse></SOAP-ENV:Body></SOAP-ENV:Envelope>';
 
-// Antwort auf ein Paket mit 2 Vorgängen + erzwinge_asynchron=true: der FON-Testmodus
-// antwortet SYNCHRON mit einem result (rc 0) — keine DataBox-Quittung.
-const ASYNC_ABER_SYNCHRON =
+// Antwort auf ein Paket mit >1 Vorgang: asynchrone Empfangsbestätigung — EIN
+// `result` mit rc 0 (nur „empfangen", KEIN Einzelergebnis). Die echten
+// Einzelergebnisse liegen in der DataBox. Verifiziert 2026-07-22: 12 verschiedene
+// Vorgänge -> genau dieses eine rc-0-result; ein einzelner Vorgang dagegen -> das
+// echte Einzelergebnis (z. B. B33).
+const ASYNC_ACK =
   '<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><ns0:rkdbResponse xmlns:ns0="https://finanzonline.bmf.gv.at/rkdb"><ns0:paket_nr>1</ns0:paket_nr><ns0:ts_erstellung>2026-07-22T03:25:37</ns0:ts_erstellung><ns0:result><ns0:satznr>1</ns0:satznr><ns0:rkdbMessage><ns0:rc>0</ns0:rc><ns0:msg/></ns0:rkdbMessage></ns0:result></ns0:rkdbResponse></SOAP-ENV:Body></SOAP-ENV:Envelope>';
 
 // Kasse registrieren (KECK-2) → rc 0.
@@ -145,17 +148,15 @@ test('Fixture belegpruefung PASS: flacher Baum, VERIFICATION_FROM_CASHBOX = PASS
   assert.equal(pr[0]?.teilpruefungen, undefined); // PASS ist flach
 });
 
-test('Fixture async: 2 Vorgänge, FON antwortet synchron -> Ergebnisse NICHT verwerfen', async () => {
-  const rksv = rksvMit(ASYNC_ABER_SYNCHRON);
+test('Fixture async: >1 Vorgang -> asynchron; die rc-0-Empfangsbestätigung ist NICHT das Ergebnis', async () => {
+  const rksv = rksvMit(ASYNC_ACK);
   const q = await rksv.uebermittlePaket({
     paketNr: 1,
-    erzwingeAsynchron: true,
     vorgaenge: [
-      { art: 'registrierung_se', artSe: 'SIGNATURKARTE', vdaId: 'AT1', zertifikatsseriennummer: '32082A8F' },
-      { art: 'registrierung_se', artSe: 'SIGNATURKARTE', vdaId: 'AT1', zertifikatsseriennummer: '32082A8F' },
+      { art: 'registrierung_se', artSe: 'SIGNATURKARTE', vdaId: 'AT1', zertifikatsseriennummer: '0FEED0001' },
+      { art: 'registrierung_se', artSe: 'SIGNATURKARTE', vdaId: 'AT1', zertifikatsseriennummer: '0FEED0002' },
     ],
   });
-  assert.equal(q.verarbeitung, 'synchron');
-  assert.equal(q.verarbeitung === 'synchron' && q.ergebnisse.length, 1);
-  assert.equal(q.verarbeitung === 'synchron' && q.ergebnisse[0]?.rc, '0');
+  assert.equal(q.verarbeitung, 'asynchron');
+  assert.equal(q.verarbeitung === 'asynchron' && /DataBox/i.test(q.hinweis), true);
 });
