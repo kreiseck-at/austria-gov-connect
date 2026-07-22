@@ -179,3 +179,10 @@ export function findDescendant(node: XmlNode, localName: string): XmlNode | unde
   }
   return undefined;
 }
+
+/** Gesamter Textinhalt eines Knotens inklusive aller Nachfahren (Tiefensuche). */
+export function textContent(node: XmlNode): string {
+  let out = node.text;
+  for (const child of node.children) out += textContent(child);
+  return out;
+}
