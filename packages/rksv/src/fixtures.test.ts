@@ -40,6 +40,15 @@ const BELEG_FAIL =
 const ASYNC_ABER_SYNCHRON =
   '<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><ns0:rkdbResponse xmlns:ns0="https://finanzonline.bmf.gv.at/rkdb"><ns0:paket_nr>1</ns0:paket_nr><ns0:ts_erstellung>2026-07-22T03:25:37</ns0:ts_erstellung><ns0:result><ns0:satznr>1</ns0:satznr><ns0:rkdbMessage><ns0:rc>0</ns0:rc><ns0:msg/></ns0:rkdbMessage></ns0:result></ns0:rkdbResponse></SOAP-ENV:Body></SOAP-ENV:Envelope>';
 
+// Kasse registrieren (KECK-2) → rc 0.
+const REG_KASSE_OK =
+  '<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><ns0:rkdbResponse xmlns:ns0="https://finanzonline.bmf.gv.at/rkdb"><ns0:paket_nr>1</ns0:paket_nr><ns0:ts_erstellung>2026-07-22T04:12:07</ns0:ts_erstellung><ns0:result><ns0:satznr>1</ns0:satznr><ns0:rkdbMessage><ns0:rc>0</ns0:rc><ns0:msg/></ns0:rkdbMessage></ns0:result></ns0:rkdbResponse></SOAP-ENV:Body></SOAP-ENV:Envelope>';
+
+// Belegprüfung PASS: rc 0, FLACHER Baum — nur VERIFICATION_FROM_CASHBOX mit PASS,
+// keine verschachtelten Teilprüfungen (die gibt es nur im FAIL-Fall).
+const BELEG_PASS =
+  '<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><ns0:rkdbResponse xmlns:ns0="https://finanzonline.bmf.gv.at/rkdb"><ns0:paket_nr>1</ns0:paket_nr><ns0:ts_erstellung>2026-07-22T04:12:09</ns0:ts_erstellung><ns0:result><ns0:satznr>1</ns0:satznr><ns0:rkdbMessage><ns0:rc>0</ns0:rc><ns0:msg/></ns0:rkdbMessage><ns0:verificationResultList><ns0:verificationResult><ns0:verificationId>VERIFICATION_FROM_CASHBOX</ns0:verificationId><ns0:version>1</ns0:version><ns0:verificationName>Prüfergebnis - Kasse</ns0:verificationName><ns0:verificationTextualDescription>Bei der Belegprüfung wird untersucht ...</ns0:verificationTextualDescription><ns0:verificationState>PASS</ns0:verificationState><ns0:verificationResultDetailedMessage>Die Registrierung Ihrer Registrierkasse und der Signatur-/Siegelerstellungseinheit war erfolgreich. Der vorliegende Startbeleg wurde gesetzeskonform erstellt.</ns0:verificationResultDetailedMessage><ns0:input><RECEIPT xmlns="https://finanzonline.bmf.gv.at/rkdb">_R1-AT1_KECK-2_KECK-2-ID-1_2026-07-22T04:11:18_0,00_0,00_0,00_0,00_0,00_QLSULaIS_32082A8F_mDUJ5OYs4oY=_VcMexjthBlgPCG3Hv6mFQAGwP1hX35+pMoz7WvdOLBovLhKOhgHHrNotDha5wjvam9QJ8FgYTdEKoVNKMdm/sg==</RECEIPT></ns0:input><ns0:verificationTimestamp>2026-07-22T04:12:10.003+02:00</ns0:verificationTimestamp></ns0:verificationResult></ns0:verificationResultList></ns0:result></ns0:rkdbResponse></SOAP-ENV:Body></SOAP-ENV:Envelope>';
+
 const SEE_REG = { paketNr: 1, artSe: 'SIGNATURKARTE', vdaId: 'AT1', zertifikatsseriennummer: '32082A8F' } as const;
 
 test('Fixture reg_se rc 0: leeres <msg/> -> ok, rc 0, msg leer', async () => {
@@ -83,6 +92,26 @@ test('Fixture belegpruefung FAIL: verificationId-Baum (VERIFICATION_FROM_CASHBOX
   assert.equal(pr[0]?.status, 'FAIL');
   assert.equal(pr[0]?.teilpruefungen?.[0]?.id, 'EXISTS_CASHBOX');
   assert.equal(pr[0]?.teilpruefungen?.[0]?.status, 'FAIL');
+});
+
+test('Fixture reg_kasse KECK-2 rc 0: Kasse registriert', async () => {
+  const erg = await rksvMit(REG_KASSE_OK).kasse.registriere({
+    paketNr: 1,
+    kassenidentifikationsnummer: 'KECK-2',
+    benutzerschluessel: 'A'.repeat(44),
+  });
+  assert.equal(erg.ok, true);
+  assert.equal(erg.rc, '0');
+});
+
+test('Fixture belegpruefung PASS: flacher Baum, VERIFICATION_FROM_CASHBOX = PASS', async () => {
+  const pr = await rksvMit(BELEG_PASS).beleg.pruefe({ paketNr: 1, beleg: '_R1-AT1_KECK-2_…' });
+  assert.equal(pr.length, 1);
+  assert.equal(pr[0]?.id, 'VERIFICATION_FROM_CASHBOX');
+  assert.equal(pr[0]?.name, 'Prüfergebnis - Kasse');
+  assert.equal(pr[0]?.status, 'PASS');
+  assert.match(pr[0]?.detail ?? '', /erfolgreich|gesetzeskonform/);
+  assert.equal(pr[0]?.teilpruefungen, undefined); // PASS ist flach
 });
 
 test('Fixture async: 2 Vorgänge, FON antwortet synchron -> Ergebnisse NICHT verwerfen', async () => {
