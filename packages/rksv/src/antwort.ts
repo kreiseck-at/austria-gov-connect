@@ -73,3 +73,15 @@ export function parseRkdbErgebnisse(root: XmlNode): Ergebnis[] {
     return erg;
   });
 }
+
+export interface RkdbAntwort {
+  ergebnisse: Ergebnis[];
+  /** Empfangs-/Verarbeitungshinweis des Dienstes (nur bei asynchroner Verarbeitung gesetzt). */
+  info?: string;
+}
+
+export function parseRkdbAntwort(root: XmlNode): RkdbAntwort {
+  const resp = findDescendant(root, 'rkdbResponse');
+  const info = resp ? childText(resp, 'info') : undefined;
+  return { ergebnisse: parseRkdbErgebnisse(root), info: info || undefined };
+}

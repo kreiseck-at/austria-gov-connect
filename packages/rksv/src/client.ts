@@ -6,7 +6,7 @@ import {
   type TransportOptions,
 } from '@kreiseck/finanzonline-core';
 import { buildRkdbEnvelope, buildStatusEnvelope } from './request';
-import { parseRkdbErgebnisse, type Ergebnis, type Pruefung } from './antwort';
+import { parseRkdbAntwort, type Ergebnis, type Pruefung, type RkdbAntwort } from './antwort';
 import { RksvError, type ArtSe, type Vorgang } from './vorgaenge';
 import { rcIsTechnical } from './returncodes';
 import { makeKasse } from './kasse';
@@ -96,11 +96,11 @@ function throwIfTechnical(ergebnisse: Ergebnis[]): void {
   }
 }
 
-async function ruf(config: RksvConfig, body: string): Promise<Ergebnis[]> {
+async function ruf(config: RksvConfig, body: string): Promise<RkdbAntwort> {
   const root = await callSoap({ endpoint: RKDB_ENDPOINT, soapAction: 'rkdb', body }, config.transport);
-  const ergebnisse = parseRkdbErgebnisse(root);
-  throwIfTechnical(ergebnisse);
-  return ergebnisse;
+  const antwort = parseRkdbAntwort(root);
+  throwIfTechnical(antwort.ergebnisse);
+  return antwort;
 }
 
 /** Signatur der internen Einzelvorgang-Hülle: sendet genau einen Vorgang und liefert dessen Ergebnis. */
@@ -125,12 +125,15 @@ export function createRksv(config: RksvConfig): Rksv {
       erzwingeAsynchron,
       vorgaenge,
     });
-    const istAsync = vorgaenge.length > 1 || erzwingeAsynchron === true;
-    const ergebnisse = await ruf(config, body);
-    if (istAsync) {
+    // Synchron vs. asynchron aus der ANTWORT ableiten, nicht aus dem Request:
+    // der FON-Dienst antwortet auch auf Mehrfach-Pakete synchron, wenn er die
+    // Ergebnisse mitschickt. Nur wenn keine `result`-Einträge zurückkommen, ist
+    // das Paket asynchron übernommen (Ergebnisprotokoll in der DataBox).
+    const { ergebnisse, info } = await ruf(config, body);
+    if (ergebnisse.length === 0) {
       return {
         verarbeitung: 'asynchron',
-        hinweis: 'Paket asynchron übernommen; das Ergebnisprotokoll liegt in der DataBox.',
+        hinweis: info ?? 'Paket asynchron übernommen; das Ergebnisprotokoll liegt in der DataBox.',
       };
     }
     return { verarbeitung: 'synchron', ergebnisse };
@@ -163,7 +166,7 @@ export function createRksv(config: RksvConfig): Rksv {
           tsErstellung: new Date(),
           ziel: { art: 'status_kasse', kassenidentifikationsnummer },
         });
-        const erg = (await ruf(config, body))[0];
+        const erg = (await ruf(config, body)).ergebnisse[0];
         if (!erg) throw new RksvError('Statusabfrage ohne Ergebnis');
         return erg;
       },
@@ -179,7 +182,7 @@ export function createRksv(config: RksvConfig): Rksv {
           tsErstellung: new Date(),
           ziel: { art: 'status_se', zertifikatsseriennummer },
         });
-        const erg = (await ruf(config, body))[0];
+        const erg = (await ruf(config, body)).ergebnisse[0];
         if (!erg) throw new RksvError('Statusabfrage ohne Ergebnis');
         return erg;
       },

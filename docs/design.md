@@ -124,8 +124,16 @@ rkdb
 einzelnen Vorgang. Statusabfragen sind asynchron unzulässig (`rc = 998`).
 Belegprüfung ist immer synchron und immer genau ein Beleg.
 
-Diese Eigenschaft ist nicht wegabstrahierbar: Bei mehr als einem Vorgang
+Diese Eigenschaft ist nicht wegabstrahierbar: Bei asynchroner Verarbeitung
 bekommt der Aufrufer kein Ergebnis. Die API muss das sichtbar machen (siehe 4.3).
+
+**Verifiziert an realen Testantworten (2026-07-22):** Der FON-**Testmodus**
+antwortet auch auf Mehrfach-Pakete (und trotz `erzwinge_asynchron=true`)
+**synchron** — ein `result` mit `rc`, keine DataBox-Quittung. Die Sync/Async-
+Unterscheidung darf daher **nicht** aus dem Request (Vorgangszahl/Flag)
+abgeleitet werden, sondern aus der **Antwort**: kommen `result`-Einträge zurück,
+ist die Verarbeitung synchron und die Ergebnisse sind durchzureichen; nur ohne
+`result` ist das Paket asynchron übernommen. `uebermittlePaket` handhabt das so.
 
 ### 2.4 Vorgangsarten und Felder
 
