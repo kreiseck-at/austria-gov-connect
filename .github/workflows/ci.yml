@@ -25,10 +25,14 @@ jobs:
         run: |
           npm run build -w @kreiseck/finanzonline-core
           npm run build -w @kreiseck/rksv
+          npm run build -w @kreiseck/uid
+          npm run build -w @kreiseck/finanzonline
       - name: Test
         run: |
           npm test -w @kreiseck/finanzonline-core
           npm test -w @kreiseck/rksv
+          npm test -w @kreiseck/uid
+          npm test -w @kreiseck/finanzonline
 
   lint:
     name: Lint & Format

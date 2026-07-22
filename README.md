@@ -21,7 +21,8 @@ weder Belegketten noch Signaturen.
 |---|---|---|
 | `@kreiseck/finanzonline-core` | FinanzOnline Session + SOAP-Transport | in Arbeit |
 | `@kreiseck/rksv` | Registrierkassen-Webservice, Belegprüfung, Belegcode offline | in Arbeit |
-| `@kreiseck/finanzonline` | Übrige FinanzOnline-Verfahren | geplant |
+| `@kreiseck/uid` | UID-Bestätigungsverfahren (Stufe 1 + 2) | fertig |
+| `@kreiseck/finanzonline` | Übrige FinanzOnline-Verfahren (DataBox u. a.) | DataBox (Teil), Rest geplant |
 | `@kreiseck/elda` | Sozialversicherung (ELDA) | geplant |
 
 ## Doku

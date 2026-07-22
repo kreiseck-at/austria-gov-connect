@@ -24,7 +24,8 @@ framework-agnostisch, zustandslos, minimale Abhängigkeiten.
 |---|---|---|
 | `@kreiseck/finanzonline-core` | FinanzOnline Session + SOAP-Transport | Ausbaustufe 1 |
 | `@kreiseck/rksv` | Registrierkassen-Webservice (`rkdb`) + Belegcode offline | Ausbaustufe 1 |
-| `@kreiseck/finanzonline` | Übrige FinanzOnline-Verfahren (DataBox, Uploads, UID) | später |
+| `@kreiseck/uid` | UID-Bestätigungsverfahren (Stufe 1 + 2) | fertig |
+| `@kreiseck/finanzonline` | Übrige FinanzOnline-Verfahren (DataBox, Uploads) | DataBox (Teil), Rest später |
 | `@kreiseck/elda` | Sozialversicherung (ELDA) | später |
 
 Jede weitere Ausbaustufe bekommt eine eigene Spezifikation. Dieses Dokument
