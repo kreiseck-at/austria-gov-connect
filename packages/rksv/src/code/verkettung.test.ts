@@ -8,7 +8,21 @@ const UMS = Buffer.alloc(8, 2).toString('base64');
 const SIG = Buffer.alloc(64, 7).toString('base64');
 
 function code(sigVoriger: string, over: Partial<Record<number, string>> = {}): string {
-  const seg = ['R1-AT1', 'KASSE-001', '243', '2026-07-20T14:23:34', '10,00', '0,00', '0,00', '0,00', '0,00', UMS, '1a2b3c', sigVoriger, SIG];
+  const seg = [
+    'R1-AT1',
+    'KASSE-001',
+    '243',
+    '2026-07-20T14:23:34',
+    '10,00',
+    '0,00',
+    '0,00',
+    '0,00',
+    '0,00',
+    UMS,
+    '1a2b3c',
+    sigVoriger,
+    SIG,
+  ];
   for (const [k, v] of Object.entries(over)) seg[Number(k) - 1] = v as string;
   return '_' + seg.join('_');
 }

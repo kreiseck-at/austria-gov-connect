@@ -62,21 +62,32 @@ export function buildRkdbEnvelope(p: RkdbPaket): string {
   const art = vorgangArt(p.vorgaenge[0]!);
   for (const v of p.vorgaenge) {
     if (vorgangArt(v) !== art) {
-      throw new RksvError(`Ein Paket darf nur eine Vorgangsart enthalten (gemischt: ${art} und ${vorgangArt(v)})`);
+      throw new RksvError(
+        `Ein Paket darf nur eine Vorgangsart enthalten (gemischt: ${art} und ${vorgangArt(v)})`,
+      );
     }
   }
   const fastnr = p.fastnr !== undefined ? el('fastnr', p.fastnr) : '';
   const erzwinge = p.erzwingeAsynchron === true ? el('erzwinge_asynchron', 'true') : '';
   const vorgangXmls = p.vorgaenge.map((v, i) => vorgangXml(v, i + 1)).join('');
   const rkdb =
-    '<rkdb>' + fastnr + el('paket_nr', String(p.paketNr)) + el('ts_erstellung', isoDateTime(p.tsErstellung)) + vorgangXmls + '</rkdb>';
+    '<rkdb>' +
+    fastnr +
+    el('paket_nr', String(p.paketNr)) +
+    el('ts_erstellung', isoDateTime(p.tsErstellung)) +
+    vorgangXmls +
+    '</rkdb>';
   return envelope(kopf(p.tid, p.benid, p.id, p.uebermittlung) + erzwinge + rkdb);
 }
 
 export function buildStatusEnvelope(s: StatusAbfrage): string {
   requirePaketNr(s.paketNr);
   const fastnr = s.fastnr !== undefined ? el('fastnr', s.fastnr) : '';
-  const gemeinsam = fastnr + el('paket_nr', String(s.paketNr)) + el('ts_erstellung', isoDateTime(s.tsErstellung)) + el('satznr', '1');
+  const gemeinsam =
+    fastnr +
+    el('paket_nr', String(s.paketNr)) +
+    el('ts_erstellung', isoDateTime(s.tsErstellung)) +
+    el('satznr', '1');
   const block =
     s.ziel.art === 'status_kasse'
       ? `<status_kasse>${gemeinsam}${el('kassenidentifikationsnummer', s.ziel.kassenidentifikationsnummer)}</status_kasse>`

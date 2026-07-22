@@ -104,7 +104,11 @@ const WRAPPER_CALLS: Array<{ name: string; call: (rksv: Rksv) => Promise<Ergebni
   {
     name: 'kasse.registriere',
     call: (r) =>
-      r.kasse.registriere({ paketNr: 1, kassenidentifikationsnummer: 'K1', benutzerschluessel: 'A'.repeat(44) }),
+      r.kasse.registriere({
+        paketNr: 1,
+        kassenidentifikationsnummer: 'K1',
+        benutzerschluessel: 'A'.repeat(44),
+      }),
   },
   {
     name: 'kasse.meldeAusfall',
@@ -132,7 +136,12 @@ const WRAPPER_CALLS: Array<{ name: string; call: (rksv: Rksv) => Promise<Ergebni
   {
     name: 'see.registriere',
     call: (r) =>
-      r.see.registriere({ paketNr: 1, artSe: 'HSM_DIENSTLEISTER', vdaId: 'AT9', zertifikatsseriennummer: '1a2b' }),
+      r.see.registriere({
+        paketNr: 1,
+        artSe: 'HSM_DIENSTLEISTER',
+        vdaId: 'AT9',
+        zertifikatsseriennummer: '1a2b',
+      }),
   },
   {
     name: 'see.meldeAusfall',
@@ -147,7 +156,11 @@ const WRAPPER_CALLS: Array<{ name: string; call: (rksv: Rksv) => Promise<Ergebni
   {
     name: 'see.meldeWiederinbetriebnahme',
     call: (r) =>
-      r.see.meldeWiederinbetriebnahme({ paketNr: 1, zertifikatsseriennummer: '1a2b', ende: new Date('2026-01-02T00:00:00Z') }),
+      r.see.meldeWiederinbetriebnahme({
+        paketNr: 1,
+        zertifikatsseriennummer: '1a2b',
+        ende: new Date('2026-01-02T00:00:00Z'),
+      }),
   },
   {
     name: 'see.nimmAusserBetrieb',
@@ -167,7 +180,12 @@ for (const { name, call } of WRAPPER_CALLS) {
 test('kasse.registriere wirft FonSessionExpiredError bei rc -1', async () => {
   const rksv = rksvMitRc('-1', 'Session ungültig');
   await assert.rejects(
-    () => rksv.kasse.registriere({ paketNr: 1, kassenidentifikationsnummer: 'K1', benutzerschluessel: 'A'.repeat(44) }),
+    () =>
+      rksv.kasse.registriere({
+        paketNr: 1,
+        kassenidentifikationsnummer: 'K1',
+        benutzerschluessel: 'A'.repeat(44),
+      }),
     FonSessionExpiredError,
   );
 });
@@ -176,7 +194,12 @@ test('see.registriere wirft FonSessionExpiredError bei rc -1', async () => {
   const rksv = rksvMitRc('-1', 'Session ungültig');
   await assert.rejects(
     () =>
-      rksv.see.registriere({ paketNr: 1, artSe: 'HSM_DIENSTLEISTER', vdaId: 'AT9', zertifikatsseriennummer: '1a2b' }),
+      rksv.see.registriere({
+        paketNr: 1,
+        artSe: 'HSM_DIENSTLEISTER',
+        vdaId: 'AT9',
+        zertifikatsseriennummer: '1a2b',
+      }),
     FonSessionExpiredError,
   );
 });

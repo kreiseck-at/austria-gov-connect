@@ -14,9 +14,19 @@ const VOR_B64 = Buffer.alloc(8, 1).toString('base64');
 const SIG_B64 = Buffer.alloc(64, 7).toString('base64');
 
 const BASE_SEG = [
-  'R1-AT1', 'KASSE-001', '243', '2026-07-20T14:23:34',
-  '10,00', '0,00', '0,00', '0,00', '0,00',
-  UMS_B64, '1a2b3c', VOR_B64, SIG_B64,
+  'R1-AT1',
+  'KASSE-001',
+  '243',
+  '2026-07-20T14:23:34',
+  '10,00',
+  '0,00',
+  '0,00',
+  '0,00',
+  '0,00',
+  UMS_B64,
+  '1a2b3c',
+  VOR_B64,
+  SIG_B64,
 ];
 
 // Baut einen unsignierten Rohcode aus BASE_SEG mit optionalen 1-basierten Overrides.
@@ -33,7 +43,10 @@ function signedCode(over: Partial<Record<number, string>> = {}): string {
   const payload = '_' + seg.join('_');
   const header = 'eyJhbGciOiJFUzI1NiJ9';
   const signingInput = header + '.' + Buffer.from(payload, 'utf8').toString('base64url');
-  const sig = sign('sha256', Buffer.from(signingInput, 'utf8'), { key: privateKey, dsaEncoding: 'ieee-p1363' });
+  const sig = sign('sha256', Buffer.from(signingInput, 'utf8'), {
+    key: privateKey,
+    dsaEncoding: 'ieee-p1363',
+  });
   return payload + '_' + sig.toString('base64');
 }
 
@@ -207,7 +220,11 @@ test('pruefe: Signaturfeld dekodiert zu != 64 Byte -> Signaturlaenge FAIL und Si
 
 test('verkettung: Startbeleg mit falschem Verkettungswert -> FAIL', () => {
   const kassenId = 'KASSE-999';
-  const falsch = createHash('sha256').update(Buffer.from('anderer-wert', 'utf8')).digest().subarray(0, 8).toString('base64');
+  const falsch = createHash('sha256')
+    .update(Buffer.from('anderer-wert', 'utf8'))
+    .digest()
+    .subarray(0, 8)
+    .toString('base64');
   const beleg = decodeBelegCode(rawCode({ 2: kassenId, 12: falsch }));
   assert.equal(pruefeVerkettung(beleg).status, 'FAIL');
 });

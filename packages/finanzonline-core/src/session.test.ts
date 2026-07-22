@@ -46,10 +46,12 @@ test('createSession sendet loginRequest in bindender Feldreihenfolge', async () 
   let action = '';
   const session = await createSession({
     ...VALID,
-    transport: { fetchImpl: respond(loginOk('SESSION0001'), (b, a) => {
-      body = b;
-      action = a;
-    }) },
+    transport: {
+      fetchImpl: respond(loginOk('SESSION0001'), (b, a) => {
+        body = b;
+        action = a;
+      }),
+    },
   });
   assert.equal(session.id, 'SESSION0001');
   assert.equal(action, '"login"');
@@ -78,7 +80,9 @@ test('rc=-4 wirft FonSessionError (nicht Expired)', async () => {
       createSession({
         ...VALID,
         transport: {
-          fetchImpl: respond('<Envelope><Body><loginResponse><rc>-4</rc><msg>ungültig</msg></loginResponse></Body></Envelope>'),
+          fetchImpl: respond(
+            '<Envelope><Body><loginResponse><rc>-4</rc><msg>ungültig</msg></loginResponse></Body></Envelope>',
+          ),
         },
       }),
     (err: unknown) =>
@@ -131,7 +135,7 @@ test('logout sendet logoutRequest mit tid, benid, id', async () => {
 
 test('zweiter logout-Aufruf ist ein No-op und sendet keinen weiteren Request', async () => {
   let call = 0;
-  const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+  const fetchImpl = (async (_url: string | URL | Request, _init?: RequestInit) => {
     call++;
     if (call === 1) return new Response(loginOk('SESSION0001'), { status: 200 });
     return new Response('<Envelope><Body><logoutResponse><rc>0</rc></logoutResponse></Body></Envelope>', {

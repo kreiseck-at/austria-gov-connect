@@ -9,15 +9,27 @@ const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256
 // Baut einen gültig signierten Belegcode: Segmente 1..12, dann Signatur über den Signing-Input.
 function signedCode(over: Partial<Record<number, string>> = {}): string {
   const seg = [
-    'R1-AT1', 'KASSE-001', '243', '2026-07-20T14:23:34',
-    '10,00', '0,00', '0,00', '0,00', '0,00',
-    Buffer.alloc(8, 2).toString('base64'), '1a2b3c', Buffer.alloc(8, 1).toString('base64'),
+    'R1-AT1',
+    'KASSE-001',
+    '243',
+    '2026-07-20T14:23:34',
+    '10,00',
+    '0,00',
+    '0,00',
+    '0,00',
+    '0,00',
+    Buffer.alloc(8, 2).toString('base64'),
+    '1a2b3c',
+    Buffer.alloc(8, 1).toString('base64'),
   ];
   for (const [k, v] of Object.entries(over)) seg[Number(k) - 1] = v as string; // 1-basiert
   const payload = '_' + seg.join('_');
   const header = 'eyJhbGciOiJFUzI1NiJ9';
   const signingInput = header + '.' + Buffer.from(payload, 'utf8').toString('base64url');
-  const sig = sign('sha256', Buffer.from(signingInput, 'utf8'), { key: privateKey, dsaEncoding: 'ieee-p1363' });
+  const sig = sign('sha256', Buffer.from(signingInput, 'utf8'), {
+    key: privateKey,
+    dsaEncoding: 'ieee-p1363',
+  });
   return payload + '_' + sig.toString('base64');
 }
 
@@ -67,8 +79,19 @@ test('see-ausfall -> Signatur NOT_EXECUTED trotz Schlüssel', () => {
   // Bei SEE-Ausfall steht statt der Signatur der Ausfall-Marker; nicht signieren.
   const marker = Buffer.from('Sicherheitseinrichtung ausgefallen').toString('base64');
   const seg = [
-    'R1-AT1', 'KASSE-001', '243', '2026-07-20T14:23:34', '10,00', '0,00', '0,00', '0,00', '0,00',
-    Buffer.alloc(8, 2).toString('base64'), '1a2b3c', Buffer.alloc(8, 1).toString('base64'), marker,
+    'R1-AT1',
+    'KASSE-001',
+    '243',
+    '2026-07-20T14:23:34',
+    '10,00',
+    '0,00',
+    '0,00',
+    '0,00',
+    '0,00',
+    Buffer.alloc(8, 2).toString('base64'),
+    '1a2b3c',
+    Buffer.alloc(8, 1).toString('base64'),
+    marker,
   ];
   const beleg = decodeBelegCode('_' + seg.join('_'));
   const res = pruefeBelegCode(beleg, { schluessel: publicKey });

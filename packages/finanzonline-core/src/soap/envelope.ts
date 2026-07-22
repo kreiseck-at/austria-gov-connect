@@ -14,9 +14,7 @@ export interface EnvelopeSpec {
 const SOAP_ENV = 'http://schemas.xmlsoap.org/soap/envelope/';
 
 export function buildEnvelope(spec: EnvelopeSpec): string {
-  const body = spec.fields
-    .map((f) => `<${f.name}>${escapeXmlText(f.value)}</${f.name}>`)
-    .join('');
+  const body = spec.fields.map((f) => `<${f.name}>${escapeXmlText(f.value)}</${f.name}>`).join('');
   return (
     '<?xml version="1.0" encoding="UTF-8"?>' +
     `<soapenv:Envelope xmlns:soapenv="${SOAP_ENV}">` +

@@ -102,11 +102,17 @@ function ausfallBlock(
   const hatAbn = a.ausserbetriebnahme !== undefined;
   req(hatAusfall !== hatAbn, 'Genau eines von ausfall/ausserbetriebnahme ist erforderlich');
   if (a.ausfall) {
-    req(ausfallCodes.includes(a.ausfall.begruendung), `Ungültiger Begründungscode ${a.ausfall.begruendung} für Ausfall`);
+    req(
+      ausfallCodes.includes(a.ausfall.begruendung),
+      `Ungültiger Begründungscode ${a.ausfall.begruendung} für Ausfall`,
+    );
     return `<ausfall>${el('begruendung', String(a.ausfall.begruendung))}${el('beginn_ausfall', isoDateTime(a.ausfall.beginn))}</ausfall>`;
   }
   const abn = a.ausserbetriebnahme!;
-  req(abn.begruendung === 6 || abn.begruendung === 7, `Ungültiger Begründungscode ${abn.begruendung} für Außerbetriebnahme`);
+  req(
+    abn.begruendung === 6 || abn.begruendung === 7,
+    `Ungültiger Begründungscode ${abn.begruendung} für Außerbetriebnahme`,
+  );
   return `<ausserbetriebnahme>${el('begruendung', String(abn.begruendung))}</ausserbetriebnahme>`;
 }
 
@@ -115,7 +121,10 @@ export function vorgangXml(v: Vorgang, satznr: number): string {
   const kundeninfo = v.kundeninfo !== undefined ? el('kundeninfo', v.kundeninfo) : '';
   switch (v.art) {
     case 'registrierung_kasse': {
-      req(BENUTZERSCHLUESSEL.test(v.benutzerschluessel), 'benutzerschluessel muss 44 Zeichen [0-9a-zA-Z+/=] sein');
+      req(
+        BENUTZERSCHLUESSEL.test(v.benutzerschluessel),
+        'benutzerschluessel muss 44 Zeichen [0-9a-zA-Z+/=] sein',
+      );
       const anmerkung = v.anmerkung !== undefined ? el('anmerkung', v.anmerkung) : '';
       return `<registrierung_kasse>${satz}${kundeninfo}${el('kassenidentifikationsnummer', v.kassenidentifikationsnummer)}${anmerkung}${el('benutzerschluessel', v.benutzerschluessel)}</registrierung_kasse>`;
     }
@@ -125,10 +134,9 @@ export function vorgangXml(v: Vorgang, satznr: number): string {
       const hatSn = v.zertifikatsseriennummer !== undefined;
       const hatZert = v.zertifikat !== undefined;
       req(hatSn !== hatZert, 'Genau eines von zertifikatsseriennummer/zertifikat ist erforderlich');
-      if (hatSn) req(ZERT_SN.test(v.zertifikatsseriennummer!), 'zertifikatsseriennummer muss hex (max 50) sein');
-      const zertEl = hatSn
-        ? zertSnEl(v.zertifikatsseriennummer!)
-        : el('zertifikat', v.zertifikat!);
+      if (hatSn)
+        req(ZERT_SN.test(v.zertifikatsseriennummer!), 'zertifikatsseriennummer muss hex (max 50) sein');
+      const zertEl = hatSn ? zertSnEl(v.zertifikatsseriennummer!) : el('zertifikat', v.zertifikat!);
       return `<registrierung_se>${satz}${kundeninfo}${el('art_se', v.artSe)}${el('vda_id', v.vdaId)}${zertEl}</registrierung_se>`;
     }
     case 'ausfall_kasse': {

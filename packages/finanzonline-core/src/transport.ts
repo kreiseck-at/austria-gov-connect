@@ -16,10 +16,7 @@ export interface SoapCallSpec {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-export async function callSoap(
-  spec: SoapCallSpec,
-  opts: TransportOptions = {},
-): Promise<XmlNode> {
+export async function callSoap(spec: SoapCallSpec, opts: TransportOptions = {}): Promise<XmlNode> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const retries = opts.retries ?? 0;
   const doFetch = opts.fetchImpl ?? fetch;
@@ -62,9 +59,7 @@ export async function callSoap(
   try {
     root = parseXml(responseText);
   } catch (err) {
-    throw new FonProtocolError(
-      `Antwort ist kein gültiges XML (HTTP ${status}): ${(err as Error).message}`,
-    );
+    throw new FonProtocolError(`Antwort ist kein gültiges XML (HTTP ${status}): ${(err as Error).message}`);
   }
 
   const fault = detectFault(root);

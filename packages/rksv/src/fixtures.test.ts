@@ -62,7 +62,12 @@ const INVALID_SESSION =
 const VALIDATION_FAULT =
   '<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><SOAP-ENV:Fault><faultcode>SOAP-ENV:Client</faultcode><faultstring xml:lang="en">Validation error</faultstring><detail><fon:ValidationError xmlns:fon="https://finanzonline.bmf.gv.at">cvc-complex-type.2.4.a: Invalid content was found starting with element art_uebermittlung. One of tid is expected.</fon:ValidationError></detail></SOAP-ENV:Fault></SOAP-ENV:Body></SOAP-ENV:Envelope>';
 
-const SEE_REG = { paketNr: 1, artSe: 'SIGNATURKARTE', vdaId: 'AT1', zertifikatsseriennummer: '32082A8F' } as const;
+const SEE_REG = {
+  paketNr: 1,
+  artSe: 'SIGNATURKARTE',
+  vdaId: 'AT1',
+  zertifikatsseriennummer: '32082A8F',
+} as const;
 
 test('Fixture ungültige Session: rc -1 -> FonSessionExpiredError (geworfen)', async () => {
   const rksv = rksvMit(INVALID_SESSION);
@@ -100,7 +105,10 @@ test('Fixture reg_se B10: bereits gespeichert -> ok false, rc/msg durchgereicht'
 });
 
 test('Fixture status_se IN_BETRIEB: abfrage_ergebnis mit NICHT-namespaced Kindern', async () => {
-  const erg = await rksvMit(STATUS_IN_BETRIEB).status.see({ paketNr: 1, zertifikatsseriennummer: '32082A8F' });
+  const erg = await rksvMit(STATUS_IN_BETRIEB).status.see({
+    paketNr: 1,
+    zertifikatsseriennummer: '32082A8F',
+  });
   assert.equal(erg.ok, true);
   assert.equal(erg.status?.status, 'IN_BETRIEB');
   assert.equal(erg.status?.tsRegistrierung, '2026-07-22T03:25:29.852+02:00');

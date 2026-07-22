@@ -44,7 +44,5 @@ export class FonSessionError extends FonError {
 export class FonSessionExpiredError extends FonSessionError {}
 
 export function sessionErrorFor(rc: number, serverMsg?: string): FonSessionError {
-  return rc === -1
-    ? new FonSessionExpiredError(rc, serverMsg)
-    : new FonSessionError(rc, serverMsg);
+  return rc === -1 ? new FonSessionExpiredError(rc, serverMsg) : new FonSessionError(rc, serverMsg);
 }

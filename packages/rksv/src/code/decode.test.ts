@@ -9,9 +9,19 @@ const UMS_B64 = Buffer.alloc(8, 2).toString('base64');
 
 function code(over: Partial<Record<number, string>> = {}): string {
   const seg = [
-    'R1-AT1', 'KASSE-001', '243', '2026-07-20T14:23:34',
-    '10,00', '0,00', '0,00', '0,00', '0,00',
-    UMS_B64, '1a2b3c', VOR_B64, SIG_B64,
+    'R1-AT1',
+    'KASSE-001',
+    '243',
+    '2026-07-20T14:23:34',
+    '10,00',
+    '0,00',
+    '0,00',
+    '0,00',
+    '0,00',
+    UMS_B64,
+    '1a2b3c',
+    VOR_B64,
+    SIG_B64,
   ];
   for (const [k, v] of Object.entries(over)) seg[Number(k) - 1] = v as string; // 1-basierte Segmentnummer
   return '_' + seg.join('_');

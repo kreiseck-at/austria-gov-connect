@@ -1,10 +1,5 @@
 export { createSession, type Session, type SessionConfig } from './session';
-export {
-  SESSION_ENDPOINT,
-  SESSION_NAMESPACE,
-  RKDB_ENDPOINT,
-  RKDB_NAMESPACE,
-} from './endpoints';
+export { SESSION_ENDPOINT, SESSION_NAMESPACE, RKDB_ENDPOINT, RKDB_NAMESPACE } from './endpoints';
 export {
   FonError,
   FonTransportError,

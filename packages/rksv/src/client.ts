@@ -23,8 +23,7 @@ export interface RksvConfig {
 
 /** Antwort auf {@link Rksv.uebermittlePaket}: bei genau einem Vorgang synchron mit Ergebnis, sonst asynchron nur mit Hinweis. */
 export type Quittung =
-  | { verarbeitung: 'synchron'; ergebnisse: Ergebnis[] }
-  | { verarbeitung: 'asynchron'; hinweis: string };
+  { verarbeitung: 'synchron'; ergebnisse: Ergebnis[] } | { verarbeitung: 'asynchron'; hinweis: string };
 
 /** Öffentliche API des rkdb-Clients: Paketübermittlung sowie bequeme Einzelvorgang-Hüllen je Vorgangsart. */
 export interface Rksv {
@@ -126,7 +125,11 @@ export type Einzel = (paketNr: number, vorgang: Vorgang) => Promise<Ergebnis>;
 export function createRksv(config: RksvConfig): Rksv {
   const s = config.session;
 
-  async function uebermittlePaket({ paketNr, vorgaenge, erzwingeAsynchron }: {
+  async function uebermittlePaket({
+    paketNr,
+    vorgaenge,
+    erzwingeAsynchron,
+  }: {
     paketNr: number;
     vorgaenge: Vorgang[];
     erzwingeAsynchron?: boolean;
