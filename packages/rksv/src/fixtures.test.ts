@@ -120,12 +120,14 @@ test('Fixture status_se B33: nicht registriert -> ok false, kein status', async 
 });
 
 test('Fixture belegpruefung FAIL: verificationId-Baum (VERIFICATION_FROM_CASHBOX -> EXISTS_CASHBOX)', async () => {
-  const pr = await rksvMit(BELEG_FAIL).beleg.pruefe({ paketNr: 1, beleg: '_R1-AT1_KECK-1_…' });
-  assert.equal(pr[0]?.id, 'VERIFICATION_FROM_CASHBOX');
-  assert.equal(pr[0]?.name, 'Prüfergebnis - Kasse');
-  assert.equal(pr[0]?.status, 'FAIL');
-  assert.equal(pr[0]?.teilpruefungen?.[0]?.id, 'EXISTS_CASHBOX');
-  assert.equal(pr[0]?.teilpruefungen?.[0]?.status, 'FAIL');
+  const erg = await rksvMit(BELEG_FAIL).beleg.pruefe({ paketNr: 1, beleg: '_R1-AT1_KECK-1_…' });
+  assert.equal(erg.rc, '43');
+  const pr = erg.belegpruefung;
+  assert.equal(pr?.[0]?.id, 'VERIFICATION_FROM_CASHBOX');
+  assert.equal(pr?.[0]?.name, 'Prüfergebnis - Kasse');
+  assert.equal(pr?.[0]?.status, 'FAIL');
+  assert.equal(pr?.[0]?.teilpruefungen?.[0]?.id, 'EXISTS_CASHBOX');
+  assert.equal(pr?.[0]?.teilpruefungen?.[0]?.status, 'FAIL');
 });
 
 test('Fixture reg_kasse KECK-2 rc 0: Kasse registriert', async () => {
@@ -139,13 +141,16 @@ test('Fixture reg_kasse KECK-2 rc 0: Kasse registriert', async () => {
 });
 
 test('Fixture belegpruefung PASS: flacher Baum, VERIFICATION_FROM_CASHBOX = PASS', async () => {
-  const pr = await rksvMit(BELEG_PASS).beleg.pruefe({ paketNr: 1, beleg: '_R1-AT1_KECK-2_…' });
-  assert.equal(pr.length, 1);
-  assert.equal(pr[0]?.id, 'VERIFICATION_FROM_CASHBOX');
-  assert.equal(pr[0]?.name, 'Prüfergebnis - Kasse');
-  assert.equal(pr[0]?.status, 'PASS');
-  assert.match(pr[0]?.detail ?? '', /erfolgreich|gesetzeskonform/);
-  assert.equal(pr[0]?.teilpruefungen, undefined); // PASS ist flach
+  const erg = await rksvMit(BELEG_PASS).beleg.pruefe({ paketNr: 1, beleg: '_R1-AT1_KECK-2_…' });
+  assert.equal(erg.ok, true);
+  assert.equal(erg.rc, '0');
+  const pr = erg.belegpruefung;
+  assert.equal(pr?.length, 1);
+  assert.equal(pr?.[0]?.id, 'VERIFICATION_FROM_CASHBOX');
+  assert.equal(pr?.[0]?.name, 'Prüfergebnis - Kasse');
+  assert.equal(pr?.[0]?.status, 'PASS');
+  assert.match(pr?.[0]?.detail ?? '', /erfolgreich|gesetzeskonform/);
+  assert.equal(pr?.[0]?.teilpruefungen, undefined); // PASS ist flach
 });
 
 test('Fixture async: >1 Vorgang -> asynchron; die rc-0-Empfangsbestätigung ist NICHT das Ergebnis', async () => {

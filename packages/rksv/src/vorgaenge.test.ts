@@ -17,6 +17,18 @@ test('registrierung_kasse mit optionaler anmerkung platziert sie vor benutzersch
   assert.ok(xml.indexOf('<anmerkung>Hinweis<') < xml.indexOf('<benutzerschluessel>'));
 });
 
+test('registrierung_kasse mit kundeninfo platziert es direkt nach satznr', () => {
+  const v: Vorgang = { art: 'registrierung_kasse', kassenidentifikationsnummer: 'K1', benutzerschluessel: 'A'.repeat(44), kundeninfo: 'REF-1' };
+  const xml = vorgangXml(v, 1);
+  assert.match(xml, /^<registrierung_kasse><satznr>1<\/satznr><kundeninfo>REF-1<\/kundeninfo>/);
+});
+
+test('registrierung_kasse ohne kundeninfo lässt das Element weg', () => {
+  const v: Vorgang = { art: 'registrierung_kasse', kassenidentifikationsnummer: 'K1', benutzerschluessel: 'A'.repeat(44) };
+  const xml = vorgangXml(v, 1);
+  assert.doesNotMatch(xml, /<kundeninfo>/);
+});
+
 test('benutzerschluessel != 44 Zeichen wird lokal abgelehnt', () => {
   const v: Vorgang = { art: 'registrierung_kasse', kassenidentifikationsnummer: 'K1', benutzerschluessel: 'zu-kurz' };
   assert.throws(() => vorgangXml(v, 1), RksvError);

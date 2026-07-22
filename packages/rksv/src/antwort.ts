@@ -1,6 +1,7 @@
 import { type XmlNode, firstChild, childText, findDescendant } from '@kreiseck/finanzonline-core';
 import { rcInfo } from './returncodes';
 
+/** Einzelprüfung aus einem `verificationResult`-Baum (z. B. Belegprüfung); kann rekursiv Teilprüfungen enthalten. */
 export interface Pruefung {
   /** Maschinenlesbare Prüf-ID des Dienstes (`verificationId`), z. B. `MATCH_COMPANY`. */
   id?: string;
@@ -10,17 +11,25 @@ export interface Pruefung {
   teilpruefungen?: Pruefung[];
 }
 
+/** Ergebnis einer Statusabfrage (`status.kasse`/`status.see`): Betriebsstatus samt Zeitstempeln. */
 export interface StatusErgebnis {
   status: string;
   tsRegistrierung?: string;
   tsStatus?: string;
 }
 
+/**
+ * Ergebnis eines einzelnen Vorgangs (`result` im rkdb-Antwortprotokoll).
+ * Fachliche Returncodes lösen keinen Fehler aus — `ok`/`rc`/`msg` tragen sie durch;
+ * `belegpruefung`/`status` sind nur bei den jeweils passenden Vorgangsarten gesetzt.
+ */
 export interface Ergebnis {
   satznr: number;
   ok: boolean;
   rc: string;
   msg: string;
+  /** Vom Dienst unverändert zurückgegebenes `kundeninfo`, falls im Vorgang gesetzt. */
+  kundeninfo?: string;
   belegpruefung?: Pruefung[];
   status?: StatusErgebnis;
 }
@@ -58,6 +67,9 @@ export function parseRkdbErgebnisse(root: XmlNode): Ergebnis[] {
     const msg = (msgNode ? childText(msgNode, 'msg') : undefined) ?? '';
     const satznr = Number.parseInt(childText(result, 'satznr') ?? '0', 10);
     const erg: Ergebnis = { satznr, ok: rcInfo(rc).kind === 'ok', rc, msg };
+
+    const kundeninfo = childText(result, 'kundeninfo');
+    if (kundeninfo) erg.kundeninfo = kundeninfo;
 
     const vrl = firstChild(result, 'verificationResultList');
     if (vrl) erg.belegpruefung = parsePruefungen(vrl);

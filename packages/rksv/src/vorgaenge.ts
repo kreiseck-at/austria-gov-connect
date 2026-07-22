@@ -14,6 +14,7 @@ export interface RegistrierungKasse {
   kassenidentifikationsnummer: string;
   benutzerschluessel: string;
   anmerkung?: string;
+  kundeninfo?: string;
 }
 export interface RegistrierungSee {
   art: 'registrierung_se';
@@ -21,32 +22,38 @@ export interface RegistrierungSee {
   vdaId: string;
   zertifikatsseriennummer?: string;
   zertifikat?: string;
+  kundeninfo?: string;
 }
 export interface AusfallKasse {
   art: 'ausfall_kasse';
   kassenidentifikationsnummer: string;
   ausfall?: { begruendung: 1 | 5 | 99; beginn: Date };
   ausserbetriebnahme?: { begruendung: 6 | 7 };
+  kundeninfo?: string;
 }
 export interface AusfallSee {
   art: 'ausfall_se';
   zertifikatsseriennummer: string;
   ausfall?: { begruendung: 1 | 2 | 99; beginn: Date };
   ausserbetriebnahme?: { begruendung: 6 | 7 };
+  kundeninfo?: string;
 }
 export interface WiederinbetriebnahmeKasse {
   art: 'wiederinbetriebnahme_kasse';
   kassenidentifikationsnummer: string;
   ende: Date;
+  kundeninfo?: string;
 }
 export interface WiederinbetriebnahmeSee {
   art: 'wiederinbetriebnahme_se';
   zertifikatsseriennummer: string;
   ende: Date;
+  kundeninfo?: string;
 }
 export interface BelegpruefungVorgang {
   art: 'belegpruefung';
   beleg: string;
+  kundeninfo?: string;
 }
 export type Vorgang =
   | RegistrierungKasse
@@ -105,11 +112,12 @@ function ausfallBlock(
 
 export function vorgangXml(v: Vorgang, satznr: number): string {
   const satz = el('satznr', String(satznr));
+  const kundeninfo = v.kundeninfo !== undefined ? el('kundeninfo', v.kundeninfo) : '';
   switch (v.art) {
     case 'registrierung_kasse': {
       req(BENUTZERSCHLUESSEL.test(v.benutzerschluessel), 'benutzerschluessel muss 44 Zeichen [0-9a-zA-Z+/=] sein');
       const anmerkung = v.anmerkung !== undefined ? el('anmerkung', v.anmerkung) : '';
-      return `<registrierung_kasse>${satz}${el('kassenidentifikationsnummer', v.kassenidentifikationsnummer)}${anmerkung}${el('benutzerschluessel', v.benutzerschluessel)}</registrierung_kasse>`;
+      return `<registrierung_kasse>${satz}${kundeninfo}${el('kassenidentifikationsnummer', v.kassenidentifikationsnummer)}${anmerkung}${el('benutzerschluessel', v.benutzerschluessel)}</registrierung_kasse>`;
     }
     case 'registrierung_se': {
       req(ART_SE.includes(v.artSe), `art_se ungültig: ${v.artSe}`);
@@ -121,24 +129,24 @@ export function vorgangXml(v: Vorgang, satznr: number): string {
       const zertEl = hatSn
         ? zertSnEl(v.zertifikatsseriennummer!)
         : el('zertifikat', v.zertifikat!);
-      return `<registrierung_se>${satz}${el('art_se', v.artSe)}${el('vda_id', v.vdaId)}${zertEl}</registrierung_se>`;
+      return `<registrierung_se>${satz}${kundeninfo}${el('art_se', v.artSe)}${el('vda_id', v.vdaId)}${zertEl}</registrierung_se>`;
     }
     case 'ausfall_kasse': {
       const block = ausfallBlock(v, [1, 5, 99]);
-      return `<ausfall_kasse>${satz}${el('kassenidentifikationsnummer', v.kassenidentifikationsnummer)}${block}</ausfall_kasse>`;
+      return `<ausfall_kasse>${satz}${kundeninfo}${el('kassenidentifikationsnummer', v.kassenidentifikationsnummer)}${block}</ausfall_kasse>`;
     }
     case 'ausfall_se': {
       req(ZERT_SN.test(v.zertifikatsseriennummer), 'zertifikatsseriennummer muss hex (max 50) sein');
       const block = ausfallBlock(v, [1, 2, 99]);
-      return `<ausfall_se>${satz}${zertSnEl(v.zertifikatsseriennummer)}${block}</ausfall_se>`;
+      return `<ausfall_se>${satz}${kundeninfo}${zertSnEl(v.zertifikatsseriennummer)}${block}</ausfall_se>`;
     }
     case 'wiederinbetriebnahme_kasse':
-      return `<wiederinbetriebnahme_kasse>${satz}${el('kassenidentifikationsnummer', v.kassenidentifikationsnummer)}${el('ende_ausfall', isoDateTime(v.ende))}</wiederinbetriebnahme_kasse>`;
+      return `<wiederinbetriebnahme_kasse>${satz}${kundeninfo}${el('kassenidentifikationsnummer', v.kassenidentifikationsnummer)}${el('ende_ausfall', isoDateTime(v.ende))}</wiederinbetriebnahme_kasse>`;
     case 'wiederinbetriebnahme_se': {
       req(ZERT_SN.test(v.zertifikatsseriennummer), 'zertifikatsseriennummer muss hex (max 50) sein');
-      return `<wiederinbetriebnahme_se>${satz}${zertSnEl(v.zertifikatsseriennummer)}${el('ende_ausfall', isoDateTime(v.ende))}</wiederinbetriebnahme_se>`;
+      return `<wiederinbetriebnahme_se>${satz}${kundeninfo}${zertSnEl(v.zertifikatsseriennummer)}${el('ende_ausfall', isoDateTime(v.ende))}</wiederinbetriebnahme_se>`;
     }
     case 'belegpruefung':
-      return `<belegpruefung>${satz}${el('beleg', v.beleg)}</belegpruefung>`;
+      return `<belegpruefung>${satz}${kundeninfo}${el('beleg', v.beleg)}</belegpruefung>`;
   }
 }

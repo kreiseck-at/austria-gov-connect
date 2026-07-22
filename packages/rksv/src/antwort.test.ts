@@ -23,6 +23,12 @@ test('fachlicher rc B1 -> ok false, rc/msg durchgereicht', () => {
   assert.equal(erg[0]?.msg, 'bereits registriert');
 });
 
+test('kundeninfo wird durchgereicht, wenn im result vorhanden', () => {
+  const root = wrap('<result><satznr>1</satznr><kundeninfo>REF-1</kundeninfo><rkdbMessage><rc>0</rc><msg>ok</msg></rkdbMessage></result>');
+  const erg = parseRkdbErgebnisse(root);
+  assert.equal(erg[0]?.kundeninfo, 'REF-1');
+});
+
 test('mehrere results werden in Reihenfolge geliefert', () => {
   const root = wrap(
     '<result><satznr>1</satznr><rkdbMessage><rc>0</rc><msg>ok</msg></rkdbMessage></result>' +

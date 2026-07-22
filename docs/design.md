@@ -381,12 +381,27 @@ const erg = await rksv.status.kasse({ paketNr, kassenidentifikationsnummer: 'KAS
 // erg: Ergebnis mit ok/rc/msg; erg.status → { status: 'IN_BETRIEB', tsRegistrierung, tsStatus }
 // nicht registriert → { ok: false, rc: 'B32', msg, status: undefined }
 
-const pruefung = await rksv.beleg.pruefe({ paketNr, beleg: '_R1-AT9_…' });
-// → strukturiertes Prüfprotokoll
+const erg = await rksv.beleg.pruefe({ paketNr, beleg: '_R1-AT9_…' });
+// erg: volles Ergebnis wie bei status.* — erg.rc/erg.ok für den Ausgang
+// (rc '0' = alle Teilprüfungen PASS, '43' = mind. eine FAIL),
+// erg.belegpruefung → strukturiertes Prüfprotokoll
 ```
 
 Die Signatureinheit hat dieselben vier Vorgänge, adressiert über
 `zertifikatsseriennummer`.
+
+Jeder Vorgang (nicht die Statusabfragen) akzeptiert optional `kundeninfo` — eine
+frei wählbare Referenz, die der Dienst im Ergebnisprotokoll unverändert
+zurückgibt (siehe 2.4):
+
+```ts
+await rksv.kasse.registriere({
+  paketNr,
+  kassenidentifikationsnummer: 'KASSE-001',
+  benutzerschluessel: '<44 Zeichen Base64>',
+  kundeninfo: 'Filiale-Wien-3',
+});
+```
 
 ### 4.3 Batch
 

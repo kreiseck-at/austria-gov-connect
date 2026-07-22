@@ -45,9 +45,10 @@ test('see.registriere sendet registrierung_se mit vda_id', async () => {
   assert.match(body, /<registrierung_se>.*<vda_id>AT9<\/vda_id>/);
 });
 
-test('beleg.pruefe liefert Prüfungsbaum', async () => {
+test('beleg.pruefe liefert volles Ergebnis mit Prüfungsbaum', async () => {
   const rksv = rksvMit(ok('<verificationResultList><verificationResult><verificationId>1</verificationId><version>1</version><verificationName>Struktur</verificationName><verificationState>PASS</verificationState><verificationTimestamp>t</verificationTimestamp></verificationResult></verificationResultList>'));
-  const pr = await rksv.beleg.pruefe({ paketNr: 1, beleg: '_R1-AT9_K_1_2026-07-20T14:23:34_10,00' });
-  assert.equal(pr[0]?.name, 'Struktur');
-  assert.equal(pr[0]?.status, 'PASS');
+  const erg = await rksv.beleg.pruefe({ paketNr: 1, beleg: '_R1-AT9_K_1_2026-07-20T14:23:34_10,00' });
+  assert.equal(erg.ok, true);
+  assert.equal(erg.belegpruefung?.[0]?.name, 'Struktur');
+  assert.equal(erg.belegpruefung?.[0]?.status, 'PASS');
 });
