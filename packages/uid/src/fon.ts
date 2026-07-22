@@ -1,4 +1,4 @@
-import { buildEnvelope, callSoap, findDescendant, childText, type Session, type TransportOptions } from '@kreiseck/finanzonline-core';
+import { buildEnvelope, callSoap, findDescendant, childText, sessionErrorFor, type Session, type TransportOptions } from '@kreiseck/finanzonline-core';
 import { normalisiereUid } from './normalisieren';
 import { UidEingabeError, type UidErgebnis, type KeinAntwortGrund } from './ergebnis';
 
@@ -21,6 +21,7 @@ export async function fonUidAbfrage(args: { session: Session; antragsteller: str
   const resp = findDescendant(root, 'uidAbfrageServiceResponse');
   const rcText = resp ? childText(resp, 'rc') : undefined;
   const rc = Number.parseInt(rcText ?? '', 10);
+  if (rc === -1) throw sessionErrorFor(-1, resp ? childText(resp, 'msg') : undefined);
   const base = { quelle: 'fon' as const, uid: ziel.voll, land: ziel.land, abfragedatum: datum, rohRc: String(rc) };
   if (rc === 0) {
     const erg: UidErgebnis = { ...base, ergebnis: 'gueltig' };

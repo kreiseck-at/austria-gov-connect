@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { fonUidAbfrage } from './fon';
 import { UidEingabeError } from './ergebnis';
 import type { Session } from '@kreiseck/finanzonline-core';
+import { FonSessionExpiredError } from '@kreiseck/finanzonline-core';
 
 const s: Session = { id: 'ABCDEFGHIJ1234567890', tid: 'ABCD1234', benid: 'benutzer1', async logout() {} };
 const resp = (inner: string) => `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:uidAbfrageServiceResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/uidAbfrage">${inner}</ns:uidAbfrageServiceResponse></S:Body></S:Envelope>`;
@@ -28,4 +29,7 @@ test('rc 1513 -> keine_antwort/ratenlimit, NICHT wiederholbar', async () => {
 });
 test('rc 4 -> UidEingabeError', async () => {
   await assert.rejects(() => fonUidAbfrage({ session: s, antragsteller: 'ATU12345678', uid: 'XX', stufe: 1, transport: tp(resp('<rc>4</rc>')) }), UidEingabeError);
+});
+test('rc -1 -> FonSessionExpiredError', async () => {
+  await assert.rejects(() => fonUidAbfrage({ session: s, antragsteller: 'ATU12345678', uid: 'ATU12345678', stufe: 1, transport: tp(resp('<rc>-1</rc><msg>Session abgelaufen</msg>')) }), FonSessionExpiredError);
 });
