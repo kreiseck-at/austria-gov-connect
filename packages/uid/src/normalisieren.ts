@@ -1,6 +1,35 @@
 import { UidEingabeError } from './ergebnis';
 
-const LAENDER = ['AT','BE','BG','CY','CZ','DE','DK','EE','EL','ES','FI','FR','GB','HR','HU','IE','IT','LT','LU','LV','MT','NL','PL','PT','SE','SI','SK','XI'] as const;
+const LAENDER = [
+  'AT',
+  'BE',
+  'BG',
+  'CY',
+  'CZ',
+  'DE',
+  'DK',
+  'EE',
+  'EL',
+  'ES',
+  'FI',
+  'FR',
+  'GB',
+  'HR',
+  'HU',
+  'IE',
+  'IT',
+  'LT',
+  'LU',
+  'LV',
+  'MT',
+  'NL',
+  'PL',
+  'PT',
+  'SE',
+  'SI',
+  'SK',
+  'XI',
+] as const;
 
 export function normalisiereUid(roh: string): { land: string; nummer: string; voll: string } {
   if (typeof roh !== 'string') throw new UidEingabeError('UID muss ein String sein');

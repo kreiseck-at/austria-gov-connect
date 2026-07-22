@@ -5,6 +5,21 @@ an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/); die Pakete folgen
 [Semantic Versioning](https://semver.org/lang/de/) (vor 1.0.0 können Minor-Bumps
 brechen).
 
+## @kreiseck/uid
+
+### 0.1.0 — 2026-07-22
+
+- **Neu:** `createUid(config)` erzeugt ein Objekt mit Methoden zur UID-Prüfung
+  (VIES und FinanzOnline).
+- **Neu:** VIES-Prüfung über `pruefe()` (schnell, anonym) und `bestaetige()`
+  (mit Adressapproximation und Konsultationsnummern).
+- **Neu:** 3-Ausgänge-Modell: `gueltig` | `ungueltig` | `keine_antwort` mit
+  differenziertem `grund` und `wiederholbar`-Flag.
+- **Neu:** FON-UID-Abfrage (Stufe 1/2) über `fon.abfrage()` mit behördlicher
+  Bestätigung via DataBox-Bescheid.
+- **Neu:** Normalisierung und Caching via `normalisiereUid()` und `cacheKey()`.
+- Stateless API — alle Abfragen ohne interne Session (Session nur für FON optional).
+
 ## @kreiseck/rksv
 
 ### 0.5.0 — 2026-07-22

@@ -7,24 +7,36 @@ const jsonFetch = (body: unknown) =>
 
 test('gueltige DE-UID -> gueltig, quelle vies, land DE', async () => {
   const erg = await viesPruefe('DE136695976', {
-    fetchImpl: jsonFetch({ isValid: true, userError: 'VALID', name: '', address: '', requestDate: '2026-07-22' }),
+    fetchImpl: jsonFetch({
+      isValid: true,
+      userError: 'VALID',
+      name: '',
+      address: '',
+      requestDate: '2026-07-22',
+    }),
   });
   assert.equal(erg.ergebnis, 'gueltig');
   assert.equal(erg.quelle, 'vies');
   assert.equal(erg.land, 'DE');
 });
 test('nicht registriert -> ungueltig', async () => {
-  const erg = await viesPruefe('DE000000000', { fetchImpl: jsonFetch({ isValid: false, userError: 'INVALID' }) });
+  const erg = await viesPruefe('DE000000000', {
+    fetchImpl: jsonFetch({ isValid: false, userError: 'INVALID' }),
+  });
   assert.equal(erg.ergebnis, 'ungueltig');
 });
 test('MS_UNAVAILABLE -> keine_antwort/wiederholbar', async () => {
-  const erg = await viesPruefe('DE136695976', { fetchImpl: jsonFetch({ isValid: false, userError: 'MS_UNAVAILABLE' }) });
+  const erg = await viesPruefe('DE136695976', {
+    fetchImpl: jsonFetch({ isValid: false, userError: 'MS_UNAVAILABLE' }),
+  });
   assert.equal(erg.ergebnis, 'keine_antwort');
   assert.equal(erg.wiederholbar, true);
 });
 test('Netzwerkfehler -> keine_antwort/timeout', async () => {
   const erg = await viesPruefe('DE136695976', {
-    fetchImpl: (async () => { throw new Error('network'); }) as unknown as typeof fetch,
+    fetchImpl: (async () => {
+      throw new Error('network');
+    }) as unknown as typeof fetch,
   });
   assert.equal(erg.ergebnis, 'keine_antwort');
   assert.equal(erg.grund, 'timeout');
