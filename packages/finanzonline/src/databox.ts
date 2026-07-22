@@ -1,0 +1,112 @@
+import {
+  buildEnvelope,
+  callSoap,
+  findDescendant,
+  childText,
+  FonProtocolError,
+  type XmlNode,
+  type Session,
+  type TransportOptions,
+} from '@kreiseck/finanzonline-core';
+
+const DATABOX_ENDPOINT = 'https://finanzonline.bmf.gv.at/fon/ws/databox';
+const DATABOX_NAMESPACE = 'https://finanzonline.bmf.gv.at/fon/ws/databox';
+
+/** Ein Eintrag der DataBox-Liste (`databoxListEntry`); nur Metadaten, kein Dateiinhalt. */
+export interface DataboxEintrag {
+  stnr?: string;
+  name: string;
+  anbringen: string;
+  zrvon: string;
+  zrbis: string;
+  datbesch: string;
+  erltyp: string;
+  fileart: 'XML' | 'PDF';
+  tsZust: string;
+  applkey: string;
+  filebez: string;
+  gelesen: boolean;
+  betreff?: string;
+}
+
+export interface Databox {
+  /** Listet DataBox-Einträge; ohne `erltyp` nur ungelesene, mit `von`/`bis` das Zustellfenster (gelesen+ungelesen). */
+  liste(args?: { erltyp?: string; von?: Date; bis?: Date }): Promise<DataboxEintrag[]>;
+}
+
+function childrenNamed(node: XmlNode, name: string): XmlNode[] {
+  return node.children.filter((c) => c.name === name);
+}
+
+function normalizeFileart(value: string | undefined): 'XML' | 'PDF' {
+  return value === 'PDF' ? 'PDF' : 'XML';
+}
+
+function toIsoDateTime(d: Date): string {
+  return d.toISOString().slice(0, 19);
+}
+
+function parseEintrag(result: XmlNode): DataboxEintrag {
+  const eintrag: DataboxEintrag = {
+    name: childText(result, 'name') ?? '',
+    anbringen: childText(result, 'anbringen') ?? '',
+    zrvon: childText(result, 'zrvon') ?? '',
+    zrbis: childText(result, 'zrbis') ?? '',
+    datbesch: childText(result, 'datbesch') ?? '',
+    erltyp: childText(result, 'erltyp') ?? '',
+    fileart: normalizeFileart(childText(result, 'fileart')),
+    tsZust: childText(result, 'ts_zust') ?? '',
+    applkey: childText(result, 'applkey') ?? '',
+    filebez: childText(result, 'filebez') ?? '',
+    gelesen: childText(result, 'status') === '1',
+  };
+  const stnr = childText(result, 'stnr');
+  if (stnr) eintrag.stnr = stnr;
+  const betreff = childText(result, 'betreff');
+  if (betreff) eintrag.betreff = betreff;
+  return eintrag;
+}
+
+/** Baut den DataBox-Client (`getDatabox`) aus einer bestehenden {@link Session}. Zustandslos außer der übergebenen Konfiguration. */
+export function createDatabox(session: Session, opts?: { transport?: TransportOptions }): Databox {
+  const transport = opts?.transport;
+
+  async function liste(args?: { erltyp?: string; von?: Date; bis?: Date }): Promise<DataboxEintrag[]> {
+    const fields = [
+      { name: 'tid', value: session.tid },
+      { name: 'benid', value: session.benid },
+      { name: 'id', value: session.id },
+      { name: 'erltyp', value: args?.erltyp ?? '' },
+    ];
+    if (args?.von) fields.push({ name: 'ts_zust_von', value: toIsoDateTime(args.von) });
+    if (args?.bis) fields.push({ name: 'ts_zust_bis', value: toIsoDateTime(args.bis) });
+
+    const body = buildEnvelope({
+      namespace: DATABOX_NAMESPACE,
+      bodyElement: 'getDataboxRequest',
+      fields,
+    });
+
+    const root = await callSoap(
+      { endpoint: DATABOX_ENDPOINT, soapAction: 'getDatabox', body },
+      transport,
+    );
+
+    const resp = findDescendant(root, 'getDataboxResponse');
+    if (!resp) throw new FonProtocolError('Antwort enthält kein getDataboxResponse');
+
+    const rcText = childText(resp, 'rc');
+    const rc = Number.parseInt(rcText ?? '', 10);
+    if (rcText === undefined || Number.isNaN(rc)) {
+      throw new FonProtocolError(`getDataboxResponse ohne gültiges rc: "${rcText}"`);
+    }
+    if (rc !== 0) {
+      const msg = childText(resp, 'msg');
+      throw new FonProtocolError(`getDatabox rc=${rc}${msg ? `: ${msg}` : ''}`);
+    }
+
+    return childrenNamed(resp, 'result').map(parseEintrag);
+  }
+
+  return { liste };
+}
