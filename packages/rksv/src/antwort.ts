@@ -7,6 +7,8 @@ export interface Pruefung {
   id?: string;
   name: string;
   status: 'PASS' | 'FAIL' | 'NOT_EXECUTED';
+  /** Menschenlesbare Beschreibung der Prüfung (`verificationTextualDescription`). */
+  beschreibung?: string;
   detail?: string;
   teilpruefungen?: Pruefung[];
 }
@@ -28,6 +30,8 @@ export interface Ergebnis {
   ok: boolean;
   rc: string;
   msg: string;
+  /** Zeitstempel des Antwort-Envelopes (`ts_erstellung` auf rkdbResponse-Ebene), sofern vorhanden. */
+  tsErstellung?: string;
   /** Vom Dienst unverändert zurückgegebenes `kundeninfo`, falls im Vorgang gesetzt. */
   kundeninfo?: string;
   belegpruefung?: Pruefung[];
@@ -51,6 +55,8 @@ function parsePruefungen(list: XmlNode): Pruefung[] {
     };
     const id = childText(vr, 'verificationId');
     if (id) p.id = id;
+    const beschreibung = childText(vr, 'verificationTextualDescription');
+    if (beschreibung) p.beschreibung = beschreibung;
     const detail = childText(vr, 'verificationResultDetailedMessage');
     if (detail) p.detail = detail;
     if (teil) p.teilpruefungen = parsePruefungen(teil);
@@ -61,12 +67,17 @@ function parsePruefungen(list: XmlNode): Pruefung[] {
 export function parseRkdbErgebnisse(root: XmlNode): Ergebnis[] {
   const resp = findDescendant(root, 'rkdbResponse');
   if (!resp) return [];
+  // Antwort-Envelope-Zeitstempel steht einmal auf rkdbResponse-Ebene und gilt
+  // für alle enthaltenen result-Einträge.
+  const tsErstellung = childText(resp, 'ts_erstellung');
   return childrenNamed(resp, 'result').map((result) => {
     const msgNode = firstChild(result, 'rkdbMessage');
     const rc = (msgNode ? childText(msgNode, 'rc') : undefined) ?? '';
     const msg = (msgNode ? childText(msgNode, 'msg') : undefined) ?? '';
     const satznr = Number.parseInt(childText(result, 'satznr') ?? '0', 10);
     const erg: Ergebnis = { satznr, ok: rcInfo(rc).kind === 'ok', rc, msg };
+
+    if (tsErstellung) erg.tsErstellung = tsErstellung;
 
     const kundeninfo = childText(result, 'kundeninfo');
     if (kundeninfo) erg.kundeninfo = kundeninfo;

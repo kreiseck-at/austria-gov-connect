@@ -7,6 +7,18 @@ brechen).
 
 ## @kreiseck/rksv
 
+### 0.5.0 — 2026-07-22
+
+- **Neu:** `Pruefung.beschreibung` erfasst die menschenlesbare
+  `verificationTextualDescription` je Knoten im Belegprüfungs-Baum (vorher
+  verworfen).
+- **Neu:** `Ergebnis.tsErstellung` reicht den Zeitstempel des Antwort-Envelopes
+  (`ts_erstellung` auf rkdbResponse-Ebene) je Ergebnis durch — nützlich, um den
+  Verarbeitungszeitpunkt einer Einreichung festzuhalten.
+- Mindest-Abhängigkeit auf `@kreiseck/finanzonline-core` `^0.1.2` angehoben
+  (enthält die vollständige Fault-Detailtext-Erfassung).
+- Rein additiv, keine Breaking Changes.
+
 ### 0.4.1 — 2026-07-22
 
 - **Wartung:** Mindest-Node auf `>=20.18.0` angehoben (Node 18 ist End-of-Life),

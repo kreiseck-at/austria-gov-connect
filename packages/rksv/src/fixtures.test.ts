@@ -95,6 +95,8 @@ test('Fixture reg_se rc 0: leeres <msg/> -> ok, rc 0, msg leer', async () => {
   assert.equal(erg.ok, true);
   assert.equal(erg.rc, '0');
   assert.equal(erg.msg, '');
+  // Antwort-Envelope-Zeitstempel wird je Ergebnis durchgereicht (seit 0.5.0).
+  assert.equal(erg.tsErstellung, '2026-07-22T03:25:29');
 });
 
 test('Fixture reg_se B10: bereits gespeichert -> ok false, rc/msg durchgereicht', async () => {
@@ -134,8 +136,14 @@ test('Fixture belegpruefung FAIL: verificationId-Baum (VERIFICATION_FROM_CASHBOX
   assert.equal(pr?.[0]?.id, 'VERIFICATION_FROM_CASHBOX');
   assert.equal(pr?.[0]?.name, 'Prüfergebnis - Kasse');
   assert.equal(pr?.[0]?.status, 'FAIL');
+  // verificationTextualDescription wird als `beschreibung` erfasst (seit 0.5.0).
+  assert.match(pr?.[0]?.beschreibung ?? '', /Bei der Belegprüfung wird untersucht/);
+  // Teilprüfung ohne Textbeschreibung -> beschreibung bleibt undefined.
   assert.equal(pr?.[0]?.teilpruefungen?.[0]?.id, 'EXISTS_CASHBOX');
   assert.equal(pr?.[0]?.teilpruefungen?.[0]?.status, 'FAIL');
+  assert.equal(pr?.[0]?.teilpruefungen?.[0]?.beschreibung, undefined);
+  // Antwort-Envelope-Zeitstempel (seit 0.5.0).
+  assert.equal(erg.tsErstellung, '2026-07-22T03:25:36');
 });
 
 test('Fixture reg_kasse KECK-2 rc 0: Kasse registriert', async () => {
@@ -158,7 +166,9 @@ test('Fixture belegpruefung PASS: flacher Baum, VERIFICATION_FROM_CASHBOX = PASS
   assert.equal(pr?.[0]?.name, 'Prüfergebnis - Kasse');
   assert.equal(pr?.[0]?.status, 'PASS');
   assert.match(pr?.[0]?.detail ?? '', /erfolgreich|gesetzeskonform/);
+  assert.match(pr?.[0]?.beschreibung ?? '', /Bei der Belegprüfung wird untersucht/);
   assert.equal(pr?.[0]?.teilpruefungen, undefined); // PASS ist flach
+  assert.equal(erg.tsErstellung, '2026-07-22T04:12:09');
 });
 
 test('Fixture async: >1 Vorgang -> asynchron; die rc-0-Empfangsbestätigung ist NICHT das Ergebnis', async () => {

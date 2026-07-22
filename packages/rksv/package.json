@@ -1,6 +1,6 @@
 {
   "name": "@kreiseck/rksv",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "FinanzOnline Registrierkassen-Webservice (RKSV) und Offline-Belegcode",
   "license": "Apache-2.0",
   "author": "Kreiseck",
@@ -44,7 +44,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@kreiseck/finanzonline-core": "^0.1.0"
+    "@kreiseck/finanzonline-core": "^0.1.2"
   },
   "devDependencies": {
     "typescript": "^5.4.0",

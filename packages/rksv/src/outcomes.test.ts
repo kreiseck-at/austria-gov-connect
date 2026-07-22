@@ -53,7 +53,7 @@ test("rc '0' -> synchron mit vollständigem ok-Ergebnis", async () => {
   const q = await rksv.uebermittlePaket({ paketNr: 42, vorgaenge: [einzelnerVorgang] });
   assert.equal(q.verarbeitung, 'synchron');
   if (q.verarbeitung !== 'synchron') return;
-  assert.deepEqual(q.ergebnisse, [{ satznr: 1, ok: true, rc: '0', msg: 'Aufruf ok' }]);
+  assert.deepEqual(q.ergebnisse, [{ satznr: 1, ok: true, rc: '0', msg: 'Aufruf ok', tsErstellung: 'x' }]);
 });
 
 test("rc '-1' wirft FonSessionExpiredError", async () => {
