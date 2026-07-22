@@ -34,7 +34,7 @@ const VALIDATION_FAULT = parseXml(
     '<faultcode>SOAP-ENV:Client</faultcode>' +
     '<faultstring xml:lang="en">Validation error</faultstring>' +
     '<detail><fon:ValidationError xmlns:fon="https://finanzonline.bmf.gv.at">' +
-    "cvc-complex-type.2.4.a: Invalid content was found starting with element " +
+    'cvc-complex-type.2.4.a: Invalid content was found starting with element ' +
     "'{&quot;https://finanzonline.bmf.gv.at/rkdb&quot;:art_uebermittlung}'. " +
     "One of '{&quot;https://finanzonline.bmf.gv.at/rkdb&quot;:tid}' is expected." +
     '</fon:ValidationError></detail>' +

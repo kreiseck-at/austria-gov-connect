@@ -104,7 +104,11 @@ const WRAPPER_CALLS: Array<{ name: string; call: (rksv: Rksv) => Promise<Ergebni
   {
     name: 'kasse.registriere',
     call: (r) =>
-      r.kasse.registriere({ paketNr: 1, kassenidentifikationsnummer: 'K1', benutzerschluessel: 'A'.repeat(44) }),
+      r.kasse.registriere({
+        paketNr: 1,
+        kassenidentifikationsnummer: 'K1',
+        benutzerschluessel: 'A'.repeat(44),
+      }),
   },
   {
     name: 'kasse.meldeAusfall',
@@ -132,7 +136,12 @@ const WRAPPER_CALLS: Array<{ name: string; call: (rksv: Rksv) => Promise<Ergebni
   {
     name: 'see.registriere',
     call: (r) =>
-      r.see.registriere({ paketNr: 1, artSe: 'HSM_DIENSTLEISTER', vdaId: 'AT9', zertifikatsseriennummer: '1a2b' }),
+      r.see.registriere({
+        paketNr: 1,
+        artSe: 'HSM_DIENSTLEISTER',
+        vdaId: 'AT9',
+        zertifikatsseriennummer: '1a2b',
+      }),
   },
   {
     name: 'see.meldeAusfall',
@@ -147,7 +156,11 @@ const WRAPPER_CALLS: Array<{ name: string; call: (rksv: Rksv) => Promise<Ergebni
   {
     name: 'see.meldeWiederinbetriebnahme',
     call: (r) =>
-      r.see.meldeWiederinbetriebnahme({ paketNr: 1, zertifikatsseriennummer: '1a2b', ende: new Date('2026-01-02T00:00:00Z') }),
+      r.see.meldeWiederinbetriebnahme({
+        paketNr: 1,
+        zertifikatsseriennummer: '1a2b',
+        ende: new Date('2026-01-02T00:00:00Z'),
+      }),
   },
   {
     name: 'see.nimmAusserBetrieb',
@@ -167,7 +180,12 @@ for (const { name, call } of WRAPPER_CALLS) {
 test('kasse.registriere wirft FonSessionExpiredError bei rc -1', async () => {
   const rksv = rksvMitRc('-1', 'Session ungültig');
   await assert.rejects(
-    () => rksv.kasse.registriere({ paketNr: 1, kassenidentifikationsnummer: 'K1', benutzerschluessel: 'A'.repeat(44) }),
+    () =>
+      rksv.kasse.registriere({
+        paketNr: 1,
+        kassenidentifikationsnummer: 'K1',
+        benutzerschluessel: 'A'.repeat(44),
+      }),
     FonSessionExpiredError,
   );
 });
@@ -176,7 +194,12 @@ test('see.registriere wirft FonSessionExpiredError bei rc -1', async () => {
   const rksv = rksvMitRc('-1', 'Session ungültig');
   await assert.rejects(
     () =>
-      rksv.see.registriere({ paketNr: 1, artSe: 'HSM_DIENSTLEISTER', vdaId: 'AT9', zertifikatsseriennummer: '1a2b' }),
+      rksv.see.registriere({
+        paketNr: 1,
+        artSe: 'HSM_DIENSTLEISTER',
+        vdaId: 'AT9',
+        zertifikatsseriennummer: '1a2b',
+      }),
     FonSessionExpiredError,
   );
 });
@@ -198,7 +221,8 @@ test('belegpruefung: alle Prüfungen PASS', async () => {
     '<verificationResult><verificationName>B</verificationName><verificationState>PASS</verificationState></verificationResult>' +
     '</verificationResultList>';
   const rksv = rksvMitBelegpruefung(vrl);
-  const pr = await rksv.beleg.pruefe({ paketNr: 1, beleg: '_R1-AT9_K_1_2026-07-20T14:23:34_10,00' });
+  const erg = await rksv.beleg.pruefe({ paketNr: 1, beleg: '_R1-AT9_K_1_2026-07-20T14:23:34_10,00' });
+  const pr = erg.belegpruefung ?? [];
   assert.equal(pr.length, 2);
   assert.equal(pr[0]?.status, 'PASS');
   assert.equal(pr[1]?.status, 'PASS');
@@ -211,7 +235,8 @@ test('belegpruefung: gemischt PASS/FAIL mit Detailmeldung', async () => {
     '<verificationResult><verificationName>Signatur</verificationName><verificationState>FAIL</verificationState><verificationResultDetailedMessage>Signatur ungültig</verificationResultDetailedMessage></verificationResult>' +
     '</verificationResultList>';
   const rksv = rksvMitBelegpruefung(vrl);
-  const pr = await rksv.beleg.pruefe({ paketNr: 1, beleg: '_R1-AT9_K_1_2026-07-20T14:23:34_10,00' });
+  const erg = await rksv.beleg.pruefe({ paketNr: 1, beleg: '_R1-AT9_K_1_2026-07-20T14:23:34_10,00' });
+  const pr = erg.belegpruefung ?? [];
   assert.equal(pr.length, 2);
   assert.equal(pr[0]?.status, 'PASS');
   assert.equal(pr[0]?.detail, undefined);
@@ -225,7 +250,8 @@ test('belegpruefung: NOT_EXECUTED-Zustand wird übernommen', async () => {
     '<verificationResult><verificationName>NichtAusgeführt</verificationName><verificationState>NOT_EXECUTED</verificationState></verificationResult>' +
     '</verificationResultList>';
   const rksv = rksvMitBelegpruefung(vrl);
-  const pr = await rksv.beleg.pruefe({ paketNr: 1, beleg: '_R1-AT9_K_1_2026-07-20T14:23:34_10,00' });
+  const erg = await rksv.beleg.pruefe({ paketNr: 1, beleg: '_R1-AT9_K_1_2026-07-20T14:23:34_10,00' });
+  const pr = erg.belegpruefung ?? [];
   assert.equal(pr.length, 1);
   assert.equal(pr[0]?.status, 'NOT_EXECUTED');
 });
@@ -244,7 +270,8 @@ test('belegpruefung: verschachtelte Teilprüfungen zwei Ebenen tief', async () =
     '</verificationResult>' +
     '</verificationResultList>';
   const rksv = rksvMitBelegpruefung(vrl);
-  const pr = await rksv.beleg.pruefe({ paketNr: 1, beleg: '_R1-AT9_K_1_2026-07-20T14:23:34_10,00' });
+  const erg = await rksv.beleg.pruefe({ paketNr: 1, beleg: '_R1-AT9_K_1_2026-07-20T14:23:34_10,00' });
+  const pr = erg.belegpruefung ?? [];
   assert.equal(pr[0]?.name, 'Ebene1');
   const ebene2 = pr[0]?.teilpruefungen?.[0];
   assert.equal(ebene2?.name, 'Ebene2');
@@ -259,14 +286,16 @@ test('belegpruefung: unbekannter/kaputter verificationState normalisiert zu NOT_
     '<verificationResult><verificationName>Garbage</verificationName><verificationState>IRGENDWAS_UNBEKANNTES</verificationState></verificationResult>' +
     '</verificationResultList>';
   const rksv = rksvMitBelegpruefung(vrl);
-  const pr = await rksv.beleg.pruefe({ paketNr: 1, beleg: '_R1-AT9_K_1_2026-07-20T14:23:34_10,00' });
+  const erg = await rksv.beleg.pruefe({ paketNr: 1, beleg: '_R1-AT9_K_1_2026-07-20T14:23:34_10,00' });
+  const pr = erg.belegpruefung ?? [];
   assert.equal(pr[0]?.status, 'NOT_EXECUTED');
 });
 
 test('belegpruefung: leere verificationResultList -> leeres Pruefung[]', async () => {
   const vrl = '<verificationResultList></verificationResultList>';
   const rksv = rksvMitBelegpruefung(vrl);
-  const pr = await rksv.beleg.pruefe({ paketNr: 1, beleg: '_R1-AT9_K_1_2026-07-20T14:23:34_10,00' });
+  const erg = await rksv.beleg.pruefe({ paketNr: 1, beleg: '_R1-AT9_K_1_2026-07-20T14:23:34_10,00' });
+  const pr = erg.belegpruefung ?? [];
   assert.deepEqual(pr, []);
 });
 

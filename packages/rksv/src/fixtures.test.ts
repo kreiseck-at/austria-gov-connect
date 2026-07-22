@@ -62,7 +62,12 @@ const INVALID_SESSION =
 const VALIDATION_FAULT =
   '<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><SOAP-ENV:Fault><faultcode>SOAP-ENV:Client</faultcode><faultstring xml:lang="en">Validation error</faultstring><detail><fon:ValidationError xmlns:fon="https://finanzonline.bmf.gv.at">cvc-complex-type.2.4.a: Invalid content was found starting with element art_uebermittlung. One of tid is expected.</fon:ValidationError></detail></SOAP-ENV:Fault></SOAP-ENV:Body></SOAP-ENV:Envelope>';
 
-const SEE_REG = { paketNr: 1, artSe: 'SIGNATURKARTE', vdaId: 'AT1', zertifikatsseriennummer: '32082A8F' } as const;
+const SEE_REG = {
+  paketNr: 1,
+  artSe: 'SIGNATURKARTE',
+  vdaId: 'AT1',
+  zertifikatsseriennummer: '32082A8F',
+} as const;
 
 test('Fixture ungültige Session: rc -1 -> FonSessionExpiredError (geworfen)', async () => {
   const rksv = rksvMit(INVALID_SESSION);
@@ -100,7 +105,10 @@ test('Fixture reg_se B10: bereits gespeichert -> ok false, rc/msg durchgereicht'
 });
 
 test('Fixture status_se IN_BETRIEB: abfrage_ergebnis mit NICHT-namespaced Kindern', async () => {
-  const erg = await rksvMit(STATUS_IN_BETRIEB).status.see({ paketNr: 1, zertifikatsseriennummer: '32082A8F' });
+  const erg = await rksvMit(STATUS_IN_BETRIEB).status.see({
+    paketNr: 1,
+    zertifikatsseriennummer: '32082A8F',
+  });
   assert.equal(erg.ok, true);
   assert.equal(erg.status?.status, 'IN_BETRIEB');
   assert.equal(erg.status?.tsRegistrierung, '2026-07-22T03:25:29.852+02:00');
@@ -120,12 +128,14 @@ test('Fixture status_se B33: nicht registriert -> ok false, kein status', async 
 });
 
 test('Fixture belegpruefung FAIL: verificationId-Baum (VERIFICATION_FROM_CASHBOX -> EXISTS_CASHBOX)', async () => {
-  const pr = await rksvMit(BELEG_FAIL).beleg.pruefe({ paketNr: 1, beleg: '_R1-AT1_KECK-1_…' });
-  assert.equal(pr[0]?.id, 'VERIFICATION_FROM_CASHBOX');
-  assert.equal(pr[0]?.name, 'Prüfergebnis - Kasse');
-  assert.equal(pr[0]?.status, 'FAIL');
-  assert.equal(pr[0]?.teilpruefungen?.[0]?.id, 'EXISTS_CASHBOX');
-  assert.equal(pr[0]?.teilpruefungen?.[0]?.status, 'FAIL');
+  const erg = await rksvMit(BELEG_FAIL).beleg.pruefe({ paketNr: 1, beleg: '_R1-AT1_KECK-1_…' });
+  assert.equal(erg.rc, '43');
+  const pr = erg.belegpruefung;
+  assert.equal(pr?.[0]?.id, 'VERIFICATION_FROM_CASHBOX');
+  assert.equal(pr?.[0]?.name, 'Prüfergebnis - Kasse');
+  assert.equal(pr?.[0]?.status, 'FAIL');
+  assert.equal(pr?.[0]?.teilpruefungen?.[0]?.id, 'EXISTS_CASHBOX');
+  assert.equal(pr?.[0]?.teilpruefungen?.[0]?.status, 'FAIL');
 });
 
 test('Fixture reg_kasse KECK-2 rc 0: Kasse registriert', async () => {
@@ -139,13 +149,16 @@ test('Fixture reg_kasse KECK-2 rc 0: Kasse registriert', async () => {
 });
 
 test('Fixture belegpruefung PASS: flacher Baum, VERIFICATION_FROM_CASHBOX = PASS', async () => {
-  const pr = await rksvMit(BELEG_PASS).beleg.pruefe({ paketNr: 1, beleg: '_R1-AT1_KECK-2_…' });
-  assert.equal(pr.length, 1);
-  assert.equal(pr[0]?.id, 'VERIFICATION_FROM_CASHBOX');
-  assert.equal(pr[0]?.name, 'Prüfergebnis - Kasse');
-  assert.equal(pr[0]?.status, 'PASS');
-  assert.match(pr[0]?.detail ?? '', /erfolgreich|gesetzeskonform/);
-  assert.equal(pr[0]?.teilpruefungen, undefined); // PASS ist flach
+  const erg = await rksvMit(BELEG_PASS).beleg.pruefe({ paketNr: 1, beleg: '_R1-AT1_KECK-2_…' });
+  assert.equal(erg.ok, true);
+  assert.equal(erg.rc, '0');
+  const pr = erg.belegpruefung;
+  assert.equal(pr?.length, 1);
+  assert.equal(pr?.[0]?.id, 'VERIFICATION_FROM_CASHBOX');
+  assert.equal(pr?.[0]?.name, 'Prüfergebnis - Kasse');
+  assert.equal(pr?.[0]?.status, 'PASS');
+  assert.match(pr?.[0]?.detail ?? '', /erfolgreich|gesetzeskonform/);
+  assert.equal(pr?.[0]?.teilpruefungen, undefined); // PASS ist flach
 });
 
 test('Fixture async: >1 Vorgang -> asynchron; die rc-0-Empfangsbestätigung ist NICHT das Ergebnis', async () => {

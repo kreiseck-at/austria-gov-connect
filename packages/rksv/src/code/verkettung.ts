@@ -21,6 +21,8 @@ export function pruefeVerkettung(beleg: Beleg, vorheriger?: Beleg): Pruefung {
   return {
     name: 'Verkettung',
     status: 'FAIL',
-    detail: vorheriger ? 'Verkettungswert stimmt nicht mit Vorbeleg überein' : 'Verkettungswert stimmt nicht mit Kassen-ID überein (Startbeleg)',
+    detail: vorheriger
+      ? 'Verkettungswert stimmt nicht mit Vorbeleg überein'
+      : 'Verkettungswert stimmt nicht mit Kassen-ID überein (Startbeleg)',
   };
 }

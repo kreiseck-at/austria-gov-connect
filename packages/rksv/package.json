@@ -1,6 +1,6 @@
 {
   "name": "@kreiseck/rksv",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "FinanzOnline Registrierkassen-Webservice (RKSV) und Offline-Belegcode",
   "license": "Apache-2.0",
   "author": "Kreiseck",

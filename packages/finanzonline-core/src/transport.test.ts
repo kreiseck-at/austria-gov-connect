@@ -24,16 +24,12 @@ test('setzt SOAPAction und Content-Type korrekt', async () => {
     const h = new Headers(init?.headers);
     seenAction = h.get('SOAPAction');
     seenType = h.get('Content-Type');
-    return new Response(
-      '<Envelope><Body><loginResponse><rc>0</rc></loginResponse></Body></Envelope>',
-      { status: 200 },
-    );
+    return new Response('<Envelope><Body><loginResponse><rc>0</rc></loginResponse></Body></Envelope>', {
+      status: 200,
+    });
   }) as unknown as typeof fetch;
 
-  await callSoap(
-    { endpoint: 'https://example.test', soapAction: 'login', body: '<x/>' },
-    { fetchImpl },
-  );
+  await callSoap({ endpoint: 'https://example.test', soapAction: 'login', body: '<x/>' }, { fetchImpl });
   assert.equal(seenAction, '"login"');
   assert.equal(seenType, 'text/xml; charset=utf-8');
 });
@@ -68,7 +64,8 @@ test('wirft FonProtocolError bei unparsebarer Antwort', async () => {
 });
 
 test('wirft FonProtocolError bei HTTP 404 ohne Fault', async () => {
-  const fetchImpl = (async () => new Response('<html>404</html>', { status: 404 })) as unknown as typeof fetch;
+  const fetchImpl = (async () =>
+    new Response('<html>404</html>', { status: 404 })) as unknown as typeof fetch;
   await assert.rejects(
     () => callSoap({ endpoint: 'https://x.test', soapAction: 'login', body: '<x/>' }, { fetchImpl }),
     FonProtocolError,
@@ -83,10 +80,7 @@ test('wirft FonTransportError bei Netzfehler und respektiert retries', async () 
   }) as unknown as typeof fetch;
   await assert.rejects(
     () =>
-      callSoap(
-        { endpoint: 'https://x.test', soapAction: 'login', body: '<x/>' },
-        { fetchImpl, retries: 2 },
-      ),
+      callSoap({ endpoint: 'https://x.test', soapAction: 'login', body: '<x/>' }, { fetchImpl, retries: 2 }),
     FonTransportError,
   );
   assert.equal(calls, 3); // 1 Versuch + 2 Wiederholungen
@@ -104,8 +98,7 @@ test('wirft FonTransportError bei Zeitüberschreitung', async () => {
         { endpoint: 'https://x.test', soapAction: 'login', body: '<x/>' },
         { fetchImpl, timeoutMs: 10 },
       ),
-    (err: unknown) =>
-      err instanceof FonTransportError && /Zeitüberschreitung/.test(err.message),
+    (err: unknown) => err instanceof FonTransportError && /Zeitüberschreitung/.test(err.message),
   );
 });
 

@@ -1,11 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  FonError,
-  FonSessionError,
-  FonSessionExpiredError,
-  sessionErrorFor,
-} from './errors';
+import { FonError, FonSessionError, FonSessionExpiredError, sessionErrorFor } from './errors';
 
 test('sessionErrorFor(-1) liefert FonSessionExpiredError', () => {
   const err = sessionErrorFor(-1);

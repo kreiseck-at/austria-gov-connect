@@ -49,11 +49,17 @@ export function pruefeBelegCode(beleg: Beleg, opts?: PruefOptionen): Pruefergebn
   pruefungen.push(pruefe('Algorithmuskennzeichen', RKA.test(beleg.rka.kennzeichen)));
   pruefungen.push(pruefe('Datum', DATUM.test(beleg.zeitpunkt)));
   const b = beleg.betraege;
-  const betraegeOk = [b.normal, b.ermaessigt1, b.ermaessigt2, b.null, b.besonders].every((x) => BETRAG.test(x));
+  const betraegeOk = [b.normal, b.ermaessigt1, b.ermaessigt2, b.null, b.besonders].every((x) =>
+    BETRAG.test(x),
+  );
   pruefungen.push(pruefe('Betragsformate', betraegeOk));
 
   if (beleg.besonderheit === 'see-ausfall') {
-    pruefungen.push({ name: 'Signaturlaenge', status: 'NOT_EXECUTED', detail: 'Signatureinheit ausgefallen' });
+    pruefungen.push({
+      name: 'Signaturlaenge',
+      status: 'NOT_EXECUTED',
+      detail: 'Signatureinheit ausgefallen',
+    });
     pruefungen.push({ name: 'Signatur', status: 'NOT_EXECUTED', detail: 'Signatureinheit ausgefallen' });
     return { pruefungen };
   }
@@ -63,7 +69,11 @@ export function pruefeBelegCode(beleg: Beleg, opts?: PruefOptionen): Pruefergebn
 
   const key = verifyKey(opts);
   if (!key) {
-    pruefungen.push({ name: 'Signatur', status: 'NOT_EXECUTED', detail: 'Kein Schlüssel/Zertifikat übergeben' });
+    pruefungen.push({
+      name: 'Signatur',
+      status: 'NOT_EXECUTED',
+      detail: 'Kein Schlüssel/Zertifikat übergeben',
+    });
     return { pruefungen };
   }
   if (sigBytes.length !== 64) {
@@ -73,7 +83,12 @@ export function pruefeBelegCode(beleg: Beleg, opts?: PruefOptionen): Pruefergebn
 
   let ok = false;
   try {
-    ok = verify('sha256', Buffer.from(belegSigningInput(beleg), 'utf8'), { key, dsaEncoding: 'ieee-p1363' }, sigBytes);
+    ok = verify(
+      'sha256',
+      Buffer.from(belegSigningInput(beleg), 'utf8'),
+      { key, dsaEncoding: 'ieee-p1363' },
+      sigBytes,
+    );
   } catch (err) {
     pruefungen.push({ name: 'Signatur', status: 'FAIL', detail: (err as Error).message });
     return { pruefungen };
