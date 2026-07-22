@@ -1,5 +1,5 @@
 import { escapeXmlText } from '@kreiseck/finanzonline-core';
-import { type Vorgang, vorgangArt, vorgangXml, isoDateTime, RksvError } from './vorgaenge';
+import { type Vorgang, vorgangArt, vorgangXml, isoDateTime, RksvError, zertSnEl } from './vorgaenge';
 
 const SOAP_ENV = 'http://schemas.xmlsoap.org/soap/envelope/';
 const RKDB_NS = 'https://finanzonline.bmf.gv.at/rkdb';
@@ -80,6 +80,6 @@ export function buildStatusEnvelope(s: StatusAbfrage): string {
   const block =
     s.ziel.art === 'status_kasse'
       ? `<status_kasse>${gemeinsam}${el('kassenidentifikationsnummer', s.ziel.kassenidentifikationsnummer)}</status_kasse>`
-      : `<status_see>${gemeinsam}${el('zertifikatsseriennummer', s.ziel.zertifikatsseriennummer)}</status_see>`;
+      : `<status_see>${gemeinsam}${zertSnEl(s.ziel.zertifikatsseriennummer)}</status_see>`;
   return envelope(kopf(s.tid, s.benid, s.id, s.uebermittlung) + block);
 }
