@@ -7,6 +7,12 @@ brechen).
 
 ## @kreiseck/rksv
 
+### 0.4.1 — 2026-07-22
+
+- **Wartung:** Mindest-Node auf `>=20.18.0` angehoben (Node 18 ist End-of-Life),
+  `@types/node` auf 22, CI-Matrix auf Node 20/22/24. Keine funktionalen
+  Änderungen am ausgelieferten Code.
+
 ### 0.4.0 — 2026-07-22
 
 - **Neu:** Optionales `kundeninfo` je Vorgang (registrieren, Ausfall,
@@ -50,6 +56,11 @@ brechen).
   ES256-Signaturprüfung, SHA-256-Verkettung.
 
 ## @kreiseck/finanzonline-core
+
+### 0.1.2 — 2026-07-22
+
+- **Wartung:** Mindest-Node auf `>=20.18.0` angehoben (Node 18 ist End-of-Life),
+  `@types/node` auf 22. Keine funktionalen Änderungen.
 
 ### 0.1.1 — 2026-07-22
 

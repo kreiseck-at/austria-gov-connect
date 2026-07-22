@@ -1,6 +1,6 @@
 {
   "name": "@kreiseck/finanzonline-core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "FinanzOnline Session- und SOAP-Transport für Node",
   "license": "Apache-2.0",
   "author": "Kreiseck",
@@ -29,7 +29,7 @@
     "NOTICE"
   ],
   "engines": {
-    "node": ">=18.18"
+    "node": ">=20.18.0"
   },
   "publishConfig": {
     "access": "public"
@@ -41,6 +41,6 @@
   },
   "devDependencies": {
     "typescript": "^5.4.0",
-    "@types/node": "^20.11.0"
+    "@types/node": "^22.0.0"
   }
 }
