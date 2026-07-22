@@ -70,5 +70,5 @@ test('status_kasse: Element status_kasse mit satznr 1 und kassenid', () => {
 
 test('status_se schreibt XSD-Elementnamen status_see', () => {
   const s: StatusAbfrage = { ...BASE, ziel: { art: 'status_se', zertifikatsseriennummer: '1a2b' } };
-  assert.match(buildStatusEnvelope(s), /<status_see><paket_nr>42<\/paket_nr>.*<zertifikatsseriennummer>1a2b<\/zertifikatsseriennummer><\/status_see>/);
+  assert.match(buildStatusEnvelope(s), /<status_see><paket_nr>42<\/paket_nr>.*<zertifikatsseriennummer hex="true">1a2b<\/zertifikatsseriennummer><\/status_see>/);
 });

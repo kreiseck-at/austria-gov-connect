@@ -127,13 +127,20 @@ Belegprüfung ist immer synchron und immer genau ein Beleg.
 Diese Eigenschaft ist nicht wegabstrahierbar: Bei asynchroner Verarbeitung
 bekommt der Aufrufer kein Ergebnis. Die API muss das sichtbar machen (siehe 4.3).
 
-**Verifiziert an realen Testantworten (2026-07-22):** Der FON-**Testmodus**
-antwortet auch auf Mehrfach-Pakete (und trotz `erzwinge_asynchron=true`)
-**synchron** — ein `result` mit `rc`, keine DataBox-Quittung. Die Sync/Async-
-Unterscheidung darf daher **nicht** aus dem Request (Vorgangszahl/Flag)
-abgeleitet werden, sondern aus der **Antwort**: kommen `result`-Einträge zurück,
-ist die Verarbeitung synchron und die Ergebnisse sind durchzureichen; nur ohne
-`result` ist das Paket asynchron übernommen. `uebermittlePaket` handhabt das so.
+**Verifiziert an realen Antworten (2026-07-22), Test *und* Echtbetrieb:** Weder
+`erzwinge_asynchron=true` noch mehrere Vorgänge lösen die asynchrone Verarbeitung
+verlässlich aus — der Dienst antwortete in **jedem** geprüften Fall (Testmodus
+mit 2 Vorgängen; Echtbetrieb mit 1 und mit 2 Vorgängen, jeweils + `erzwinge_asynchron`)
+**synchron** mit `result`/`rc`, nie mit einer DataBox-Quittung. Bei mehreren
+identischen Vorgängen kam sogar nur **ein** `result` zurück. Die in §2.3 oben
+genannte Regel „>1 Vorgang → async" ist damit als alleiniger Auslöser widerlegt;
+async hängt an Bedingungen (Last/Konfiguration), die sich nicht künstlich
+herbeiführen lassen. **Konsequenz:** Die Sync/Async-Unterscheidung darf **nicht**
+aus dem Request (Vorgangszahl/Flag) abgeleitet werden, sondern aus der
+**Antwort** — kommen `result`-Einträge zurück, ist die Verarbeitung synchron und
+die Ergebnisse sind durchzureichen; nur ohne `result` ist das Paket asynchron
+übernommen. `uebermittlePaket` handhabt das so. Die echte async-`info`-Quittung
+ist bislang nicht erfasst.
 
 ### 2.4 Vorgangsarten und Felder
 

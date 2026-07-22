@@ -70,6 +70,15 @@ function el(name: string, value: string): string {
   return `<${name}>${escapeXmlText(value)}</${name}>`;
 }
 
+/**
+ * Zertifikatsseriennummer-Element mit `hex="true"` — wie in den echten
+ * FON-Requests. Das Attribut macht die Hex-Interpretation explizit (sonst
+ * würde eine rein numerische Seriennummer als Dezimalzahl fehlgedeutet).
+ */
+export function zertSnEl(value: string): string {
+  return `<zertifikatsseriennummer hex="true">${escapeXmlText(value)}</zertifikatsseriennummer>`;
+}
+
 function req(condition: boolean, message: string): void {
   if (!condition) throw new RksvError(message);
 }
@@ -110,7 +119,7 @@ export function vorgangXml(v: Vorgang, satznr: number): string {
       req(hatSn !== hatZert, 'Genau eines von zertifikatsseriennummer/zertifikat ist erforderlich');
       if (hatSn) req(ZERT_SN.test(v.zertifikatsseriennummer!), 'zertifikatsseriennummer muss hex (max 50) sein');
       const zertEl = hatSn
-        ? el('zertifikatsseriennummer', v.zertifikatsseriennummer!)
+        ? zertSnEl(v.zertifikatsseriennummer!)
         : el('zertifikat', v.zertifikat!);
       return `<registrierung_se>${satz}${el('art_se', v.artSe)}${el('vda_id', v.vdaId)}${zertEl}</registrierung_se>`;
     }
@@ -121,13 +130,13 @@ export function vorgangXml(v: Vorgang, satznr: number): string {
     case 'ausfall_se': {
       req(ZERT_SN.test(v.zertifikatsseriennummer), 'zertifikatsseriennummer muss hex (max 50) sein');
       const block = ausfallBlock(v, [1, 2, 99]);
-      return `<ausfall_se>${satz}${el('zertifikatsseriennummer', v.zertifikatsseriennummer)}${block}</ausfall_se>`;
+      return `<ausfall_se>${satz}${zertSnEl(v.zertifikatsseriennummer)}${block}</ausfall_se>`;
     }
     case 'wiederinbetriebnahme_kasse':
       return `<wiederinbetriebnahme_kasse>${satz}${el('kassenidentifikationsnummer', v.kassenidentifikationsnummer)}${el('ende_ausfall', isoDateTime(v.ende))}</wiederinbetriebnahme_kasse>`;
     case 'wiederinbetriebnahme_se': {
       req(ZERT_SN.test(v.zertifikatsseriennummer), 'zertifikatsseriennummer muss hex (max 50) sein');
-      return `<wiederinbetriebnahme_se>${satz}${el('zertifikatsseriennummer', v.zertifikatsseriennummer)}${el('ende_ausfall', isoDateTime(v.ende))}</wiederinbetriebnahme_se>`;
+      return `<wiederinbetriebnahme_se>${satz}${zertSnEl(v.zertifikatsseriennummer)}${el('ende_ausfall', isoDateTime(v.ende))}</wiederinbetriebnahme_se>`;
     }
     case 'belegpruefung':
       return `<belegpruefung>${satz}${el('beleg', v.beleg)}</belegpruefung>`;

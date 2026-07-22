@@ -27,7 +27,7 @@ test('registrierung_se mit vdaId und zertifikatsseriennummer', () => {
   const xml = vorgangXml(v, 1);
   assert.match(xml, /<art_se>HSM_DIENSTLEISTER<\/art_se>/);
   assert.match(xml, /<vda_id>AT9<\/vda_id>/);
-  assert.match(xml, /<zertifikatsseriennummer>1a2b3c<\/zertifikatsseriennummer>/);
+  assert.match(xml, /<zertifikatsseriennummer hex="true">1a2b3c<\/zertifikatsseriennummer>/);
 });
 
 test('registrierung_se verlangt genau eines von zertifikatsseriennummer/zertifikat', () => {
