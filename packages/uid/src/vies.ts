@@ -6,24 +6,21 @@ export interface ViesConfig {
   fetchImpl?: typeof fetch;
 }
 const DEFAULT_BASIS = 'https://ec.europa.eu/taxation_customs/vies';
-const MATCH: Record<number, 'match' | 'kein_match' | 'nicht_geprueft'> = {
-  1: 'match',
-  2: 'kein_match',
-  3: 'nicht_geprueft',
-};
+
+function mapMatch(wert?: string): 'match' | 'kein_match' | 'nicht_geprueft' {
+  return wert === 'VALID' ? 'match' : wert === 'INVALID' ? 'kein_match' : 'nicht_geprueft';
+}
 
 interface ViesApproxAntwort {
-  isValid?: boolean;
+  valid?: boolean;
   userError?: string;
   name?: string;
   address?: string;
   requestIdentifier?: string;
-  viesApproximate?: {
-    matchName?: number;
-    matchStreet?: number;
-    matchPostalCode?: number;
-    matchCity?: number;
-  };
+  traderNameMatch?: string;
+  traderStreetMatch?: string;
+  traderPostalCodeMatch?: string;
+  traderCityMatch?: string;
 }
 
 export async function viesPruefe(uid: string, cfg: ViesConfig = {}): Promise<UidErgebnis> {
@@ -135,7 +132,7 @@ export async function viesBestaetige(
     };
   }
   const userError =
-    data.userError ?? (data.isValid === true ? 'VALID' : data.isValid === false ? 'INVALID' : undefined);
+    data.userError ?? (data.valid === true ? 'VALID' : data.valid === false ? 'INVALID' : undefined);
   if (userError === 'INVALID_INPUT') throw new UidEingabeError(`VIES: ungültige Eingabe für ${ziel.voll}`);
   if (userError === undefined)
     return {
@@ -155,13 +152,17 @@ export async function viesBestaetige(
     if (data.name) erg.name = data.name;
     if (data.address) erg.adresse = data.address;
   }
-  const ap = data.viesApproximate;
-  if (ap)
+  if (
+    data.traderNameMatch !== undefined ||
+    data.traderStreetMatch !== undefined ||
+    data.traderPostalCodeMatch !== undefined ||
+    data.traderCityMatch !== undefined
+  )
     erg.matches = {
-      name: MATCH[ap.matchName ?? 0] ?? 'nicht_geprueft',
-      strasse: MATCH[ap.matchStreet ?? 0] ?? 'nicht_geprueft',
-      plz: MATCH[ap.matchPostalCode ?? 0] ?? 'nicht_geprueft',
-      ort: MATCH[ap.matchCity ?? 0] ?? 'nicht_geprueft',
+      name: mapMatch(data.traderNameMatch),
+      strasse: mapMatch(data.traderStreetMatch),
+      plz: mapMatch(data.traderPostalCodeMatch),
+      ort: mapMatch(data.traderCityMatch),
     };
   if (a.ergebnis === 'gueltig' && data.requestIdentifier)
     erg.nachweis = { art: 'vies-konsultationsnummer', id: data.requestIdentifier, datum };

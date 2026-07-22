@@ -16,10 +16,13 @@ test('gueltig mit Konsultationsnummer + Matches', async () => {
     {
       fetchImpl: jsonFetch(
         {
-          isValid: true,
-          userError: 'VALID',
-          requestIdentifier: 'WAPIAAAAX1',
-          viesApproximate: { matchName: 1, matchStreet: 3, matchPostalCode: 3, matchCity: 1 },
+          valid: true,
+          requestIdentifier: '3a597d17-cece-434d-92f2-324d04bf0c8e',
+          name: 'ACME',
+          traderNameMatch: 'VALID',
+          traderCityMatch: 'VALID',
+          traderStreetMatch: 'NOT_PROCESSED',
+          traderPostalCodeMatch: 'NOT_PROCESSED',
         },
         (i) => {
           sent = JSON.parse(String(i.body));
@@ -29,7 +32,7 @@ test('gueltig mit Konsultationsnummer + Matches', async () => {
   );
   assert.equal(erg.ergebnis, 'gueltig');
   assert.equal(erg.nachweis?.art, 'vies-konsultationsnummer');
-  assert.equal(erg.nachweis?.id, 'WAPIAAAAX1');
+  assert.equal(erg.nachweis?.id, '3a597d17-cece-434d-92f2-324d04bf0c8e');
   assert.equal(erg.matches?.name, 'match');
   assert.equal(erg.matches?.ort, 'match');
   assert.equal(erg.matches?.strasse, 'nicht_geprueft');
@@ -47,7 +50,7 @@ test('HTTP-Fehler (non-2xx) -> keine_antwort/wiederholbar, nie ungueltig', async
   assert.equal(erg.ergebnis, 'keine_antwort');
   assert.equal(erg.wiederholbar, true);
 });
-test('fehlendes Signal (kein userError, kein isValid) -> keine_antwort, NICHT ungueltig', async () => {
+test('fehlendes Signal (kein userError, kein valid) -> keine_antwort, NICHT ungueltig', async () => {
   const erg = await viesBestaetige(
     { uid: 'DE136695976', antragsteller: 'ATU12345678' },
     { fetchImpl: jsonFetch({ foo: 1 }) },
