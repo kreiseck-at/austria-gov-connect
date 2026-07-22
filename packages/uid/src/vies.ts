@@ -65,3 +65,13 @@ export async function viesBestaetige(
   if (a.ergebnis === 'gueltig' && data.requestIdentifier) erg.nachweis = { art: 'vies-konsultationsnummer', id: data.requestIdentifier, datum };
   return erg;
 }
+
+export async function viesStatus(cfg: ViesConfig = {}) {
+  const f = cfg.fetchImpl ?? fetch;
+  const basis = cfg.basis ?? DEFAULT_BASIS;
+  const res = await f(`${basis}/rest-api/check-status`, { headers: { Accept: 'application/json' } });
+  const data = (await res.json()) as { vow?: { available?: boolean }; countries?: Array<{ countryCode: string; availability: string }> };
+  const land: Record<string, 'verfuegbar'|'nicht_verfuegbar'|'beobachtet'> = {};
+  for (const c of data.countries ?? []) land[c.countryCode] = c.availability === 'Available' ? 'verfuegbar' : c.availability === 'Monitored' ? 'beobachtet' : 'nicht_verfuegbar';
+  return { vowVerfuegbar: data.vow?.available === true, land };
+}
