@@ -96,10 +96,7 @@ export function createDatabox(session: Session, opts?: { transport?: TransportOp
       fields,
     });
 
-    const root = await callSoap(
-      { endpoint: DATABOX_ENDPOINT, soapAction: 'getDatabox', body },
-      transport,
-    );
+    const root = await callSoap({ endpoint: DATABOX_ENDPOINT, soapAction: 'getDatabox', body }, transport);
 
     const resp = findDescendant(root, 'getDataboxResponse');
     if (!resp) throw new FonProtocolError('Antwort enthält kein getDataboxResponse');

@@ -6,7 +6,9 @@ const s: Session = { id: 'ABCDEFGHIJ1234567890', tid: 'ABCD1234', benid: 'benutz
 const LISTE = `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>0</rc><result><name>ACME</name><anbringen>RKDB</anbringen><zrvon>2026-01-01</zrvon><zrbis>2026-01-31</zrbis><datbesch>2026-07-22</datbesch><erltyp>P</erltyp><fileart>XML</fileart><ts_zust>2026-07-22T03:25:37</ts_zust><applkey>KEY0000000001</applkey><filebez>protokoll.xml</filebez><status></status></result></ns:getDataboxResponse></S:Body></S:Envelope>`;
 
 test('liste parst databoxListEntry inkl. gelesen-Flag', async () => {
-  const db = createDatabox(s, { transport: { fetchImpl: (async () => new Response(LISTE, { status: 200 })) as unknown as typeof fetch } });
+  const db = createDatabox(s, {
+    transport: { fetchImpl: (async () => new Response(LISTE, { status: 200 })) as unknown as typeof fetch },
+  });
   const eintraege = await db.liste({ erltyp: 'P' });
   assert.equal(eintraege.length, 1);
   assert.equal(eintraege[0]?.anbringen, 'RKDB');
@@ -17,7 +19,11 @@ test('liste parst databoxListEntry inkl. gelesen-Flag', async () => {
 
 test('liste setzt gelesen=true bei status=1', async () => {
   const gelesenXml = `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>0</rc><result><name>ACME</name><anbringen>RKDB</anbringen><zrvon>2026-01-01</zrvon><zrbis>2026-01-31</zrbis><datbesch>2026-07-22</datbesch><erltyp>P</erltyp><fileart>XML</fileart><ts_zust>2026-07-22T03:25:37</ts_zust><applkey>KEY0000000002</applkey><filebez>protokoll2.xml</filebez><status>1</status></result></ns:getDataboxResponse></S:Body></S:Envelope>`;
-  const db = createDatabox(s, { transport: { fetchImpl: (async () => new Response(gelesenXml, { status: 200 })) as unknown as typeof fetch } });
+  const db = createDatabox(s, {
+    transport: {
+      fetchImpl: (async () => new Response(gelesenXml, { status: 200 })) as unknown as typeof fetch,
+    },
+  });
   const eintraege = await db.liste({ erltyp: 'P' });
   assert.equal(eintraege.length, 1);
   assert.equal(eintraege[0]?.gelesen, true);
@@ -25,7 +31,11 @@ test('liste setzt gelesen=true bei status=1', async () => {
 
 test('liste wirft FonProtocolError bei rc != 0', async () => {
   const fehlerXml = `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>-6</rc><msg>Fenster &gt;7 Tage</msg></ns:getDataboxResponse></S:Body></S:Envelope>`;
-  const db = createDatabox(s, { transport: { fetchImpl: (async () => new Response(fehlerXml, { status: 200 })) as unknown as typeof fetch } });
+  const db = createDatabox(s, {
+    transport: {
+      fetchImpl: (async () => new Response(fehlerXml, { status: 200 })) as unknown as typeof fetch,
+    },
+  });
   await assert.rejects(() => db.liste({ erltyp: 'P' }), FonProtocolError);
 });
 
@@ -48,7 +58,11 @@ test('liste formatiert von/bis als YYYY-MM-DDThh:mm:ss ohne Z/Millisekunden', as
 
 test('liste liefert mehrere Einträge bei mehreren result-Blöcken', async () => {
   const mehrfachXml = `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>0</rc><result><name>ACME</name><anbringen>RKDB</anbringen><zrvon>2026-01-01</zrvon><zrbis>2026-01-31</zrbis><datbesch>2026-07-22</datbesch><erltyp>P</erltyp><fileart>XML</fileart><ts_zust>2026-07-22T03:25:37</ts_zust><applkey>KEY0000000001</applkey><filebez>protokoll.xml</filebez><status></status></result><result><name>ACME</name><anbringen>RKDB</anbringen><zrvon>2026-02-01</zrvon><zrbis>2026-02-28</zrbis><datbesch>2026-07-23</datbesch><erltyp>P</erltyp><fileart>PDF</fileart><ts_zust>2026-07-23T03:25:37</ts_zust><applkey>KEY0000000002</applkey><filebez>protokoll2.pdf</filebez><status>1</status></result></ns:getDataboxResponse></S:Body></S:Envelope>`;
-  const db = createDatabox(s, { transport: { fetchImpl: (async () => new Response(mehrfachXml, { status: 200 })) as unknown as typeof fetch } });
+  const db = createDatabox(s, {
+    transport: {
+      fetchImpl: (async () => new Response(mehrfachXml, { status: 200 })) as unknown as typeof fetch,
+    },
+  });
   const eintraege = await db.liste({ erltyp: 'P' });
   assert.equal(eintraege.length, 2);
   assert.equal(eintraege[0]?.applkey, 'KEY0000000001');

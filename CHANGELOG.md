@@ -102,3 +102,16 @@ brechen).
   selbstgeschriebener SOAP-1.1-Transport (Envelope, Parser, Fault-Erkennung),
   HTTP über `fetch` mit Timeout und sicherer Wiederholung, Fehlerhierarchie.
   Keine Laufzeitabhängigkeiten.
+
+## @kreiseck/finanzonline
+
+### 0.1.0 — 2026-07-22
+
+- Erstveröffentlichung: DataBox-Client (`createDatabox`) mit `liste()`
+  (`getDatabox`, optional gefiltert nach `erltyp` und Zustellfenster
+  `von`/`bis`) und `eintrag()` (`getDataboxEntry`, liefert `fileart` und den
+  Inhalt als `Buffer`).
+- `liste()` ohne `erltyp` liefert nur ungelesene Einträge; der Abruf eines
+  Eintrags über `eintrag()` markiert ihn serverseitig als gelesen.
+- Zeitfenster-Limits dokumentiert: `von` maximal 31 Tage zurück, Spanne
+  `von`–`bis` maximal 7 Tage.
