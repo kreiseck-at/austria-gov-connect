@@ -32,6 +32,15 @@ export interface DataboxEintrag {
 export interface Databox {
   /** Listet DataBox-Einträge; ohne `erltyp` nur ungelesene, mit `von`/`bis` das Zustellfenster (gelesen+ungelesen). */
   liste(args?: { erltyp?: string; von?: Date; bis?: Date }): Promise<DataboxEintrag[]>;
+  /**
+   * Ruft den Inhalt eines DataBox-Eintrags ab (`getDataboxEntry`).
+   *
+   * **Achtung:** Der Abruf markiert den Eintrag in der DataBox als gelesen.
+   *
+   * @param applkey Schlüssel des Eintrags aus {@link Databox.liste}.
+   * @param fileart Dateiart des Eintrags (aus {@link Databox.liste}), da die Entry-Antwort selbst keine `fileart` liefert.
+   */
+  eintrag(applkey: string, fileart: 'XML' | 'PDF'): Promise<{ fileart: 'XML' | 'PDF'; inhalt: Buffer }>;
 }
 
 function childrenNamed(node: XmlNode, name: string): XmlNode[] {
@@ -108,5 +117,44 @@ export function createDatabox(session: Session, opts?: { transport?: TransportOp
     return childrenNamed(resp, 'result').map(parseEintrag);
   }
 
-  return { liste };
+  async function eintrag(
+    applkey: string,
+    fileart: 'XML' | 'PDF',
+  ): Promise<{ fileart: 'XML' | 'PDF'; inhalt: Buffer }> {
+    const fields = [
+      { name: 'tid', value: session.tid },
+      { name: 'benid', value: session.benid },
+      { name: 'id', value: session.id },
+      { name: 'applkey', value: applkey },
+    ];
+
+    const body = buildEnvelope({
+      namespace: DATABOX_NAMESPACE,
+      bodyElement: 'getDataboxEntryRequest',
+      fields,
+    });
+
+    const root = await callSoap(
+      { endpoint: DATABOX_ENDPOINT, soapAction: 'getDataboxEntry', body },
+      transport,
+    );
+
+    const resp = findDescendant(root, 'getDataboxEntryResponse');
+    if (!resp) throw new FonProtocolError('Antwort enthält kein getDataboxEntryResponse');
+
+    const rcText = childText(resp, 'rc');
+    const rc = Number.parseInt(rcText ?? '', 10);
+    if (rcText === undefined || Number.isNaN(rc)) {
+      throw new FonProtocolError(`getDataboxEntryResponse ohne gültiges rc: "${rcText}"`);
+    }
+    if (rc !== 0) {
+      const msg = childText(resp, 'msg');
+      throw new FonProtocolError(`getDataboxEntry rc=${rc}${msg ? `: ${msg}` : ''}`);
+    }
+
+    const inhalt = Buffer.from(childText(resp, 'result') ?? '', 'base64');
+    return { fileart, inhalt };
+  }
+
+  return { liste, eintrag };
 }
