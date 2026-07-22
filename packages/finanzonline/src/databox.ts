@@ -4,6 +4,7 @@ import {
   findDescendant,
   childText,
   FonProtocolError,
+  sessionErrorFor,
   type XmlNode,
   type Session,
   type TransportOptions,
@@ -55,6 +56,24 @@ function toIsoDateTime(d: Date): string {
   return d.toISOString().slice(0, 19);
 }
 
+/**
+ * Prüft eine DataBox-Antwort: fehlendes Element/`rc` → {@link FonProtocolError}; `rc` -1 (Session
+ * abgelaufen) routet über {@link sessionErrorFor} zu {@link FonSessionExpiredError}.
+ */
+function pruefeRc(resp: XmlNode | undefined, op: string): asserts resp is XmlNode {
+  if (!resp) throw new FonProtocolError(`Antwort enthält kein ${op}Response`);
+  const rcText = childText(resp, 'rc');
+  const rc = Number.parseInt(rcText ?? '', 10);
+  if (rcText === undefined || Number.isNaN(rc)) {
+    throw new FonProtocolError(`${op}Response ohne gültiges rc: "${rcText}"`);
+  }
+  if (rc === -1) throw sessionErrorFor(-1, childText(resp, 'msg'));
+  if (rc !== 0) {
+    const msg = childText(resp, 'msg');
+    throw new FonProtocolError(`${op} rc=${rc}${msg ? `: ${msg}` : ''}`);
+  }
+}
+
 function parseEintrag(result: XmlNode): DataboxEintrag {
   const eintrag: DataboxEintrag = {
     name: childText(result, 'name') ?? '',
@@ -99,17 +118,7 @@ export function createDatabox(session: Session, opts?: { transport?: TransportOp
     const root = await callSoap({ endpoint: DATABOX_ENDPOINT, soapAction: 'getDatabox', body }, transport);
 
     const resp = findDescendant(root, 'getDataboxResponse');
-    if (!resp) throw new FonProtocolError('Antwort enthält kein getDataboxResponse');
-
-    const rcText = childText(resp, 'rc');
-    const rc = Number.parseInt(rcText ?? '', 10);
-    if (rcText === undefined || Number.isNaN(rc)) {
-      throw new FonProtocolError(`getDataboxResponse ohne gültiges rc: "${rcText}"`);
-    }
-    if (rc !== 0) {
-      const msg = childText(resp, 'msg');
-      throw new FonProtocolError(`getDatabox rc=${rc}${msg ? `: ${msg}` : ''}`);
-    }
+    pruefeRc(resp, 'getDatabox');
 
     return childrenNamed(resp, 'result').map(parseEintrag);
   }
@@ -137,17 +146,7 @@ export function createDatabox(session: Session, opts?: { transport?: TransportOp
     );
 
     const resp = findDescendant(root, 'getDataboxEntryResponse');
-    if (!resp) throw new FonProtocolError('Antwort enthält kein getDataboxEntryResponse');
-
-    const rcText = childText(resp, 'rc');
-    const rc = Number.parseInt(rcText ?? '', 10);
-    if (rcText === undefined || Number.isNaN(rc)) {
-      throw new FonProtocolError(`getDataboxEntryResponse ohne gültiges rc: "${rcText}"`);
-    }
-    if (rc !== 0) {
-      const msg = childText(resp, 'msg');
-      throw new FonProtocolError(`getDataboxEntry rc=${rc}${msg ? `: ${msg}` : ''}`);
-    }
+    pruefeRc(resp, 'getDataboxEntry');
 
     const inhalt = Buffer.from(childText(resp, 'result') ?? '', 'base64');
     return { fileart, inhalt };

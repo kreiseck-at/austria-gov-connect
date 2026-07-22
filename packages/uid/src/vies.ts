@@ -36,6 +36,17 @@ export async function viesPruefe(uid: string, cfg: ViesConfig = {}): Promise<Uid
     const res = await f(`${basis}/rest-api/ms/${land}/vat/${nummer}`, {
       headers: { Accept: 'application/json' },
     });
+    if (!res.ok)
+      return {
+        ergebnis: 'keine_antwort',
+        quelle: 'vies',
+        uid: voll,
+        land,
+        abfragedatum: datum,
+        grund: 'ms_nicht_erreichbar',
+        wiederholbar: true,
+        rohRc: 'HTTP_' + res.status,
+      };
     data = (await res.json()) as typeof data;
   } catch {
     return {
@@ -48,8 +59,19 @@ export async function viesPruefe(uid: string, cfg: ViesConfig = {}): Promise<Uid
       wiederholbar: true,
     };
   }
-  const userError = data.userError ?? (data.isValid ? 'VALID' : 'INVALID');
+  const userError =
+    data.userError ?? (data.isValid === true ? 'VALID' : data.isValid === false ? 'INVALID' : undefined);
   if (userError === 'INVALID_INPUT') throw new UidEingabeError(`VIES: ungültige Eingabe für ${voll}`);
+  if (userError === undefined)
+    return {
+      ergebnis: 'keine_antwort',
+      quelle: 'vies',
+      uid: voll,
+      land,
+      abfragedatum: datum,
+      grund: 'technisch',
+      wiederholbar: true,
+    };
   const a = viesUserErrorAusgang(userError);
   const erg: UidErgebnis = { ...a, quelle: 'vies', uid: voll, land, abfragedatum: datum, rohRc: userError };
   if (a.ergebnis === 'gueltig') {
@@ -89,6 +111,17 @@ export async function viesBestaetige(
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(body),
     });
+    if (!res.ok)
+      return {
+        ergebnis: 'keine_antwort',
+        quelle: 'vies',
+        uid: ziel.voll,
+        land: ziel.land,
+        abfragedatum: datum,
+        grund: 'ms_nicht_erreichbar',
+        wiederholbar: true,
+        rohRc: 'HTTP_' + res.status,
+      };
     data = (await res.json()) as ViesApproxAntwort;
   } catch {
     return {
@@ -101,14 +134,27 @@ export async function viesBestaetige(
       wiederholbar: true,
     };
   }
-  const userError = data.userError ?? (data.isValid ? 'VALID' : 'INVALID');
+  const userError =
+    data.userError ?? (data.isValid === true ? 'VALID' : data.isValid === false ? 'INVALID' : undefined);
   if (userError === 'INVALID_INPUT') throw new UidEingabeError(`VIES: ungültige Eingabe für ${ziel.voll}`);
+  if (userError === undefined)
+    return {
+      ergebnis: 'keine_antwort',
+      quelle: 'vies',
+      uid: ziel.voll,
+      land: ziel.land,
+      abfragedatum: datum,
+      grund: 'technisch',
+      wiederholbar: true,
+    };
   const a = viesUserErrorAusgang(userError);
   const erg: UidErgebnis & {
     matches?: Record<'name' | 'strasse' | 'plz' | 'ort', 'match' | 'kein_match' | 'nicht_geprueft'>;
   } = { ...a, quelle: 'vies', uid: ziel.voll, land: ziel.land, abfragedatum: datum, rohRc: userError };
-  if (data.name) erg.name = data.name;
-  if (data.address) erg.adresse = data.address;
+  if (a.ergebnis === 'gueltig') {
+    if (data.name) erg.name = data.name;
+    if (data.address) erg.adresse = data.address;
+  }
   const ap = data.viesApproximate;
   if (ap)
     erg.matches = {

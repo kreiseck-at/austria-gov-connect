@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { viesBestaetige } from './vies';
+import { UidEingabeError } from './ergebnis';
 
 const jsonFetch = (body: unknown, capture?: (init: RequestInit) => void) =>
   (async (_u: unknown, init?: RequestInit) => {
@@ -35,4 +36,32 @@ test('gueltig mit Konsultationsnummer + Matches', async () => {
   // Antragsteller landet im Request:
   assert.equal(sent.requesterMemberStateCode, 'AT');
   assert.equal(sent.requesterNumber, 'U12345678');
+});
+test('HTTP-Fehler (non-2xx) -> keine_antwort/wiederholbar, nie ungueltig', async () => {
+  const erg = await viesBestaetige(
+    { uid: 'DE136695976', antragsteller: 'ATU12345678' },
+    {
+      fetchImpl: (async () => new Response(JSON.stringify({}), { status: 503 })) as unknown as typeof fetch,
+    },
+  );
+  assert.equal(erg.ergebnis, 'keine_antwort');
+  assert.equal(erg.wiederholbar, true);
+});
+test('fehlendes Signal (kein userError, kein isValid) -> keine_antwort, NICHT ungueltig', async () => {
+  const erg = await viesBestaetige(
+    { uid: 'DE136695976', antragsteller: 'ATU12345678' },
+    { fetchImpl: jsonFetch({ foo: 1 }) },
+  );
+  assert.equal(erg.ergebnis, 'keine_antwort');
+  assert.notEqual(erg.ergebnis, 'ungueltig');
+});
+test('INVALID_INPUT -> wirft UidEingabeError', async () => {
+  await assert.rejects(
+    () =>
+      viesBestaetige(
+        { uid: 'DE136695976', antragsteller: 'ATU12345678' },
+        { fetchImpl: jsonFetch({ userError: 'INVALID_INPUT' }) },
+      ),
+    UidEingabeError,
+  );
 });
