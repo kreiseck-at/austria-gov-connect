@@ -1,8 +1,6 @@
 # @kreiseck/uid
 
-Vérifiez les UID (Umsatzsteuer-Identifikationsnummern) dans le registre de l'UE
-(VIES) et auprès de FinanzOnline en Autriche. Netzfreier Support pour die
-Normalisierung, stateless-Modell avec konsultationsnummern und Nachweisen.
+Prüft Umsatzsteuer-Identifikationsnummern (UID) — primär über das EU-System VIES, sekundär über FinanzOnline (Österreich). Format-Normalisierung ohne Netzzugriff, zustandsloses 3-Ausgänge-Modell (gültig / ungültig / keine Antwort) mit Retry-Hinweis, Konsultationsnummer und Nachweis.
 
 Dieses Paket kapselt die Anbindung an die europäische VIES-API und den
 österreichischen FON-UID-Dienst (FinanzOnline).
@@ -121,7 +119,7 @@ Die folgenden Szenarien sind noch nicht im Live-Betrieb validiert — Feedback
 nach Einsatz sehr willkommen:
 
 - FON-Prüfung in der Testumgebung (FinanzOnline Test-Zugänge)
-- Verhalten bei VIES-Ratenlimiting und Üb'erlast-Codes
+- Verhalten bei VIES-Ratenlimiting und Überlast-Codes
 - Konsultationsnummern und VIES-Datumgenauigkeit für Compliance
 
 ## Lizenz
