@@ -127,20 +127,22 @@ Belegprüfung ist immer synchron und immer genau ein Beleg.
 Diese Eigenschaft ist nicht wegabstrahierbar: Bei asynchroner Verarbeitung
 bekommt der Aufrufer kein Ergebnis. Die API muss das sichtbar machen (siehe 4.3).
 
-**Verifiziert an realen Antworten (2026-07-22), Test *und* Echtbetrieb:** Weder
-`erzwinge_asynchron=true` noch mehrere Vorgänge lösen die asynchrone Verarbeitung
-verlässlich aus — der Dienst antwortete in **jedem** geprüften Fall (Testmodus
-mit 2 Vorgängen; Echtbetrieb mit 1 und mit 2 Vorgängen, jeweils + `erzwinge_asynchron`)
-**synchron** mit `result`/`rc`, nie mit einer DataBox-Quittung. Bei mehreren
-identischen Vorgängen kam sogar nur **ein** `result` zurück. Die in §2.3 oben
-genannte Regel „>1 Vorgang → async" ist damit als alleiniger Auslöser widerlegt;
-async hängt an Bedingungen (Last/Konfiguration), die sich nicht künstlich
-herbeiführen lassen. **Konsequenz:** Die Sync/Async-Unterscheidung darf **nicht**
-aus dem Request (Vorgangszahl/Flag) abgeleitet werden, sondern aus der
-**Antwort** — kommen `result`-Einträge zurück, ist die Verarbeitung synchron und
-die Ergebnisse sind durchzureichen; nur ohne `result` ist das Paket asynchron
-übernommen. `uebermittlePaket` handhabt das so. Die echte async-`info`-Quittung
-ist bislang nicht erfasst.
+**Verifiziert an realen Antworten (2026-07-22):** Die Regel oben stimmt — der
+Auslöser ist **request-bestimmt**, nicht aus der Antwort ableitbar. Ein
+diskriminierender Test zeigte es eindeutig: **ein** `ausfall_se` auf eine
+erfundene Seriennummer → synchrone Antwort mit dem **echten** Einzel-`rc B33`;
+**zwölf verschiedene** solche Vorgänge → **eine** Antwort mit *einem* `result`,
+`rc 0`. Dieses eine `rc 0` ist **nicht** das Ergebnis der zwölf Vorgänge, sondern
+die **Empfangsbestätigung** — die zwölf echten `B33` liegen im Ergebnisprotokoll
+in der **DataBox**. Frühere gegenteilige Beobachtungen beruhten auf **identischen**
+Mehrfach-Vorgängen, die der Dienst zu einem `result` zusammenfasste, sowie auf der
+Fehldeutung dieser rc-0-Bestätigung als synchrones Ergebnis. **Konsequenz für die
+Bibliothek:** `uebermittlePaket` bestimmt synchron/asynchron aus dem Request
+(genau 1 Vorgang und nicht erzwungen → synchron; sonst asynchron) und gibt bei
+async **keine** Ergebnisse zurück (die stehen in der DataBox), sondern nur den
+Hinweis. Die genaue Struktur einer async-Antwort *mit* `info`-Feld ist bislang
+nicht erfasst; die erfasste Empfangsbestätigung trägt nur `paket_nr`,
+`ts_erstellung` und das rc-0-`result`.
 
 ### 2.4 Vorgangsarten und Felder
 
