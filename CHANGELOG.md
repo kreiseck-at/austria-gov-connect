@@ -17,6 +17,9 @@ brechen).
   differenziertem `grund` und `wiederholbar`-Flag.
 - **Neu:** FON-UID-Abfrage (Stufe 1/2) über `fon.abfrage()` mit behördlicher
   Bestätigung via DataBox-Bescheid.
+- **Neu:** `parseUidBescheid(xml)` liest den FON-UID-Bescheid aus der DataBox
+  (`anbringen=UID`, `<Bestaetigungen>`-Format) — je Antragsteller-UID der
+  §132-Nachweis mit den bestätigten UIDs. An einem echten Bescheid verifiziert.
 - **Neu:** Normalisierung und Caching via `normalisiereUid()` und `cacheKey()`.
 - Stateless API — alle Abfragen ohne interne Session (Session nur für FON optional).
 

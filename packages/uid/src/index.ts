@@ -1,6 +1,7 @@
 export { createUid, type Uid, type UidConfig } from './uid';
 export { viesPruefe, viesBestaetige, viesStatus, type ViesConfig } from './vies';
 export { fonUidAbfrage } from './fon';
+export { parseUidBescheid, type UidBescheid, type UidBestaetigung } from './bescheid';
 export { normalisiereUid } from './normalisieren';
 export {
   UidEingabeError,
