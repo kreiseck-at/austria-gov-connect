@@ -62,3 +62,11 @@ test('INVALID_INPUT -> wirft UidEingabeError', async () => {
     UidEingabeError,
   );
 });
+test('gueltig, aber Name/Adresse "---" (nicht offengelegt) -> name/adresse undefined', async () => {
+  const erg = await viesPruefe('DE289901008', {
+    fetchImpl: jsonFetch({ isValid: true, userError: 'VALID', name: '---', address: '---' }),
+  });
+  assert.equal(erg.ergebnis, 'gueltig');
+  assert.equal(erg.name, undefined);
+  assert.equal(erg.adresse, undefined);
+});

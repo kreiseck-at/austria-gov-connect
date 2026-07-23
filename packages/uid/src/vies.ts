@@ -11,6 +11,14 @@ function mapMatch(wert?: string): 'match' | 'kein_match' | 'nicht_geprueft' {
   return wert === 'VALID' ? 'match' : wert === 'INVALID' ? 'kein_match' : 'nicht_geprueft';
 }
 
+// VIES gibt bei nicht offengelegten Daten den Platzhalter "---" (oder leer)
+// zurück (z. B. Deutschland gibt Name/Adresse aus Datenschutzgründen nicht frei).
+// Solche Werte sind KEINE echten Stammdaten -> als "nicht vorhanden" behandeln.
+function echterWert(v?: string): string | undefined {
+  const t = (v ?? '').trim();
+  return t && !/^-+$/.test(t) ? t : undefined;
+}
+
 interface ViesApproxAntwort {
   valid?: boolean;
   userError?: string;
@@ -72,8 +80,10 @@ export async function viesPruefe(uid: string, cfg: ViesConfig = {}): Promise<Uid
   const a = viesUserErrorAusgang(userError);
   const erg: UidErgebnis = { ...a, quelle: 'vies', uid: voll, land, abfragedatum: datum, rohRc: userError };
   if (a.ergebnis === 'gueltig') {
-    if (data.name) erg.name = data.name;
-    if (data.address) erg.adresse = data.address;
+    const echterName = echterWert(data.name);
+    if (echterName) erg.name = echterName;
+    const echteAdresse = echterWert(data.address);
+    if (echteAdresse) erg.adresse = echteAdresse;
   }
   return erg;
 }
@@ -149,8 +159,10 @@ export async function viesBestaetige(
     matches?: Record<'name' | 'strasse' | 'plz' | 'ort', 'match' | 'kein_match' | 'nicht_geprueft'>;
   } = { ...a, quelle: 'vies', uid: ziel.voll, land: ziel.land, abfragedatum: datum, rohRc: userError };
   if (a.ergebnis === 'gueltig') {
-    if (data.name) erg.name = data.name;
-    if (data.address) erg.adresse = data.address;
+    const echterName = echterWert(data.name);
+    if (echterName) erg.name = echterName;
+    const echteAdresse = echterWert(data.address);
+    if (echteAdresse) erg.adresse = echteAdresse;
   }
   if (
     data.traderNameMatch !== undefined ||
