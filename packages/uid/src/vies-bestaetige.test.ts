@@ -17,7 +17,7 @@ test('gueltig mit Konsultationsnummer + Matches', async () => {
       fetchImpl: jsonFetch(
         {
           valid: true,
-          requestIdentifier: '3a597d17-cece-434d-92f2-324d04bf0c8e',
+          requestIdentifier: '11111111-1111-4111-8111-111111111111',
           name: 'ACME',
           traderNameMatch: 'VALID',
           traderCityMatch: 'VALID',
@@ -32,7 +32,7 @@ test('gueltig mit Konsultationsnummer + Matches', async () => {
   );
   assert.equal(erg.ergebnis, 'gueltig');
   assert.equal(erg.nachweis?.art, 'vies-konsultationsnummer');
-  assert.equal(erg.nachweis?.id, '3a597d17-cece-434d-92f2-324d04bf0c8e');
+  assert.equal(erg.nachweis?.id, '11111111-1111-4111-8111-111111111111');
   assert.equal(erg.matches?.name, 'match');
   assert.equal(erg.matches?.ort, 'match');
   assert.equal(erg.matches?.strasse, 'nicht_geprueft');
