@@ -4,6 +4,7 @@ import {
   findDescendant,
   childText,
   FonProtocolError,
+  FonRcError,
   sessionErrorFor,
   type XmlNode,
   type Session,
@@ -80,10 +81,7 @@ function pruefeRc(resp: XmlNode | undefined, op: string): asserts resp is XmlNod
     throw new FonProtocolError(`${op}Response ohne gültiges rc: "${rcText}"`);
   }
   if (rc === -1) throw sessionErrorFor(-1, childText(resp, 'msg'));
-  if (rc !== 0) {
-    const msg = childText(resp, 'msg');
-    throw new FonProtocolError(`${op} rc=${rc}${msg ? `: ${msg}` : ''}`);
-  }
+  if (rc !== 0) throw new FonRcError(rc, childText(resp, 'msg'), op);
 }
 
 function parseEintrag(result: XmlNode): DataboxEintrag {

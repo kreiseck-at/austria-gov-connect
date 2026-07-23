@@ -9,6 +9,23 @@ export class FonTransportError extends FonError {}
 
 export class FonProtocolError extends FonError {}
 
+/**
+ * Fachlicher/technischer Returncode ungleich 0 aus einer FON-Antwort. Subklasse
+ * von {@link FonProtocolError} (bestehende `instanceof FonProtocolError`-Prüfungen
+ * greifen weiter), trägt aber zusätzlich den numerischen `rc` und die
+ * Servermeldung — so kann der Aufrufer z. B. DataBox-`-5`/`-6` (Fenster zu groß)
+ * programmatisch von `-3` (technisch) unterscheiden.
+ */
+export class FonRcError extends FonProtocolError {
+  readonly rc: number;
+  readonly serverMsg?: string;
+  constructor(rc: number, serverMsg?: string, kontext?: string) {
+    super(`${kontext ?? 'FinanzOnline'} rc=${rc}${serverMsg ? `: ${serverMsg}` : ''}`);
+    this.rc = rc;
+    this.serverMsg = serverMsg;
+  }
+}
+
 export class FonSoapFaultError extends FonError {
   readonly faultcode: string;
   readonly detail?: string;

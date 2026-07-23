@@ -17,6 +17,6 @@
     "test:live": "npm run build && node test/live/live-check.js",
     "prepublishOnly": "npm run build"
   },
-  "dependencies": { "@kreiseck/finanzonline-core": "^0.1.2" },
+  "dependencies": { "@kreiseck/finanzonline-core": "^0.1.3" },
   "devDependencies": { "typescript": "^5.4.0", "@types/node": "^22.0.0" }
 }

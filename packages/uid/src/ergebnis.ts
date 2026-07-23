@@ -46,7 +46,11 @@ const TRANSIENT: Record<string, KeinAntwortGrund> = {
   TECHNICAL_ERROR: 'technisch',
 };
 
-export function viesUserErrorAusgang(userError: string) {
+export function viesUserErrorAusgang(userError: string): {
+  ergebnis: Ausgang;
+  grund?: KeinAntwortGrund;
+  wiederholbar?: boolean;
+} {
   if (userError === 'VALID') return { ergebnis: 'gueltig' as const };
   if (userError === 'INVALID') return { ergebnis: 'ungueltig' as const };
   if (userError === 'VAT_BLOCKED' || userError === 'IP_BLOCKED')

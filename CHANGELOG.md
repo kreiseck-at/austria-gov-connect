@@ -93,6 +93,12 @@ brechen).
 
 ## @kreiseck/finanzonline-core
 
+### 0.1.3 — 2026-07-23
+
+- **Neu:** `FonRcError` (Subklasse von `FonProtocolError`) trägt den numerischen
+  `rc` und die Servermeldung, damit Aufrufer verschiedene Fehler-Returncodes
+  programmatisch unterscheiden können (z. B. DataBox `-5`/`-6`). Additiv.
+
 ### 0.1.2 — 2026-07-22
 
 - **Wartung:** Mindest-Node auf `>=20.18.0` angehoben (Node 18 ist End-of-Life),
