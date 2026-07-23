@@ -136,3 +136,9 @@ brechen).
 - `rkdbProtokolle()` holt die asynchronen rkdb-Ergebnisprotokolle (`erltyp=P`,
   `anbringen=RKDB`) als XML-Strings — zum Parsen mit `parseErgebnisprotokoll` aus
   `@kreiseck/rksv`. Schließt zusammen mit rksv den asynchronen RKSV-Kreis.
+- **FileUpload-Webservice:** `createFileUpload(session, { uebermittlung })` mit
+  `upload({ art, data })` übermittelt Erklärungen/Dateien (`art`-Enum: U30, U13,
+  JAHR_ERKL, L1, KOM, NOVA, DIGI, … verifiziert gegen die XSD). Antwort synchron
+  `{ rc, msg }`; das Übermittlungsprotokoll kommt asynchron in die DataBox.
+- Fehler-Returncodes tragen über `FonRcError` das numerische `rc` (z. B. DataBox
+  `-5`/`-6`, FileUpload `-4`/`-5`); `rc -1` wirft `FonSessionExpiredError`.
