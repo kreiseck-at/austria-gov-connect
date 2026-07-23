@@ -96,6 +96,13 @@ brechen).
 
 ## @kreiseck/finanzonline-core
 
+### 0.1.4 — 2026-07-23
+
+- **Neu:** Helfer für FON-Webservice-Benutzer — `BENID_MUSTER`/`istGueltigeBenid`,
+  `generiereBenid(praefix, nummer)` (z. B. `KASSENECK001`), `istGueltigesPasswort`
+  und `generierePasswort()` (kryptografisch, erfüllt die 4-Kategorien-Regel). Für
+  Onboarding/Admin-Panels, die neue Webservice-Benutzer anlegen. Additiv.
+
 ### 0.1.3 — 2026-07-23
 
 - **Neu:** `FonRcError` (Subklasse von `FonProtocolError`) trägt den numerischen

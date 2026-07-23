@@ -17,3 +17,11 @@ export { detectFault, type SoapFault } from './soap/fault';
 export { escapeXmlText } from './soap/escape';
 export { firstChild, childText, findDescendant, textContent } from './soap/parse';
 export { sessionErrorFor } from './errors';
+export {
+  BENID_MUSTER,
+  istGueltigeBenid,
+  generiereBenid,
+  PASSWORT_SONDERZEICHEN,
+  istGueltigesPasswort,
+  generierePasswort,
+} from './benutzer';
