@@ -14,6 +14,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "tsc -p tsconfig.test.json && node --test $(find test-dist -name '*.test.js')",
+    "test:live": "npm run build && node test/live/live-check.js",
     "prepublishOnly": "npm run build"
   },
   "dependencies": { "@kreiseck/finanzonline-core": "^0.1.2" },
