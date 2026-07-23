@@ -22,6 +22,15 @@ brechen).
 
 ## @kreiseck/rksv
 
+### 0.6.0 — 2026-07-23
+
+- **Neu:** `parseErgebnisprotokoll(xml)` liest ein asynchron in der FinanzOnline
+  DataBox abgelegtes rkdb-Ergebnisprotokoll (`<rkdbResponse>` ohne SOAP-Envelope)
+  und liefert `{ paketNr, info, ergebnisse: Ergebnis[] }`. Damit schließt sich der
+  asynchrone Kreis: Mehrfach-Pakete werden gesendet, das Ergebnis später aus der
+  DataBox geholt und je Vorgang über `paketNr`/`satznr`/`kundeninfo` zugeordnet.
+  An einem echten DataBox-Protokoll verifiziert.
+
 ### 0.5.0 — 2026-07-22
 
 - **Neu:** `Pruefung.beschreibung` erfasst die menschenlesbare
@@ -115,3 +124,6 @@ brechen).
   Eintrags über `eintrag()` markiert ihn serverseitig als gelesen.
 - Zeitfenster-Limits dokumentiert: `von` maximal 31 Tage zurück, Spanne
   `von`–`bis` maximal 7 Tage.
+- `rkdbProtokolle()` holt die asynchronen rkdb-Ergebnisprotokolle (`erltyp=P`,
+  `anbringen=RKDB`) als XML-Strings — zum Parsen mit `parseErgebnisprotokoll` aus
+  `@kreiseck/rksv`. Schließt zusammen mit rksv den asynchronen RKSV-Kreis.

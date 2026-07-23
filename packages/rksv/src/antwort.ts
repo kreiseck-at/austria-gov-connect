@@ -1,6 +1,15 @@
 import { type XmlNode, firstChild, childText, findDescendant } from '@kreiseck/finanzonline-core';
 import { rcInfo } from './returncodes';
 
+/**
+ * Findet den `rkdbResponse`-Knoten: entweder die Wurzel selbst (asynchrones
+ * Ergebnisprotokoll aus der DataBox — dort ist `<rkdbResponse>` die Wurzel, ohne
+ * SOAP-Envelope) oder ein Nachfahre (synchrone SOAP-Antwort im Envelope).
+ */
+export function rkdbResponseNode(root: XmlNode): XmlNode | undefined {
+  return root.name === 'rkdbResponse' ? root : findDescendant(root, 'rkdbResponse');
+}
+
 /** Einzelprüfung aus einem `verificationResult`-Baum (z. B. Belegprüfung); kann rekursiv Teilprüfungen enthalten. */
 export interface Pruefung {
   /** Maschinenlesbare Prüf-ID des Dienstes (`verificationId`), z. B. `MATCH_COMPANY`. */
@@ -65,7 +74,7 @@ function parsePruefungen(list: XmlNode): Pruefung[] {
 }
 
 export function parseRkdbErgebnisse(root: XmlNode): Ergebnis[] {
-  const resp = findDescendant(root, 'rkdbResponse');
+  const resp = rkdbResponseNode(root);
   if (!resp) return [];
   // Antwort-Envelope-Zeitstempel steht einmal auf rkdbResponse-Ebene und gilt
   // für alle enthaltenen result-Einträge.
@@ -104,7 +113,7 @@ export interface RkdbAntwort {
 }
 
 export function parseRkdbAntwort(root: XmlNode): RkdbAntwort {
-  const resp = findDescendant(root, 'rkdbResponse');
+  const resp = rkdbResponseNode(root);
   const info = resp ? childText(resp, 'info') : undefined;
   return { ergebnisse: parseRkdbErgebnisse(root), info: info || undefined };
 }

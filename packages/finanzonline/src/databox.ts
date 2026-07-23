@@ -42,6 +42,18 @@ export interface Databox {
    * @param fileart Dateiart des Eintrags (aus {@link Databox.liste}), da die Entry-Antwort selbst keine `fileart` liefert.
    */
   eintrag(applkey: string, fileart: 'XML' | 'PDF'): Promise<{ fileart: 'XML' | 'PDF'; inhalt: Buffer }>;
+  /**
+   * Holt die asynchronen rkdb-Ergebnisprotokolle (`erltyp=P`, `anbringen=RKDB`)
+   * als XML-Strings ab — Bequemlichkeit über {@link Databox.liste} +
+   * {@link Databox.eintrag}. **Markiert die abgeholten Protokolle als gelesen.**
+   * Den XML-String parst der Aufrufer mit `parseErgebnisprotokoll` aus
+   * `@kreiseck/rksv` und ordnet die Einzelergebnisse über `paketNr`/`kundeninfo`
+   * seinen Einreichungen zu.
+   */
+  rkdbProtokolle(args?: {
+    von?: Date;
+    bis?: Date;
+  }): Promise<Array<{ applkey: string; tsZust: string; xml: string }>>;
 }
 
 function childrenNamed(node: XmlNode, name: string): XmlNode[] {
@@ -152,5 +164,20 @@ export function createDatabox(session: Session, opts?: { transport?: TransportOp
     return { fileart, inhalt };
   }
 
-  return { liste, eintrag };
+  async function rkdbProtokolle(args?: {
+    von?: Date;
+    bis?: Date;
+  }): Promise<Array<{ applkey: string; tsZust: string; xml: string }>> {
+    const eintraege = (await liste({ erltyp: 'P', von: args?.von, bis: args?.bis })).filter(
+      (e) => e.anbringen === 'RKDB' && e.fileart === 'XML',
+    );
+    const out: Array<{ applkey: string; tsZust: string; xml: string }> = [];
+    for (const e of eintraege) {
+      const { inhalt } = await eintrag(e.applkey, 'XML');
+      out.push({ applkey: e.applkey, tsZust: e.tsZust, xml: inhalt.toString('utf8') });
+    }
+    return out;
+  }
+
+  return { liste, eintrag, rkdbProtokolle };
 }

@@ -12,4 +12,5 @@ export type {
   BelegpruefungVorgang,
 } from './vorgaenge';
 export type { Ergebnis, Pruefung, StatusErgebnis } from './antwort';
+export { parseErgebnisprotokoll, type Ergebnisprotokoll } from './protokoll';
 export { RKDB_RC, rcInfo, type RcInfo, type RcKind } from './returncodes';
