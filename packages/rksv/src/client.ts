@@ -26,6 +26,16 @@ export type Quittung =
   { verarbeitung: 'synchron'; ergebnisse: Ergebnis[] } | { verarbeitung: 'asynchron'; hinweis: string };
 
 /** Öffentliche API des rkdb-Clients: Paketübermittlung sowie bequeme Einzelvorgang-Hüllen je Vorgangsart. */
+/**
+ * Öffentliche API des rkdb-Clients (Registrierkassen-Webservice). Deckt die
+ * gängigen Vorgänge ab: SEE/Kasse registrieren, Ausfall/Wiederinbetriebnahme/
+ * Außerbetriebnahme, Status und Belegprüfung.
+ *
+ * Bewusst NICHT umgesetzt: die Vorgänge für geschlossene Gesamtsysteme (GGS —
+ * `registrierung_ggs`, `ausfall_ggs`, `wiederinbetriebnahme_ggs`, `status_ggs`
+ * laut BMF-Spec). Das ist ein Nischenfall (Großbetriebe mit eigenem HSM/GGS)
+ * und bei Bedarf additiv nachrüstbar.
+ */
 export interface Rksv {
   /** Sendet ein Paket Vorgänge. Genau ein Vorgang (und nicht erzwungen asynchron) läuft synchron; sonst landet das Ergebnis in der DataBox. */
   uebermittlePaket(args: {
@@ -64,6 +74,12 @@ export interface Rksv {
   };
   /** Signatur-/Siegelerstellungseinheit (SEE): dieselben vier Vorgänge wie `kasse`, adressiert über `zertifikatsseriennummer`. */
   see: {
+    /**
+     * Registriert eine SEE. `vdaId` = ID des Vertrauensdiensteanbieters laut
+     * BMF-Spec: `'AT1'` (A-Trust), `'AT2'` (GlobalTrust) oder `'AT9'` (nur für
+     * Testübermittlungen, wenn noch kein gültiges Zertifikat vorhanden ist).
+     * Entweder `zertifikatsseriennummer` oder `zertifikat` (BASE64 x509 DER) angeben.
+     */
     registriere(args: {
       paketNr: number;
       artSe: ArtSe;
