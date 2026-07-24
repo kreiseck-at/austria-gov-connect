@@ -62,7 +62,9 @@ function childrenNamed(node: XmlNode, name: string): XmlNode[] {
 }
 
 function normalizeFileart(value: string | undefined): 'XML' | 'PDF' {
-  return value === 'PDF' ? 'PDF' : 'XML';
+  // FON liefert fileart klein geschrieben (real verifiziert: <fileart>xml</fileart>),
+  // daher case-insensitiv normalisieren — sonst würde 'pdf' fälschlich zu 'XML'.
+  return value?.trim().toUpperCase() === 'PDF' ? 'PDF' : 'XML';
 }
 
 function toIsoDateTime(d: Date): string {

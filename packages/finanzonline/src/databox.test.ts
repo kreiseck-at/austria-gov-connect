@@ -8,7 +8,9 @@ import {
   type Session,
 } from '@kreiseck/finanzonline-core';
 const s: Session = { id: 'ABCDEFGHIJ1234567890', tid: 'ABCD1234', benid: 'benutzer1', async logout() {} };
-const LISTE = `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>0</rc><result><name>ACME</name><anbringen>RKDB</anbringen><zrvon>2026-01-01</zrvon><zrbis>2026-01-31</zrbis><datbesch>2026-07-22</datbesch><erltyp>P</erltyp><fileart>XML</fileart><ts_zust>2026-07-22T03:25:37</ts_zust><applkey>KEY0000000001</applkey><filebez>protokoll.xml</filebez><status></status></result></ns:getDataboxResponse></S:Body></S:Envelope>`;
+// fileart klein geschrieben + betreff/status-Form wie im echten FON-Response
+// (live gegen finanzonline.bmf.gv.at verifiziert, 2026-07-24).
+const LISTE = `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>0</rc><result><name>ACME</name><anbringen>RKDB</anbringen><zrvon>2026-01-01</zrvon><zrbis>2026-01-31</zrbis><datbesch>2026-07-22+02:00</datbesch><erltyp>P</erltyp><fileart>xml</fileart><ts_zust>2026-07-22T06:01:53.287+02:00</ts_zust><applkey>KEY0000000001</applkey><filebez>Webservice_RKDB_2026-07-22</filebez><status></status><betreff>Registrierkassenübermittlung</betreff></result></ns:getDataboxResponse></S:Body></S:Envelope>`;
 
 test('liste parst databoxListEntry inkl. gelesen-Flag', async () => {
   const db = createDatabox(s, {
@@ -17,9 +19,20 @@ test('liste parst databoxListEntry inkl. gelesen-Flag', async () => {
   const eintraege = await db.liste({ erltyp: 'P' });
   assert.equal(eintraege.length, 1);
   assert.equal(eintraege[0]?.anbringen, 'RKDB');
-  assert.equal(eintraege[0]?.fileart, 'XML');
+  assert.equal(eintraege[0]?.fileart, 'XML'); // aus kleingeschriebenem 'xml' normalisiert
   assert.equal(eintraege[0]?.applkey, 'KEY0000000001');
+  assert.equal(eintraege[0]?.betreff, 'Registrierkassenübermittlung');
   assert.equal(eintraege[0]?.gelesen, false);
+});
+
+test('liste normalisiert kleingeschriebenes fileart (real: xml/pdf) korrekt', async () => {
+  // FON liefert fileart klein — ein PDF-Eintrag darf NICHT als XML durchgehen.
+  const pdfXml = `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>0</rc><result><name>ACME</name><anbringen>BESCHEID</anbringen><zrvon></zrvon><zrbis></zrbis><datbesch>2026-07-22+02:00</datbesch><erltyp>B</erltyp><fileart>pdf</fileart><ts_zust>2026-07-22T06:01:53.287+02:00</ts_zust><applkey>KEY0000000009</applkey><filebez>bescheid.pdf</filebez><status></status></result></ns:getDataboxResponse></S:Body></S:Envelope>`;
+  const db = createDatabox(s, {
+    transport: { fetchImpl: (async () => new Response(pdfXml, { status: 200 })) as unknown as typeof fetch },
+  });
+  const eintraege = await db.liste();
+  assert.equal(eintraege[0]?.fileart, 'PDF');
 });
 
 test('liste setzt gelesen=true bei status=1', async () => {

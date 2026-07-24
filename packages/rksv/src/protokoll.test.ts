@@ -11,8 +11,25 @@ const RKDB_PROTOKOLL =
 test('parseErgebnisprotokoll: paketNr, info und beide Einzelergebnisse', () => {
   const p = parseErgebnisprotokoll(RKDB_PROTOKOLL);
   assert.equal(p.paketNr, '20160816');
+  assert.equal(p.artUebermittlung, 'P'); // Produktion (BMF-Muster)
+  assert.equal(p.fastnr, '091234567');
   assert.match(p.info ?? '', /nicht \(vollständig\) eingebracht/);
   assert.equal(p.ergebnisse.length, 2);
+});
+
+// Live gegen finanzonline.bmf.gv.at verifiziert (2026-07-24): Test-Übermittlung
+// (art_uebermittlung=T), numerische paket_nr, kein fastnr, Belegprüfungen mit rc B33.
+const RKDB_PROTOKOLL_TEST_LIVE =
+  '<?xml version="1.0" encoding="UTF-8"?><rkdbResponse xmlns="https://finanzonline.bmf.gv.at/rkdb" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><paket_nr>784690809</paket_nr><art_uebermittlung>T</art_uebermittlung><ts_erstellung>2026-07-22T05:26:47</ts_erstellung><info>Die oben angeführte TEST-Übermittlung wurde nicht (vollständig) übernommen.</info><result><satznr>1</satznr><rkdbMessage><rc>B33</rc><msg>Die Seriennummer ist nicht registriert oder bereits außer Betrieb genommen.</msg></rkdbMessage></result><result><satznr>2</satznr><rkdbMessage><rc>B33</rc><msg>Die Seriennummer ist nicht registriert oder bereits außer Betrieb genommen.</msg></rkdbMessage></result></rkdbResponse>';
+
+test('parseErgebnisprotokoll: reales Test-Protokoll (art_uebermittlung=T, ohne fastnr)', () => {
+  const p = parseErgebnisprotokoll(RKDB_PROTOKOLL_TEST_LIVE);
+  assert.equal(p.paketNr, '784690809');
+  assert.equal(p.artUebermittlung, 'T');
+  assert.equal(p.fastnr, undefined);
+  assert.equal(p.ergebnisse.length, 2);
+  assert.equal(p.ergebnisse[0]?.rc, 'B33');
+  assert.equal(p.ergebnisse[0]?.ok, false);
 });
 
 test('parseErgebnisprotokoll: Einzelergebnisse tragen satznr/rc/msg/kundeninfo zur Zuordnung', () => {

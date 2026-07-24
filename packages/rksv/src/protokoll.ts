@@ -10,6 +10,14 @@ import { parseRkdbAntwort, rkdbResponseNode, type Ergebnis } from './antwort';
 export interface Ergebnisprotokoll {
   /** Paketnummer der ursprünglichen Übermittlung (zur Zuordnung). */
   paketNr?: string;
+  /**
+   * Art der Übermittlung aus `art_uebermittlung`: `T` = Test, `P` = Produktion.
+   * `T` an echtem FON-Protokoll (live) verifiziert, `P` aus dem BMF-Musterprotokoll.
+   * Wichtig, um Test- von Produktions-Protokollen zu unterscheiden.
+   */
+  artUebermittlung?: string;
+  /** Finanzamts-/Steuernummer des Übermittlers (`fastnr`), sofern im Protokoll enthalten. */
+  fastnr?: string;
   /** Verarbeitungshinweis des Dienstes (z. B. „…nicht vollständig eingebracht"). */
   info?: string;
   ergebnisse: Ergebnis[];
@@ -25,6 +33,14 @@ export function parseErgebnisprotokoll(xml: string): Ergebnisprotokoll {
   const root = parseXml(xml);
   const resp = rkdbResponseNode(root);
   const paketNr = resp ? childText(resp, 'paket_nr') : undefined;
+  const artUebermittlung = resp ? childText(resp, 'art_uebermittlung') : undefined;
+  const fastnr = resp ? childText(resp, 'fastnr') : undefined;
   const { ergebnisse, info } = parseRkdbAntwort(root);
-  return { paketNr: paketNr || undefined, info, ergebnisse };
+  return {
+    paketNr: paketNr || undefined,
+    artUebermittlung: artUebermittlung || undefined,
+    fastnr: fastnr || undefined,
+    info,
+    ergebnisse,
+  };
 }
