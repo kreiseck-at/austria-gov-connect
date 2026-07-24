@@ -36,15 +36,19 @@ export class FonSoapFaultError extends FonError {
   }
 }
 
+// -1..-4 sind 1:1 die Returncodes der BMF-Spec „Session-Webservice" (Stand
+// 06.11.2019). -5..-8 stehen NICHT in dieser Spec (vermutlich legacy/beobachtet)
+// — nur als Best-Effort-Klartext; bei diesen Codes trägt ohnehin die FON-eigene
+// serverMsg den maßgeblichen Grund.
 export const SESSION_RC_MESSAGES: Record<number, string> = {
-  [-1]: 'Session ungültig oder abgelaufen',
-  [-2]: 'Webservice wegen Wartungsarbeiten nicht verfügbar',
-  [-3]: 'Technischer Fehler im Webservice',
-  [-4]: 'Zugangsdaten ungültig',
-  [-5]: 'Benutzer nach mehreren Fehlversuchen gesperrt',
-  [-6]: 'Benutzer gesperrt',
-  [-7]: 'Kein Webservice-Benutzer',
-  [-8]: 'Teilnehmer für FinanzOnline gesperrt oder nicht berechtigt',
+  [-1]: 'Session ungültig oder abgelaufen', // Spec
+  [-2]: 'Webservice wegen Wartungsarbeiten nicht verfügbar', // Spec
+  [-3]: 'Technischer Fehler im Webservice', // Spec
+  [-4]: 'Zugangsdaten ungültig', // Spec
+  [-5]: 'Benutzer nach mehreren Fehlversuchen gesperrt', // nicht in aktueller Spec
+  [-6]: 'Benutzer gesperrt', // nicht in aktueller Spec
+  [-7]: 'Kein Webservice-Benutzer', // nicht in aktueller Spec
+  [-8]: 'Teilnehmer für FinanzOnline gesperrt oder nicht berechtigt', // nicht in aktueller Spec
 };
 
 export class FonSessionError extends FonError {
