@@ -32,7 +32,22 @@ export interface DataboxEintrag {
 }
 
 export interface Databox {
-  /** Listet DataBox-Einträge; ohne `erltyp` nur ungelesene, mit `von`/`bis` das Zustellfenster (gelesen+ungelesen). */
+  /**
+   * Listet DataBox-Einträge (`getDatabox`). Ohne `erltyp` nur ungelesene; mit
+   * `von`/`bis` das Zustellfenster (gelesen + ungelesen).
+   *
+   * `erltyp` = Art des DataBox-Inhalts laut BMF-Spec (viele sind rollengebunden):
+   * `P` (Protokolle), `B` (Bescheide/Ergänzungsersuchen/Bescheinigungen),
+   * `I` (Informationen), `M` (Mitteilungen), `EU` (EU-Erledigungen),
+   * `FB` (Firmenbuchzustellungen), `GM` (Grundsteuermessbeträge),
+   * `E` (Prüfungsergebnisse), `DL` (Dienstgeberbeitragslisten),
+   * `KG` (Kommunalsteuergrundlagen), `SS` (Selbstberechnungserklärungen),
+   * `QL` (Quotenlisten), `AE`/`AF`/`AK`/`AZ` (Amtshilfeersuchen, Notare).
+   *
+   * Zeitfenster-Regeln (sonst `FonRcError`): `von` max. 31 Tage zurück (`rc -5`),
+   * Spanne `von`–`bis` max. 7 Tage (`rc -6`); ohne beide bei gesetztem Fenster
+   * `rc -4`. `rc -1` (Session) wirft `FonSessionExpiredError`.
+   */
   liste(args?: { erltyp?: string; von?: Date; bis?: Date }): Promise<DataboxEintrag[]>;
   /**
    * Ruft den Inhalt eines DataBox-Eintrags ab (`getDataboxEntry`).
