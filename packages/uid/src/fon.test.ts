@@ -71,6 +71,19 @@ test('rc 4 -> UidEingabeError', async () => {
     UidEingabeError,
   );
 });
+test('rc 101 (UID nicht ATU) -> UidEingabeError (kein Retry)', async () => {
+  await assert.rejects(
+    () =>
+      fonUidAbfrage({
+        session: s,
+        antragsteller: 'DE12345678',
+        uid: 'ATU87654321',
+        stufe: 1,
+        transport: tp(resp('<rc>101</rc>')),
+      }),
+    UidEingabeError,
+  );
+});
 test('rc -1 -> FonSessionExpiredError', async () => {
   await assert.rejects(
     () =>

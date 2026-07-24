@@ -13,13 +13,19 @@ import { UidEingabeError, type UidErgebnis, type KeinAntwortGrund } from './erge
 const ENDPOINT = 'https://finanzonline.bmf.gv.at/fonuid/ws/uidAbfrage/';
 const NS = 'https://finanzonline.bmf.gv.at/fon/ws/uidAbfrage';
 
+// Returncodes laut BMF-Spec „UID-Abfrage-Webservice" (Stand 20.09.2024).
+// Vorübergehend → wiederholbar (keine_antwort): -2 Wartung, 12 „(noch) nicht
+// abfragbar", 1511 Funktion nicht verfügbar, 1512 Überlast.
 const TRANSIENT: Record<number, KeinAntwortGrund> = {
   [-2]: 'wartung',
   12: 'ms_nicht_erreichbar',
   1511: 'ms_nicht_erreichbar',
   1512: 'ueberlast',
 };
+// 1513/1514 = UID pro Tag zu oft abgefragt (seit 06.04.2023: max. 2×/Tag).
 const RATENLIMIT = new Set([1513, 1514]);
+// 10 MS verbietet Abfrage, 11/-4 nicht berechtigt, 103/104 CZ/SK-Gruppe (nur
+// Stufe 1), 105 einzeln über FinanzOnline abzufragen.
 const NICHT_BER = new Set([10, 11, -4, 103, 104, 105]);
 
 export async function fonUidAbfrage(args: {
@@ -75,7 +81,9 @@ export async function fonUidAbfrage(args: {
     return erg;
   }
   if (rc === 1) return { ...base, ergebnis: 'ungueltig' };
-  if (rc === 4 || rc === 5)
+  // Eingabefehler laut BMF-Spec (kein „ungültig", kein Retry): 4 = Erwerber-UID
+  // falsch, 5 = Antragsteller-UID ungültig, 101 = UID beginnt nicht mit ATU.
+  if (rc === 4 || rc === 5 || rc === 101)
     throw new UidEingabeError(`FON-UID rc ${rc}: ${(resp && childText(resp, 'msg')) || 'ungültige Eingabe'}`);
   if (RATENLIMIT.has(rc))
     return { ...base, ergebnis: 'keine_antwort', grund: 'ratenlimit', wiederholbar: false };
