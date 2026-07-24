@@ -9,8 +9,9 @@ const listeResp = (results: string) =>
   `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>0</rc>${results}</ns:getDataboxResponse></S:Body></S:Envelope>`;
 const entryResp = (b64: string) =>
   `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxEntryResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>0</rc><result>${b64}</result></ns:getDataboxEntryResponse></S:Body></S:Envelope>`;
+// fileart klein + ts_zust mit Zeitzone + betreff wie im echten FON-Response.
 const listeEintrag = (anbringen: string, applkey: string) =>
-  `<result><name>x</name><anbringen>${anbringen}</anbringen><zrvon></zrvon><zrbis></zrbis><datbesch></datbesch><erltyp>P</erltyp><fileart>XML</fileart><ts_zust>2026-01-01T00:00:00</ts_zust><applkey>${applkey}</applkey><filebez>f</filebez><status></status></result>`;
+  `<result><name>x</name><anbringen>${anbringen}</anbringen><zrvon></zrvon><zrbis></zrbis><datbesch>2026-01-01+02:00</datbesch><erltyp>P</erltyp><fileart>xml</fileart><ts_zust>2026-01-01T06:01:00.000+02:00</ts_zust><applkey>${applkey}</applkey><filebez>Webservice_RKDB_${applkey}</filebez><status></status><betreff>Registrierkassenübermittlung</betreff></result>`;
 
 const PROTOKOLL_XML =
   '<rkdbResponse xmlns="https://finanzonline.bmf.gv.at/rkdb"><paket_nr>42</paket_nr><result><satznr>1</satznr><rkdbMessage><rc>0</rc><msg/></rkdbMessage></result></rkdbResponse>';

@@ -36,7 +36,7 @@ test('liste normalisiert kleingeschriebenes fileart (real: xml/pdf) korrekt', as
 });
 
 test('liste setzt gelesen=true bei status=1', async () => {
-  const gelesenXml = `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>0</rc><result><name>ACME</name><anbringen>RKDB</anbringen><zrvon>2026-01-01</zrvon><zrbis>2026-01-31</zrbis><datbesch>2026-07-22</datbesch><erltyp>P</erltyp><fileart>XML</fileart><ts_zust>2026-07-22T03:25:37</ts_zust><applkey>KEY0000000002</applkey><filebez>protokoll2.xml</filebez><status>1</status></result></ns:getDataboxResponse></S:Body></S:Envelope>`;
+  const gelesenXml = `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>0</rc><result><name>ACME</name><anbringen>RKDB</anbringen><zrvon>2026-01-01</zrvon><zrbis>2026-01-31</zrbis><datbesch>2026-07-22+02:00</datbesch><erltyp>P</erltyp><fileart>xml</fileart><ts_zust>2026-07-22T03:25:37.000+02:00</ts_zust><applkey>KEY0000000002</applkey><filebez>Webservice_RKDB_KEY0000000002</filebez><status>1</status></result></ns:getDataboxResponse></S:Body></S:Envelope>`;
   const db = createDatabox(s, {
     transport: {
       fetchImpl: (async () => new Response(gelesenXml, { status: 200 })) as unknown as typeof fetch,
@@ -90,7 +90,7 @@ test('liste formatiert von/bis als YYYY-MM-DDThh:mm:ss ohne Z/Millisekunden', as
 });
 
 test('liste liefert mehrere Einträge bei mehreren result-Blöcken', async () => {
-  const mehrfachXml = `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>0</rc><result><name>ACME</name><anbringen>RKDB</anbringen><zrvon>2026-01-01</zrvon><zrbis>2026-01-31</zrbis><datbesch>2026-07-22</datbesch><erltyp>P</erltyp><fileart>XML</fileart><ts_zust>2026-07-22T03:25:37</ts_zust><applkey>KEY0000000001</applkey><filebez>protokoll.xml</filebez><status></status></result><result><name>ACME</name><anbringen>RKDB</anbringen><zrvon>2026-02-01</zrvon><zrbis>2026-02-28</zrbis><datbesch>2026-07-23</datbesch><erltyp>P</erltyp><fileart>PDF</fileart><ts_zust>2026-07-23T03:25:37</ts_zust><applkey>KEY0000000002</applkey><filebez>protokoll2.pdf</filebez><status>1</status></result></ns:getDataboxResponse></S:Body></S:Envelope>`;
+  const mehrfachXml = `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>0</rc><result><name>ACME</name><anbringen>RKDB</anbringen><zrvon>2026-01-01</zrvon><zrbis>2026-01-31</zrbis><datbesch>2026-07-22+02:00</datbesch><erltyp>P</erltyp><fileart>xml</fileart><ts_zust>2026-07-22T03:25:37.000+02:00</ts_zust><applkey>KEY0000000001</applkey><filebez>Webservice_RKDB_KEY0000000001</filebez><status></status></result><result><name>ACME</name><anbringen>B</anbringen><zrvon>2026-02-01</zrvon><zrbis>2026-02-28</zrbis><datbesch>2026-07-23+02:00</datbesch><erltyp>B</erltyp><fileart>pdf</fileart><ts_zust>2026-07-23T03:25:37.000+02:00</ts_zust><applkey>KEY0000000002</applkey><filebez>bescheid.pdf</filebez><status>1</status></result></ns:getDataboxResponse></S:Body></S:Envelope>`;
   const db = createDatabox(s, {
     transport: {
       fetchImpl: (async () => new Response(mehrfachXml, { status: 200 })) as unknown as typeof fetch,
