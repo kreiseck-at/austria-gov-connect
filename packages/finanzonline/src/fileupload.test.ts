@@ -1,9 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createFileUpload, type Anbringen } from './fileupload';
+import { createFileUpload, ANBRINGEN, type Anbringen } from './fileupload';
 import { FonSessionExpiredError, type Session } from '@kreiseck/finanzonline-core';
 
 const s: Session = { id: 'ABCDEFGHIJ1234567890', tid: 'ABCD1234', benid: 'benutzer1', async logout() {} };
+
+test('ANBRINGEN deckt sich mit der BMF-Spec (Stand 04.03.2026)', () => {
+  // 39 Anbringen-Arten laut BMF „File-Upload-Webservice".
+  assert.equal(ANBRINGEN.length, 39);
+  for (const a of ['BIL', 'IVF', 'JAB', 'U30', 'U13', 'GIR'] as const) {
+    assert.ok((ANBRINGEN as readonly string[]).includes(a), `fehlt: ${a}`);
+  }
+  // Nicht (mehr) in der Spec — dürfen nicht vorkommen.
+  for (const a of ['KDUEB', 'NOVASB', 'NOVASBAB', 'KDX']) {
+    assert.ok(!(ANBRINGEN as readonly string[]).includes(a), `unerwartet: ${a}`);
+  }
+});
 
 const resp = (rc: string, msg = '') =>
   `<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:fileuploadResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/fileupload"><rc>${rc}</rc>${msg ? `<msg>${msg}</msg>` : ''}</ns:fileuploadResponse></S:Body></S:Envelope>`;
