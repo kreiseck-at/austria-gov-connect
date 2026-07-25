@@ -1,8 +1,13 @@
 /**
  * Status-Codes des ELDA Transfer-Webservice v4 (1:1 aus der
  * Schnittstellenbeschreibung V4). Steht im `serviceResult.statusCode` jeder Antwort.
+ *
+ * Der Wertetyp ist bewusst `string | undefined`: ELDA kann jederzeit einen hier
+ * noch nicht erfassten Code liefern, und dann ist der Zugriff `undefined`. Der
+ * Typ zwingt Aufrufer, das zu behandeln (`ELDA_STATUS[code] ?? code`), statt an
+ * einem vermeintlichen `string` zur Laufzeit zu scheitern.
  */
-export const ELDA_STATUS: Record<string, string> = {
+export const ELDA_STATUS: Readonly<Record<string, string | undefined>> = {
   '000': 'OK',
   '500': 'Interner Verarbeitungsfehler',
   '551': 'Request abgelaufen (created älter als 60 Sekunden)',

@@ -3,8 +3,8 @@
 # austria-gov-connect
 
 Anbindung an österreichische Behörden-Webservices für Node — FinanzOnline,
-Registrierkassen (RKSV) und später ELDA. Ein Paket pro Behördenkanal,
-framework-agnostisch und zustandslos.
+Registrierkassen (RKSV) und ELDA (Sozialversicherung). Ein Paket pro
+Behördenkanal, framework-agnostisch und zustandslos.
 
 Von **[Kreiseck](https://github.com/kreiseck-at)** · Lizenz: Apache-2.0.
 
@@ -23,7 +23,7 @@ weder Belegketten noch Signaturen.
 | `@kreiseck/rksv` | Registrierkassen-Webservice, Belegprüfung, Belegcode offline | in Arbeit |
 | `@kreiseck/uid` | UID-Bestätigungsverfahren (Stufe 1 + 2) | fertig |
 | `@kreiseck/finanzonline` | Übrige FinanzOnline-Verfahren (DataBox u. a.) | DataBox (Teil), Rest geplant |
-| `@kreiseck/elda` | Sozialversicherung (ELDA) | geplant |
+| `@kreiseck/elda` | Sozialversicherung (ELDA), Transfer-Webservice v4 | Transport fertig, Meldungs-Builder geplant |
 
 ## Doku
 

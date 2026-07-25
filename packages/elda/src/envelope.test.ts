@@ -10,7 +10,10 @@ test('baueEldaEnvelope: verschachtelte arg0/securityParameters-Struktur', () => 
     { name: 'payload', value: 'BASE64' },
   ]);
   assert.match(xml, /<v4:senden xmlns:v4="http:\/\/v4\.transfer\.ws\.elda\.at\/">/);
-  assert.match(xml, /<arg0><securityParameters><apiKey>K1<\/apiKey><created>C<\/created><kundenpasswort>H<\/kundenpasswort><nonce>N<\/nonce><seriennummer>S<\/seriennummer><\/securityParameters><dateiName>m\.xml<\/dateiName><payload>BASE64<\/payload><\/arg0>/);
+  assert.match(
+    xml,
+    /<arg0><securityParameters><apiKey>K1<\/apiKey><created>C<\/created><kundenpasswort>H<\/kundenpasswort><nonce>N<\/nonce><seriennummer>S<\/seriennummer><\/securityParameters><dateiName>m\.xml<\/dateiName><payload>BASE64<\/payload><\/arg0>/,
+  );
   assert.match(xml, /<\/v4:senden>/);
 });
 

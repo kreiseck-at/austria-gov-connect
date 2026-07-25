@@ -3,6 +3,7 @@ import {
   findDescendant,
   firstChild,
   childText,
+  FonTransportError,
   type TransportOptions,
   type XmlNode,
 } from '@kreiseck/finanzonline-core';
@@ -28,6 +29,14 @@ export interface EldaConfig extends SecurityQuelle {
   /**
    * Transport-Feineinstellungen (Timeout, Retries, `fetch`-Implementierung) —
    * siehe `TransportOptions` aus `@kreiseck/finanzonline-core`.
+   *
+   * `retries` ist die Anzahl ZUSÄTZLICHER Versuche nach einem Transportfehler
+   * (Standard `0`). Dieser Client wiederholt selbst und baut dabei für jeden
+   * Versuch frische `securityParameters` (neuer `nonce`, neues `created`) und
+   * einen neuen Envelope: ELDA lehnt einen wiederholten `nonce` mit Status `552`
+   * ab und einen `created` älter als 60 Sekunden mit `551`. Wiederholt wird
+   * ausschließlich bei Transportfehlern (`FonTransportError`) — SOAP-Faults,
+   * Protokollfehler und fachliche Status-Codes werden unverändert durchgereicht.
    */
   transport?: TransportOptions;
 }
@@ -110,18 +119,52 @@ export interface EldaTransfer {
   ruecksendungenAuflisten(): Promise<AuflistenErgebnis>;
   /**
    * Holt EINE Rücksendung per Protokollnummer. Einmalig — danach nicht mehr
-   * abrufbar. MTOM/XOP-referenzierte Payloads werden (noch) nicht unterstützt
-   * und führen zu einem {@link EldaProtocolError}, statt eine leere Datei
-   * vorzutäuschen.
+   * abrufbar.
+   *
+   * MTOM/XOP wird von diesem Client (noch) nicht unterstützt. Je nachdem, wie
+   * ELDA antwortet, äußert sich das in zwei verschiedenen Fehlern:
+   * - **Echte MTOM-Antwort** (`multipart/related` mit MIME-Teilen): Der Body ist
+   *   kein XML, das Parsing scheitert bereits im Transport von
+   *   `@kreiseck/finanzonline-core` — es kommt ein `FonProtocolError`
+   *   („Antwort ist kein gültiges XML").
+   * - **Reguläre XML-Antwort mit XOP-Referenz** (`<payload><xop:Include href="cid:…"/></payload>`,
+   *   z. B. wenn das Attachment fehlt oder abgetrennt wurde): Das erkennt dieser
+   *   Client und wirft einen {@link EldaProtocolError}, statt eine leere Datei
+   *   vorzutäuschen.
    */
   empfangen(protokollnummer: string | number): Promise<EmpfangenErgebnis>;
 }
 
-function statusUndMeldung(resp: XmlNode): { statusCode: string; meldung?: string } {
+/**
+ * Liest den Text eines Kindelements und trimmt ihn. ELDA darf seine Antworten
+ * pretty-printed liefern (`<statusCode>\n  000\n</statusCode>`) — ungetrimmt
+ * wäre jeder Vergleich falsch (`istOk` würde bei einer erfolgreichen Sendung
+ * `false` liefern und der Aufrufer womöglich ein Duplikat senden). Ein nach dem
+ * Trimmen leerer Wert zählt — wie ein fehlendes Element — als „nicht vorhanden".
+ */
+function feldText(node: XmlNode, name: string): string | undefined {
+  const roh = childText(node, name);
+  if (roh === undefined) return undefined;
+  const wert = roh.trim();
+  return wert === '' ? undefined : wert;
+}
+
+/**
+ * Liest `serviceResult` einer Antwort. Fehlt das Element oder trägt es keinen
+ * `statusCode`, ist nicht entscheidbar, ob der Aufruf erfolgreich war — das wird
+ * laut geworfen (konsistent zu {@link holeReturn}), statt stillschweigend einen
+ * leeren Status-Code und damit `ok: false` vorzutäuschen.
+ */
+function statusUndMeldung(resp: XmlNode, methode: string): { statusCode: string; meldung?: string } {
   const sr = findDescendant(resp, 'serviceResult');
-  const statusCode = (sr && childText(sr, 'statusCode')) || '';
-  const meldung = sr ? childText(sr, 'messages') : undefined;
-  return { statusCode, meldung };
+  const statusCode = sr ? feldText(sr, 'statusCode') : undefined;
+  if (!sr || !statusCode) {
+    throw new EldaProtocolError(
+      `Antwort auf '${methode}' enthält kein auswertbares <serviceResult><statusCode>. ` +
+        'Ohne Status-Code lässt sich Erfolg nicht von Fehlschlag unterscheiden.',
+    );
+  }
+  return { statusCode, meldung: feldText(sr, 'messages') };
 }
 
 /**
@@ -142,9 +185,27 @@ function holeReturn(root: XmlNode, methode: string): XmlNode {
 export function createEldaTransfer(config: EldaConfig): EldaTransfer {
   const endpoint = config.endpoint ?? ELDA_ENDPOINTS[config.umgebung ?? 'produktion'];
 
+  const { retries = 0, ...transport } = config.transport ?? {};
+
+  /**
+   * Führt einen Webservice-Aufruf aus und wiederholt ihn bei Transportfehlern.
+   *
+   * Die Wiederholung liegt bewusst hier und nicht im Transport: `nonce` und
+   * `created` dürfen nicht wiederverwendet werden (ELDA antwortet sonst mit
+   * `552` bzw. `551`), deshalb werden Security-Parameter UND Envelope für jeden
+   * Versuch neu gebaut und `callSoap` mit `retries: 0` aufgerufen. Wiederholt
+   * wird nur bei `FonTransportError` — SOAP-Faults, Protokollfehler und
+   * fachliche Status-Codes werden unverändert durchgereicht.
+   */
   async function ruf(methode: string, felder: EldaFeld[]): Promise<XmlNode> {
-    const body = baueEldaEnvelope(methode, baueSecurity(config), felder);
-    return callSoap({ endpoint, soapAction: methode, body }, config.transport);
+    for (let versuch = 0; ; versuch++) {
+      const body = baueEldaEnvelope(methode, baueSecurity(config), felder);
+      try {
+        return await callSoap({ endpoint, soapAction: methode, body }, { ...transport, retries: 0 });
+      } catch (err) {
+        if (versuch >= retries || !(err instanceof FonTransportError)) throw err;
+      }
+    }
   }
 
   return {
@@ -155,13 +216,13 @@ export function createEldaTransfer(config: EldaConfig): EldaTransfer {
         { name: 'payload', value: inhalt.toString('base64') },
       ]);
       const resp = holeReturn(root, 'senden');
-      const { statusCode, meldung } = statusUndMeldung(resp);
+      const { statusCode, meldung } = statusUndMeldung(resp, 'senden');
       const erg: SendenErgebnis = { statusCode, ok: istOk(statusCode) };
-      const protokollnummer = childText(resp, 'protokollnummer');
+      const protokollnummer = feldText(resp, 'protokollnummer');
       if (protokollnummer) erg.protokollnummer = protokollnummer;
-      const dateiId = childText(resp, 'dateiId');
+      const dateiId = feldText(resp, 'dateiId');
       if (dateiId) erg.dateiId = dateiId;
-      const eldaZeitstempel = childText(resp, 'eldaZeitstempel');
+      const eldaZeitstempel = feldText(resp, 'eldaZeitstempel');
       if (eldaZeitstempel) erg.eldaZeitstempel = eldaZeitstempel;
       if (meldung) erg.meldung = meldung;
       return erg;
@@ -170,13 +231,22 @@ export function createEldaTransfer(config: EldaConfig): EldaTransfer {
     async ruecksendungenAuflisten(): Promise<AuflistenErgebnis> {
       const root = await ruf('ruecksendungenAuflisten', []);
       const resp = holeReturn(root, 'ruecksendungenAuflisten');
-      const { statusCode, meldung } = statusUndMeldung(resp);
+      const { statusCode, meldung } = statusUndMeldung(resp, 'ruecksendungenAuflisten');
       const ruecksendungen = resp.children
         .filter((c) => c.name === 'ruecksendungen')
-        .map((c) => ({
-          protokollnummer: childText(c, 'protokollnummer') ?? '',
-          dateiName: childText(c, 'dateiName') ?? '',
-        }));
+        .map((c) => {
+          const protokollnummer = feldText(c, 'protokollnummer');
+          if (!protokollnummer) {
+            throw new EldaProtocolError(
+              "Antwort auf 'ruecksendungenAuflisten' enthält eine <ruecksendungen> ohne " +
+                'Protokollnummer. Eine solche Rücksendung ist nicht abholbar — sie wird nicht ' +
+                'als leerer Eintrag erfunden.',
+            );
+          }
+          // Ein fehlender dateiName macht die Rücksendung nur für `zuordnung`
+          // unbrauchbar, nicht für `empfangen` — deshalb kein Abbruch.
+          return { protokollnummer, dateiName: feldText(c, 'dateiName') ?? '' };
+        });
       const erg: AuflistenErgebnis = { statusCode, ok: istOk(statusCode), ruecksendungen };
       if (meldung) erg.meldung = meldung;
       return erg;
@@ -185,7 +255,7 @@ export function createEldaTransfer(config: EldaConfig): EldaTransfer {
     async empfangen(protokollnummer): Promise<EmpfangenErgebnis> {
       const root = await ruf('empfangen', [{ name: 'protokollnummer', value: String(protokollnummer) }]);
       const resp = holeReturn(root, 'empfangen');
-      const { statusCode, meldung } = statusUndMeldung(resp);
+      const { statusCode, meldung } = statusUndMeldung(resp, 'empfangen');
       const erg: EmpfangenErgebnis = { statusCode, ok: istOk(statusCode) };
       const datei = findDescendant(resp, 'datei');
       if (datei) {
@@ -197,7 +267,7 @@ export function createEldaTransfer(config: EldaConfig): EldaTransfer {
               'MTOM wird von diesem Client derzeit nicht unterstützt.',
           );
         }
-        const inhaltB64 = payloadNode?.text ?? '';
+        const inhaltB64 = payloadNode?.text.trim() ?? '';
         if (!inhaltB64 && istOk(statusCode)) {
           throw new EldaProtocolError(
             'Antwort meldet statusCode 000 mit einer <datei>, aber der Payload ist leer ' +
@@ -205,13 +275,13 @@ export function createEldaTransfer(config: EldaConfig): EldaTransfer {
           );
         }
         const d: EmpfangenErgebnis['datei'] = { inhalt: Buffer.from(inhaltB64, 'base64') };
-        const id = childText(datei, 'id');
+        const id = feldText(datei, 'id');
         if (id) d.id = id;
-        const name = childText(datei, 'name');
+        const name = feldText(datei, 'name');
         if (name) d.name = name;
-        const md5 = childText(datei, 'md5');
+        const md5 = feldText(datei, 'md5');
         if (md5) d.md5 = md5;
-        const dateiTyp = childText(datei, 'dateiTyp');
+        const dateiTyp = feldText(datei, 'dateiTyp');
         if (dateiTyp) {
           const parsed = Number.parseInt(dateiTyp, 10);
           if (Number.isFinite(parsed)) d.dateiTyp = parsed;

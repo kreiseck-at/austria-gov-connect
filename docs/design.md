@@ -26,7 +26,7 @@ framework-agnostisch, zustandslos, minimale Abhängigkeiten.
 | `@kreiseck/rksv` | Registrierkassen-Webservice (`rkdb`) + Belegcode offline | Ausbaustufe 1 |
 | `@kreiseck/uid` | UID-Bestätigungsverfahren (Stufe 1 + 2) | fertig |
 | `@kreiseck/finanzonline` | Übrige FinanzOnline-Verfahren (DataBox, Uploads) | DataBox (Teil), Rest später |
-| `@kreiseck/elda` | Sozialversicherung (ELDA) | später |
+| `@kreiseck/elda` | Sozialversicherung (ELDA), Transfer-Webservice v4 | Transport fertig, Meldungs-Builder später |
 
 Jede weitere Ausbaustufe bekommt eine eigene Spezifikation. Dieses Dokument
 deckt ausschließlich Ausbaustufe 1 ab.

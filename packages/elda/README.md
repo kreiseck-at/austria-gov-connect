@@ -76,6 +76,13 @@ geht dadurch keine Status-Information verloren. Ein leeres `liste.ruecksendungen
 bei `liste.ok === false` bedeutet **nicht** "keine Rücksendungen offen", sondern
 dass der Aufruf selbst fehlgeschlagen ist (z. B. ungültiger API-Key).
 
+**Zu `zuordnung`:** Der Vergleich ist ziffernscharf — die Protokollnummer darf im
+`dateiName` weder links noch rechts von einer weiteren Ziffer stehen. ELDA vergibt
+fortlaufende Nummern, `1557643` ist damit Präfix von `15576431`; ein reiner
+Teilstring-Vergleich würde die falsche Rücksendung liefern, und die wäre nach dem
+`empfangen` unwiederbringlich verbraucht. Eine leere Protokollnummer wirft einen
+`EldaError`, statt irgendeine fremde Rücksendung zu liefern.
+
 ## `senden` mit statusCode '000' heißt „empfangen", nicht „verarbeitet"
 
 `gesendet.ok === true` (statusCode `'000'`) bedeutet nur, dass ELDA die Datei
@@ -118,35 +125,72 @@ Fachliche Status-Codes werden **nie** geworfen — sie stecken in `ok`/`statusCo
 Antwort technisch nicht sinnvoll auswertbar ist:
 
 - **`FonSoapFaultError`** (aus `@kreiseck/finanzonline-core`) — ein echter SOAP-Fault.
-- **`EldaProtocolError`** (aus diesem Paket, Basis `EldaError`) — die Antwort
-  enthält kein `<return>`-Element, oder der `<payload>` bei `empfangen` ist
-  MTOM/XOP-referenziert (`<xop:Include>`) oder trotz `statusCode '000'` leer.
+- **`FonTransportError`** (aus `@kreiseck/finanzonline-core`) — die Anfrage kam
+  nicht durch (Netzfehler, Zeitüberschreitung). Siehe „Wiederholungen" unten.
+- **`FonProtocolError`** (aus `@kreiseck/finanzonline-core`) — die Antwort ist
+  kein gültiges XML (u. a. bei einer echten MTOM-Antwort, siehe unten) oder trägt
+  einen HTTP-Fehlerstatus ohne SOAP-Fault.
+- **`EldaProtocolError`** (aus diesem Paket, Basis `EldaError`) — die Antwort ist
+  XML, aber inhaltlich nicht auswertbar: kein `<return>`-Element, kein
+  `<serviceResult><statusCode>`, eine `<ruecksendungen>` ohne Protokollnummer,
+  oder bei `empfangen` ein `<payload>`, der XOP-referenziert (`<xop:Include>`)
+  bzw. trotz `statusCode '000'` leer ist.
 
 ```ts
 import { EldaError, EldaProtocolError } from '@kreiseck/elda';
+import { FonProtocolError } from '@kreiseck/finanzonline-core';
 
 try {
   await elda.empfangen(protokollnummer);
 } catch (err) {
   if (err instanceof EldaProtocolError) {
-    // Antwort technisch nicht auswertbar — MTOM-Fall oder fehlendes <return>
+    // Antwort ist XML, aber inhaltlich nicht auswertbar (fehlendes <return>,
+    // fehlender statusCode, XOP-Referenz statt Base64 …)
   } else if (err instanceof EldaError) {
     // reserviert für künftige elda-spezifische Fehlerarten
+  } else if (err instanceof FonProtocolError) {
+    // Antwort war gar kein XML — z. B. eine echte MTOM-Nachricht
   }
   throw err;
 }
 ```
 
+## Wiederholungen (`transport.retries`)
+
+`transport.retries` ist die Anzahl **zusätzlicher** Versuche nach einem
+Transportfehler (Standard `0`). Dieses Paket wiederholt selbst und baut dabei für
+jeden Versuch **frische `securityParameters`** (neuer `nonce`, neues `created`)
+und einen neuen Envelope — ein identisch wiederholter Request liefe bei ELDA
+sonst zwangsläufig in Status `552` (Nonce bereits verwendet) bzw. `551` (`created`
+älter als 60 Sekunden). Wiederholt wird **ausschließlich** bei Transportfehlern;
+SOAP-Faults, Protokollfehler und fachliche Status-Codes werden unverändert
+durchgereicht.
+
+Zu beachten: ein Timeout heißt nicht, dass ELDA die Datei nicht bekommen hat. Ein
+wiederholtes `senden` kann daher fachlich als Duplikat (`405`, mit der
+Protokollnummer des Originals in der Meldung) beantwortet werden — das ist der
+gewollte, auswertbare Ausgang, kein Datenverlust.
+
 ## Hinweis zu MTOM/XOP
 
 Dieser Client sendet und erwartet den Datei-Payload **inline als Base64**
-(`base64Binary`), nicht als MTOM/multipart-Nachricht. Antwortet ELDA stattdessen
-mit einer MTOM/XOP-Referenz (`<xop:Include>`), erkennt `empfangen` das und wirft
-einen `EldaProtocolError` — statt still eine leere Datei vorzutäuschen. Ob ELDA im
-Kundenbetrieb tatsächlich inline-Base64 akzeptiert/liefert oder MTOM erzwingt,
-ist erst mit einem echten ELDA-Kundentest-Zugang endgültig zu klären; bis dahin
-ist die Logik vollständig unit-getestet, aber der Sendepfad noch nicht gegen die
-echte Gegenstelle verifiziert.
+(`base64Binary`), nicht als MTOM/multipart-Nachricht. MTOM ist **nicht**
+implementiert. Antwortet ELDA trotzdem MTOM, äußert sich das in zwei
+verschiedenen Fehlern — je nachdem, wie die Antwort auf der Leitung aussieht:
+
+- **Echte MTOM-Antwort** (`multipart/related` mit MIME-Teilen): Der Body ist kein
+  XML. Das Parsing scheitert bereits im Transport von
+  `@kreiseck/finanzonline-core`, der Aufrufer bekommt einen **`FonProtocolError`**
+  („Antwort ist kein gültiges XML").
+- **Reguläre XML-Antwort mit XOP-Referenz** (`<payload><xop:Include href="cid:…"/></payload>`,
+  z. B. wenn das Attachment fehlt oder von einer Zwischenstelle abgetrennt wurde):
+  Das erkennt `empfangen` und wirft einen **`EldaProtocolError`** — statt still
+  eine leere Datei vorzutäuschen.
+
+Ob ELDA im Kundenbetrieb tatsächlich inline-Base64 akzeptiert/liefert oder MTOM
+erzwingt, ist erst mit einem echten ELDA-Kundentest-Zugang endgültig zu klären;
+bis dahin ist die Logik vollständig unit-getestet, aber der Sendepfad noch nicht
+gegen die echte Gegenstelle verifiziert.
 
 ## v2: Meldungs-Builder (Anmeldung/Abmeldung/mBGM) folgen nach SV-Datensatzbeschreibung
 
