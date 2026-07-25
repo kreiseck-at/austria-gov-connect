@@ -46,6 +46,22 @@ function base32ToBase64(s: string): string {
   return base32Decode(s).toString('base64');
 }
 
+/**
+ * Dekodiert den maschinenlesbaren Belegcode. 1:1 gegen die RKSV-Anlage
+ * (Detailspezifikationen, BGBl. II Nr. 410/2015) verifiziert:
+ * - 13 Segmente = signierte Belegdaten (JWS-Payload, Anlage Z5) + Signaturwert
+ *   (Anlage Z12), getrennt durch `_`.
+ * - Segment 0 = Registrierkassenalgorithmuskennzeichen `R{N}-{C}{M}` (Anlage Z2);
+ *   Segmente 1–11 = Kassen-ID, Belegnummer, Datum (ISO 8601 o. Zone), 5 Beträge
+ *   (Normal/Ermäßigt-1/Ermäßigt-2/Null/Besonders), Umsatzzähler (AES-256-ICM,
+ *   opak — offline kein Schlüssel), Zertifikatsseriennummer, Verkettungswert
+ *   (Anlage Z4); Segment 12 = Signaturwert.
+ * - QR: Signaturwert in Standard-base64 (Anlage Z12 verlangt Umkodierung von
+ *   base64url wegen `_`-Konflikt). OCR-Variante (Anlage Z14): base32 für genau
+ *   Umsatzzähler, Verkettungswert und Signaturwert.
+ * - `TRA`/`STO` im Umsatzzähler-Feld = Trainings-/Stornobuchung (§ 10 Abs. 3);
+ *   Signaturwert = „Sicherheitseinrichtung ausgefallen" bei SEE-Ausfall (Anlage Z6).
+ */
 export function decodeBelegCode(code: string): Beleg {
   const raw = code.trim();
   if (raw[0] !== '_') throw new RksvCodeError('Belegcode muss mit "_" beginnen');
