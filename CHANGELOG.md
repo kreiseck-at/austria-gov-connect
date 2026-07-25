@@ -191,3 +191,43 @@ brechen).
   `{ rc, msg }`; das Übermittlungsprotokoll kommt asynchron in die DataBox.
 - Fehler-Returncodes tragen über `FonRcError` das numerische `rc` (z. B. DataBox
   `-5`/`-6`, FileUpload `-4`/`-5`); `rc -1` wirft `FonSessionExpiredError`.
+
+## @kreiseck/elda
+
+### 0.1.0 — 2026-07-25
+
+- Erstveröffentlichung: Transport-Schicht des ELDA Transfer-Webservice v4
+  (Schnittstellenbeschreibung V4, 05/2026). `createEldaTransfer(config)` liefert
+  die drei Webservice-Methoden `senden`, `ruecksendungenAuflisten` und
+  `empfangen`; Envelope- und Security-Bau selbstgeschrieben auf Basis von
+  `@kreiseck/finanzonline-core` — keine weiteren Laufzeitabhängigkeiten.
+- **Security:** `baueSecurity` erzeugt die `securityParameters` (`apiKey`,
+  `created`, `kundenpasswort` als SHA-512 hex lowercase, `nonce`, `seriennummer`).
+  Das Kundenpasswort wird im Klartext übergeben und nur gehasht übermittelt.
+- **Ergebnis-Objekte statt Ausnahmen:** Fachliche Status-Codes werden nie
+  geworfen, sondern als `statusCode`/`ok`/`meldung` durchgereicht.
+  `ruecksendungenAuflisten` liefert bewusst kein nacktes Array, sondern ein
+  `AuflistenErgebnis` (`statusCode`, `ok`, `ruecksendungen`, `meldung`) — ein
+  leeres `ruecksendungen` bei `ok: false` heißt „Aufruf fehlgeschlagen", nicht
+  „keine Rücksendungen offen".
+- **Wiederholungen:** `transport.retries` sind zusätzliche Versuche nach einem
+  Transportfehler; für jeden Versuch werden `nonce` und `created` neu erzeugt
+  (ein Replay liefe sonst in Status `552`/`551`). SOAP-Faults, Protokollfehler
+  und fachliche Status-Codes werden nicht wiederholt.
+- **Korrelation:** `zuordnung(sendungsProtokollnummer, ruecksendungen)` findet die
+  Rücksendung, deren `dateiName` die Protokollnummer der Sendung enthält —
+  ziffernscharf, damit `1557643` nicht auf `15576431` passt.
+- **Keine stillen Verluste:** fehlendes `<return>`, fehlender
+  `<serviceResult><statusCode>`, eine `<ruecksendungen>` ohne Protokollnummer
+  sowie ein leerer oder XOP-referenzierter `<payload>` werfen `EldaProtocolError`
+  statt ein halbes Ergebnis vorzutäuschen. Leaf-Texte werden getrimmt, damit
+  pretty-printed Antworten korrekt ausgewertet werden.
+- `ELDA_ENDPOINTS` (Produktion/Kundentest/SIT), `ELDA_NAMESPACE`, `ELDA_STATUS`
+  (vollständige Status-Code-Tabelle der Spec V4) und `istOk` sind exportiert.
+- **MTOM/XOP wird noch nicht unterstützt** — Payloads gehen und kommen inline als
+  Base64. Eine echte MTOM-Antwort (`multipart/related`) endet in einem
+  `FonProtocolError`, eine XOP-Referenz in einer XML-Antwort in einem
+  `EldaProtocolError`. Der Sendepfad ist vollständig unit-getestet, aber noch
+  nicht gegen die echte ELDA-Gegenstelle verifiziert.
+- Meldungs-Builder (Anmeldung, Abmeldung, mBGM …) sind bewusst nicht enthalten —
+  sie brauchen die SV-Datensatzbeschreibung als eigene Spec-Grundlage.
