@@ -1,6 +1,6 @@
 {
   "name": "@kreiseck/rksv",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "FinanzOnline Registrierkassen-Webservice (RKSV) und Offline-Belegcode",
   "license": "Apache-2.0",
   "author": "Kreiseck",
@@ -25,8 +25,14 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-    "./code": { "types": "./dist/code/index.d.ts", "default": "./dist/code/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./code": {
+      "types": "./dist/code/index.d.ts",
+      "default": "./dist/code/index.js"
+    }
   },
   "files": [
     "dist",

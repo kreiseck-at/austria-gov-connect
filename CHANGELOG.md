@@ -7,6 +7,16 @@ brechen).
 
 ## @kreiseck/uid
 
+### 0.1.1 — 2026-07-25
+
+- **Fix:** `fon.abfrage` behandelt Returncode `101` (UID beginnt nicht mit ATU)
+  wie `4`/`5` als Eingabefehler (`UidEingabeError`) statt als wiederholbares
+  `keine_antwort` — kein sinnloser Retry bei fehlerhafter Eingabe.
+- Returncode-Klassifizierung gegen die BMF-Spec „UID-Abfrage-Webservice"
+  (Stand 20.09.2024) dokumentiert. Live gegen echtes FON verifiziert (Stufe 1/2
+  gültig inkl. Name/Adresse; §132-Bescheid via `parseUidBescheid` am echten
+  DataBox-Bescheid geprüft).
+
 ### 0.1.0 — 2026-07-22
 
 - **Neu:** `createUid(config)` erzeugt ein Objekt mit Methoden zur UID-Prüfung
@@ -24,6 +34,17 @@ brechen).
 - Stateless API — alle Abfragen ohne interne Session (Session nur für FON optional).
 
 ## @kreiseck/rksv
+
+### 0.7.0 — 2026-07-25
+
+- **Neu:** `parseErgebnisprotokoll` erfasst zusätzlich `artUebermittlung`
+  (`T` = Test / `P` = Produktion) und `fastnr` — an einem echten FON-Protokoll
+  verifiziert. Additiv.
+- **Doku:** rkdb gegen die BMF-Spec „Registrierkassen-Webservice" geprüft
+  (Returncode-Tabelle/Begründungscodes decken sich; `vda_id`-Werte `AT1`/`AT2`/
+  `AT9` dokumentiert; GGS-Vorgänge bewusst nicht umgesetzt). `@kreiseck/rksv/code`
+  (Belegcode) field-für-field gegen die RKSV-Anlage (BGBl. II Nr. 410/2015,
+  Detailspezifikationen Z2/Z4/Z5/Z6/Z12–Z14) verifiziert — 1:1 konform.
 
 ### 0.6.0 — 2026-07-23
 
@@ -96,6 +117,13 @@ brechen).
 
 ## @kreiseck/finanzonline-core
 
+### 0.1.5 — 2026-07-25
+
+- **Doku:** Session-Returncodes `-1..-4` als konform zur BMF-Spec
+  „Session-Webservice" (Stand 06.11.2019) markiert; `-5..-8` als NICHT in der
+  aktuellen Spec (best-effort/legacy) kenntlich gemacht — bei diesen Codes trägt
+  ohnehin die FON-`serverMsg` den maßgeblichen Grund. Keine funktionale Änderung.
+
 ### 0.1.4 — 2026-07-23
 
 - **Neu:** Helfer für FON-Webservice-Benutzer — `BENID_MUSTER`/`istGueltigeBenid`,
@@ -129,6 +157,20 @@ brechen).
   Keine Laufzeitabhängigkeiten.
 
 ## @kreiseck/finanzonline
+
+### 0.2.0 — 2026-07-25
+
+- **Fix:** `normalizeFileart` ist jetzt case-insensitiv. FON liefert `fileart`
+  klein (`xml`/`pdf`); der bisherige case-sensitive Vergleich hätte PDF-Einträge
+  fälschlich als XML eingestuft. Live gegen echtes FON verifiziert.
+- **Breaking (vor 1.0):** FileUpload-`ANBRINGEN`-Enum an die BMF-Spec
+  „File-Upload-Webservice" (Stand 04.03.2026) angeglichen — ergänzt `BIL`
+  (E-Bilanz), `IVF` (Investmentfonds), `JAB` (Jahresabschluss Firmenbuch);
+  entfernt `KDUEB`/`NOVASB`/`NOVASBAB`/`KDX` (nicht in aktueller Spec). 39 Codes
+  mit Bedeutung + Returncode-Tabelle (`-1..-5`) dokumentiert. Live im Test-Modus
+  verifiziert (rc=0, „nur für Testzwecke").
+- **Doku:** DataBox `erltyp`-Werte und Zeitfenster-Returncodes (`-4`/`-5`/`-6`)
+  dokumentiert; Test-Fixtures an die echte (kleingeschriebene) FON-Form geerdet.
 
 ### 0.1.0 — 2026-07-22
 
