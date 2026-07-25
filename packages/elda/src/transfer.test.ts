@@ -435,6 +435,51 @@ test('retry: fachlicher Status-Code wird NICHT wiederholt', async () => {
   assert.equal(n, 1);
 });
 
+test('retry: retries NaN (z. B. unbesetzte Env-Variable) läuft NICHT endlos, sondern genau ein Versuch', async () => {
+  let n = 0;
+  const elda = createEldaTransfer(
+    retryCfg(Number(process.env.ELDA_RETRIES_UNSET_XYZ), async () => {
+      n++;
+      throw new Error('ECONNRESET');
+    }),
+  );
+  await assert.rejects(
+    () => elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' }),
+    (err: unknown) => err instanceof FonTransportError,
+  );
+  assert.equal(n, 1);
+});
+
+test('retry: retries Infinity wird wie 0 behandelt (kein Endlos-Retry)', async () => {
+  let n = 0;
+  const elda = createEldaTransfer(
+    retryCfg(Infinity, async () => {
+      n++;
+      throw new Error('ECONNRESET');
+    }),
+  );
+  await assert.rejects(
+    () => elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' }),
+    (err: unknown) => err instanceof FonTransportError,
+  );
+  assert.equal(n, 1);
+});
+
+test('retry: negative retries werden wie 0 behandelt', async () => {
+  let n = 0;
+  const elda = createEldaTransfer(
+    retryCfg(-1, async () => {
+      n++;
+      throw new Error('ECONNRESET');
+    }),
+  );
+  await assert.rejects(
+    () => elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' }),
+    (err: unknown) => err instanceof FonTransportError,
+  );
+  assert.equal(n, 1);
+});
+
 test('retry: SOAP-Fault wird NICHT wiederholt', async () => {
   let n = 0;
   const fault = soap(

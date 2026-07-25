@@ -37,6 +37,9 @@ export interface EldaConfig extends SecurityQuelle {
    * ab und einen `created` älter als 60 Sekunden mit `551`. Wiederholt wird
    * ausschließlich bei Transportfehlern (`FonTransportError`) — SOAP-Faults,
    * Protokollfehler und fachliche Status-Codes werden unverändert durchgereicht.
+   * Ein ungültiger Wert (`NaN`, negativ, gebrochen oder `Infinity`, z. B. aus
+   * `Number(process.env.X)` mit unbesetzter Variable) wird wie `0` behandelt —
+   * also genau ein Versuch, statt endlos zu wiederholen.
    */
   transport?: TransportOptions;
 }
@@ -185,7 +188,13 @@ function holeReturn(root: XmlNode, methode: string): XmlNode {
 export function createEldaTransfer(config: EldaConfig): EldaTransfer {
   const endpoint = config.endpoint ?? ELDA_ENDPOINTS[config.umgebung ?? 'produktion'];
 
-  const { retries = 0, ...transport } = config.transport ?? {};
+  const { retries: retriesRoh = 0, ...transport } = config.transport ?? {};
+  // Fail closed: ein ungültiger Wert (NaN, negativ, gebrochen, Infinity — etwa
+  // aus einer unbesetzten Env-Variable) macht `versuch >= retries` sonst
+  // dauerhaft `false` (NaN) bzw. dauerhaft wahr in der falschen Richtung
+  // (Infinity) und die Wiederholung liefe endlos. Deshalb einmal hier auf `0`
+  // normalisiert, statt die Prüfung in die Schleifenbedingung zu verlagern.
+  const retries = Number.isSafeInteger(retriesRoh) && retriesRoh >= 0 ? retriesRoh : 0;
 
   /**
    * Führt einen Webservice-Aufruf aus und wiederholt ihn bei Transportfehlern.
