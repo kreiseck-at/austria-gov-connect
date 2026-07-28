@@ -1,10 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { FonSoapFaultError, FonTransportError } from '@kreiseck/finanzonline-core';
-import { createEldaTransfer, type EldaConfig } from './transfer';
-import { ELDA_ENDPOINTS } from './endpoints';
-import { EldaProtocolError } from './errors';
+import { createEldaTransfer } from './transfer';
+import type { EmpfangenErgebnis } from './transfer-roh';
+import { EldaStatusError, EldaProtocolError } from './errors';
 
 const cfg = (fetchImpl: unknown) => ({
   seriennummer: 'S1',
@@ -13,487 +11,241 @@ const cfg = (fetchImpl: unknown) => ({
   umgebung: 'kundentest' as const,
   transport: { fetchImpl: fetchImpl as typeof fetch },
 });
+
 const soap = (inner: string) =>
   `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>${inner}</soap:Body></soap:Envelope>`;
 
-test('senden: parst statusCode/protokollnummer/dateiId + baut Request an Kundentest', async () => {
-  let sentTo = '';
-  let body = '';
-  const resp = soap(
-    '<ns2:sendenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><dateiId>199565708</dateiId><eldaZeitstempel>2026-07-25T07:00:00.000+02:00</eldaZeitstempel><protokollnummer>155764331</protokollnummer></return></ns2:sendenResponse>',
-  );
-  const fetchImpl = async (url: string, init: { body: string }) => {
-    sentTo = url;
-    body = init.body;
-    return new Response(resp, { status: 200 });
-  };
-  const elda = createEldaTransfer(cfg(fetchImpl));
-  const r = await elda.senden({ dateiName: 'm.xml', inhalt: Buffer.from('<x/>') });
-  assert.equal(sentTo, 'https://online-test.elda.at/eldaws/transfer/v4/TransferService');
-  assert.match(body, /<v4:senden/);
-  assert.match(body, /<dateiName>m\.xml<\/dateiName>/); // C1: dateiName muss auf der Leitung stehen
-  assert.match(body, /<payload>PHgvPg==<\/payload>/); // base64 von "<x/>"
-  assert.equal(r.ok, true);
-  assert.equal(r.statusCode, '000');
-  assert.equal(r.protokollnummer, '155764331');
-  assert.equal(r.dateiId, '199565708');
-  assert.equal(r.eldaZeitstempel, '2026-07-25T07:00:00.000+02:00'); // C2
-});
-
-test('senden: fachlicher Fehler wird NICHT geworfen (ok:false + meldung)', async () => {
-  const resp = soap(
-    '<ns2:sendenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>fehlerCode: E1</messages><statusCode>403</statusCode></serviceResult><protokollnummer>155764331</protokollnummer></return></ns2:sendenResponse>',
-  );
-  const elda = createEldaTransfer(cfg(async () => new Response(resp, { status: 200 })));
-  const r = await elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
-  assert.equal(r.ok, false);
-  assert.equal(r.statusCode, '403');
-  assert.equal(r.meldung, 'fehlerCode: E1');
-});
-
-test('senden: produktion ist Default-Umgebung', async () => {
-  let sentTo = '';
-  const resp = soap(
-    '<ns2:sendenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult></return></ns2:sendenResponse>',
-  );
-  const elda = createEldaTransfer({
-    seriennummer: 'S1',
-    kundenpasswort: 'p',
-    apiKey: 'K1',
-    transport: {
-      fetchImpl: (async (url: string) => {
-        sentTo = url;
-        return new Response(resp, { status: 200 });
-      }) as unknown as typeof fetch,
-    },
-  });
-  await elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
-  assert.equal(sentTo, ELDA_ENDPOINTS.produktion);
-});
-
-test('senden: expliziter endpoint überschreibt umgebung', async () => {
-  let sentTo = '';
-  const resp = soap(
-    '<ns2:sendenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult></return></ns2:sendenResponse>',
-  );
-  const elda = createEldaTransfer({
-    seriennummer: 'S1',
-    kundenpasswort: 'p',
-    apiKey: 'K1',
-    umgebung: 'sit',
-    endpoint: 'https://custom.example.test/TransferService',
-    transport: {
-      fetchImpl: (async (url: string) => {
-        sentTo = url;
-        return new Response(resp, { status: 200 });
-      }) as unknown as typeof fetch,
-    },
-  });
-  await elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
-  assert.equal(sentTo, 'https://custom.example.test/TransferService');
-});
-
-test('senden: echter SOAP-Fault wird geworfen (im Unterschied zu fachlichen Status-Codes)', async () => {
-  const fault = soap(
-    '<soap:Fault><faultcode>soap:Server</faultcode><faultstring>Interner Fehler</faultstring></soap:Fault>',
-  );
-  const elda = createEldaTransfer(cfg(async () => new Response(fault, { status: 500 })));
-  await assert.rejects(
-    () => elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' }),
-    (err: unknown) => err instanceof FonSoapFaultError,
-  );
-});
-
-test('senden: fehlendes <return>-Element wird laut als EldaProtocolError geworfen', async () => {
-  const resp = soap('<ns2:sendenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"></ns2:sendenResponse>');
-  const elda = createEldaTransfer(cfg(async () => new Response(resp, { status: 200 })));
-  await assert.rejects(
-    () => elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' }),
-    (err: unknown) => err instanceof EldaProtocolError,
-  );
-});
-
-test('ruecksendungenAuflisten: parst mehrere ruecksendungen + statusCode/ok', async () => {
-  const resp = soap(
-    '<ns2:ruecksendungenAuflistenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><ruecksendungen><dateiName>fehler_155764331</dateiName><protokollnummer>155764332</protokollnummer></ruecksendungen><ruecksendungen><dateiName>ok_155764340</dateiName><protokollnummer>155764341</protokollnummer></ruecksendungen></return></ns2:ruecksendungenAuflistenResponse>',
-  );
-  const elda = createEldaTransfer(cfg(async () => new Response(resp, { status: 200 })));
-  const erg = await elda.ruecksendungenAuflisten();
-  assert.equal(erg.ok, true);
-  assert.equal(erg.statusCode, '000');
-  assert.equal(erg.ruecksendungen.length, 2);
-  assert.equal(erg.ruecksendungen[0]?.protokollnummer, '155764332');
-  assert.equal(erg.ruecksendungen[0]?.dateiName, 'fehler_155764331');
-  assert.equal(erg.ruecksendungen[1]?.protokollnummer, '155764341');
-});
-
-test('ruecksendungenAuflisten: fachlicher Fehler (z. B. ungültiger API-Key) ist von "keine offen" unterscheidbar', async () => {
-  const resp = soap(
-    '<ns2:ruecksendungenAuflistenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>API-Key ungültig</messages><statusCode>557</statusCode></serviceResult></return></ns2:ruecksendungenAuflistenResponse>',
-  );
-  const elda = createEldaTransfer(cfg(async () => new Response(resp, { status: 200 })));
-  const erg = await elda.ruecksendungenAuflisten();
-  assert.equal(erg.ok, false);
-  assert.equal(erg.statusCode, '557');
-  assert.equal(erg.meldung, 'API-Key ungültig');
-  assert.deepEqual(erg.ruecksendungen, []);
-});
-
-test('empfangen: parst statusCode + datei-Metadaten + inline base64 inhalt', async () => {
-  const b64 = Buffer.from('<protokoll/>').toString('base64');
-  const resp = soap(
-    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>199565708</id><name>mitteilung.xml</name><dateiTyp>1</dateiTyp><md5>abc</md5><payload>${b64}</payload></datei></return></ns2:empfangenResponse>`,
-  );
-  let body = '';
-  const elda = createEldaTransfer(
-    cfg(async (_u: string, init: { body: string }) => {
-      body = init.body;
-      return new Response(resp, { status: 200 });
-    }),
-  );
-  const r = await elda.empfangen('155764332');
-  assert.match(body, /<protokollnummer>155764332<\/protokollnummer>/);
-  assert.equal(r.ok, true);
-  assert.equal(r.datei?.id, '199565708'); // C2
-  assert.equal(r.datei?.name, 'mitteilung.xml');
-  assert.equal(r.datei?.dateiTyp, 1); // C2
-  assert.equal(r.datei?.md5, 'abc');
-  assert.equal(r.datei?.inhalt.toString('utf8'), '<protokoll/>');
-});
-
-test('empfangen: nicht vorhanden -> ok:false, kein datei', async () => {
-  const resp = soap(
-    '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>Keine Rücksendung mit Protokollnummer 1 vorhanden.</messages><statusCode>406</statusCode></serviceResult></return></ns2:empfangenResponse>',
-  );
-  const elda = createEldaTransfer(cfg(async () => new Response(resp, { status: 200 })));
-  const r = await elda.empfangen('1');
-  assert.equal(r.ok, false);
-  assert.equal(r.statusCode, '406');
-  assert.equal(r.datei, undefined);
-});
-
-test('empfangen: nicht-numerischer dateiTyp wird nicht als NaN gesetzt', async () => {
-  const b64 = Buffer.from('<protokoll/>').toString('base64');
-  const resp = soap(
-    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><name>x.xml</name><dateiTyp>unbekannt</dateiTyp><payload>${b64}</payload></datei></return></ns2:empfangenResponse>`,
-  );
-  const elda = createEldaTransfer(cfg(async () => new Response(resp, { status: 200 })));
-  const r = await elda.empfangen('1');
-  assert.equal(r.datei?.dateiTyp, undefined);
-});
-
-test('empfangen: MTOM/XOP-referenzierter Payload wirft statt leeres Buffer zu liefern', async () => {
-  const resp = soap(
-    '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><name>x.xml</name><payload><xop:Include xmlns:xop="http://www.w3.org/2004/08/xop/include" href="cid:abc@elda.at"/></payload></datei></return></ns2:empfangenResponse>',
-  );
-  const elda = createEldaTransfer(cfg(async () => new Response(resp, { status: 200 })));
-  await assert.rejects(
-    () => elda.empfangen('1'),
-    (err: unknown) => err instanceof EldaProtocolError,
-  );
-});
-
-test('empfangen: leerer Payload bei statusCode 000 wirft statt eine leere Datei vorzutäuschen', async () => {
-  const resp = soap(
-    '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><name>x.xml</name><payload></payload></datei></return></ns2:empfangenResponse>',
-  );
-  const elda = createEldaTransfer(cfg(async () => new Response(resp, { status: 200 })));
-  await assert.rejects(
-    () => elda.empfangen('1'),
-    (err: unknown) => err instanceof EldaProtocolError,
-  );
-});
-
-test('empfangen: fehlendes <return>-Element wird laut als EldaProtocolError geworfen', async () => {
-  const resp = soap(
-    '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"></ns2:empfangenResponse>',
-  );
-  const elda = createEldaTransfer(cfg(async () => new Response(resp, { status: 200 })));
-  await assert.rejects(
-    () => elda.empfangen('1'),
-    (err: unknown) => err instanceof EldaProtocolError,
-  );
-});
-
-// --- M2: fehlendes/leeres serviceResult -----------------------------------
-
-test('senden: <return> ohne <serviceResult> wirft statt statusCode "" + ok:false zu liefern', async () => {
-  const resp = soap(
-    '<ns2:sendenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><protokollnummer>155764331</protokollnummer></return></ns2:sendenResponse>',
-  );
-  const elda = createEldaTransfer(cfg(async () => new Response(resp, { status: 200 })));
-  await assert.rejects(
-    () => elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' }),
-    (err: unknown) => err instanceof EldaProtocolError,
-  );
-});
-
-test('empfangen: <serviceResult> ohne <statusCode> wirft ebenfalls', async () => {
-  const resp = soap(
-    '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages></serviceResult></return></ns2:empfangenResponse>',
-  );
-  const elda = createEldaTransfer(cfg(async () => new Response(resp, { status: 200 })));
-  await assert.rejects(
-    () => elda.empfangen('1'),
-    (err: unknown) => err instanceof EldaProtocolError,
-  );
-});
-
-// --- M3: Rücksendung ohne Protokollnummer ---------------------------------
-
-test('ruecksendungenAuflisten: leeres <ruecksendungen/> wirft statt Phantom-Eintrag', async () => {
-  const resp = soap(
-    '<ns2:ruecksendungenAuflistenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><ruecksendungen/></return></ns2:ruecksendungenAuflistenResponse>',
-  );
-  const elda = createEldaTransfer(cfg(async () => new Response(resp, { status: 200 })));
-  await assert.rejects(
-    () => elda.ruecksendungenAuflisten(),
-    (err: unknown) => err instanceof EldaProtocolError,
-  );
-});
-
-// --- M1: Leaf-Text wird getrimmt (pretty-printed Antworten) ----------------
-
-test('senden: pretty-printed Antwort — Leaf-Text wird getrimmt (000 bleibt ok)', async () => {
-  const resp = soap(`<ns2:sendenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/">
-    <return>
-      <serviceResult>
-        <messages>
-          OK
-        </messages>
-        <statusCode>
-          000
-        </statusCode>
-      </serviceResult>
-      <dateiId>
-        199565708
-      </dateiId>
-      <eldaZeitstempel>
-        2026-07-25T07:00:00.000+02:00
-      </eldaZeitstempel>
-      <protokollnummer>
-        155764331
-      </protokollnummer>
-    </return>
-  </ns2:sendenResponse>`);
-  const elda = createEldaTransfer(cfg(async () => new Response(resp, { status: 200 })));
-  const r = await elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
-  assert.equal(r.statusCode, '000');
-  assert.equal(r.ok, true);
-  assert.equal(r.protokollnummer, '155764331');
-  assert.equal(r.dateiId, '199565708');
-  assert.equal(r.eldaZeitstempel, '2026-07-25T07:00:00.000+02:00');
-  assert.equal(r.meldung, 'OK');
-});
-
-test('empfangen: pretty-printed Antwort — datei-Felder und payload werden getrimmt', async () => {
-  const b64 = Buffer.from('<protokoll/>').toString('base64');
-  const resp = soap(`<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/">
-    <return>
-      <serviceResult>
-        <messages>
-          OK
-        </messages>
-        <statusCode>
-          000
-        </statusCode>
-      </serviceResult>
-      <datei>
-        <id>
-          199565708
-        </id>
-        <name>
-          mitteilung.xml
-        </name>
-        <dateiTyp>
-          1
-        </dateiTyp>
-        <md5>
-          abc
-        </md5>
-        <payload>
-          ${b64}
-        </payload>
-      </datei>
-    </return>
-  </ns2:empfangenResponse>`);
-  const elda = createEldaTransfer(cfg(async () => new Response(resp, { status: 200 })));
-  const r = await elda.empfangen('155764332');
-  assert.equal(r.statusCode, '000');
-  assert.equal(r.ok, true);
-  assert.equal(r.datei?.id, '199565708');
-  assert.equal(r.datei?.name, 'mitteilung.xml');
-  assert.equal(r.datei?.dateiTyp, 1);
-  assert.equal(r.datei?.md5, 'abc');
-  assert.equal(r.datei?.inhalt.toString('utf8'), '<protokoll/>');
-});
-
-// --- M8: Passwort-Hash und Header auf der Leitung --------------------------
-
-const sendenOk = (inner = '') =>
+const sendenAntwort = (statusCode: string, extra = '') =>
   soap(
-    `<ns2:sendenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult>${inner}</return></ns2:sendenResponse>`,
+    `<ns2:sendenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return>` +
+      `<serviceResult><messages>M-${statusCode}</messages><statusCode>${statusCode}</statusCode></serviceResult>` +
+      `${extra}</return></ns2:sendenResponse>`,
   );
 
-test('senden: Kundenpasswort geht nur SHA-512-gehasht auf die Leitung, nie im Klartext', async () => {
-  let body = '';
-  const elda = createEldaTransfer({
-    seriennummer: 'S1',
-    kundenpasswort: 'geheim',
-    apiKey: 'K1',
-    umgebung: 'kundentest',
-    transport: {
-      fetchImpl: (async (_u: string, init: { body: string }) => {
-        body = init.body;
-        return new Response(sendenOk(), { status: 200 });
-      }) as unknown as typeof fetch,
+const empfangenAntwort = (statusCode: string, extra = '') =>
+  soap(
+    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return>` +
+      `<serviceResult><messages>M-${statusCode}</messages><statusCode>${statusCode}</statusCode></serviceResult>` +
+      `${extra}</return></ns2:empfangenResponse>`,
+  );
+
+const auflistenAntwort = (statusCode: string, extra = '') =>
+  soap(
+    `<ns2:ruecksendungenAuflistenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return>` +
+      `<serviceResult><messages>M-${statusCode}</messages><statusCode>${statusCode}</statusCode></serviceResult>` +
+      `${extra}</return></ns2:ruecksendungenAuflistenResponse>`,
+  );
+
+const mitAntwort = (xml: string) => createEldaTransfer(cfg(async () => new Response(xml, { status: 200 })));
+
+test('senden: 000 -> zustand angenommen, kein ok-Feld nötig', async () => {
+  const elda = mitAntwort(
+    sendenAntwort(
+      '000',
+      '<protokollnummer>155764331</protokollnummer><dateiId>199565708</dateiId><eldaZeitstempel>2026-07-25T07:00:00.000+02:00</eldaZeitstempel>',
+    ),
+  );
+  const erg = await elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
+  assert.equal(erg.zustand, 'angenommen');
+  assert.equal(erg.protokollnummer, '155764331');
+  assert.equal(erg.dateiId, '199565708');
+  assert.equal(erg.eldaZeitstempel, '2026-07-25T07:00:00.000+02:00');
+  assert.equal(erg.statusCode, '000');
+  assert.equal(erg.meldung, 'M-000');
+});
+
+test('senden: 405 ist ein Zustand, kein Fehler', async () => {
+  const elda = mitAntwort(sendenAntwort('405', '<protokollnummer>155764331</protokollnummer>'));
+  const erg = await elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
+  assert.equal(erg.zustand, 'duplikat');
+  assert.equal(erg.protokollnummer, '155764331');
+  assert.equal(erg.meldung, 'M-405');
+});
+
+test('senden: 404 ist ein Zustand (angenommen, Verarbeitung dauert an)', async () => {
+  const erg = await mitAntwort(sendenAntwort('404')).senden({ dateiName: 'm.xml', inhalt: '<x/>' });
+  assert.equal(erg.zustand, 'nochInArbeit');
+});
+
+test('senden: 558 wirft und trägt alles mit', async () => {
+  const elda = mitAntwort(sendenAntwort('558'));
+  await assert.rejects(
+    () => elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' }),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaStatusError);
+      assert.equal(err.statusCode, '558');
+      assert.equal(err.meldung, 'M-558');
+      assert.equal((err.ergebnis as { statusCode: string }).statusCode, '558');
+      assert.equal((err.ergebnis as { ok: boolean }).ok, false);
+      return true;
     },
-  });
+  );
+});
+
+test('auflisten: 000 liefert die Liste direkt', async () => {
+  const elda = mitAntwort(
+    auflistenAntwort(
+      '000',
+      '<ruecksendungen><dateiName>fehler_155764331</dateiName><protokollnummer>155764332</protokollnummer></ruecksendungen>' +
+        '<ruecksendungen><dateiName>ok_155764340</dateiName><protokollnummer>155764341</protokollnummer></ruecksendungen>',
+    ),
+  );
+  const liste = await elda.ruecksendungenAuflisten();
+  assert.equal(liste.length, 2);
+  assert.equal(liste[0]?.protokollnummer, '155764332');
+  assert.equal(liste[1]?.dateiName, 'ok_155764340');
+});
+
+test('auflisten: leere Liste bedeutet eindeutig "keine offen"', async () => {
+  assert.deepEqual(await mitAntwort(auflistenAntwort('000')).ruecksendungenAuflisten(), []);
+});
+
+test('auflisten: statusCode "constructor" wirft, statt über die Prototyp-Kette eine leere Liste vorzutäuschen', async () => {
+  // Regressionstest zur Object.hasOwn-Absicherung in zustandOderWurf: Ohne sie würde
+  // `AUFLISTEN_ZUSTAENDE['constructor']` über Object.prototype auflösen, kein `undefined`
+  // liefern, und `ruecksendungenAuflisten` gäbe fälschlich eine leere Liste zurück — genau
+  // das "keine Rücksendungen offen", das laut diesem Umbau eindeutig sein soll.
+  await assert.rejects(
+    () => mitAntwort(auflistenAntwort('constructor')).ruecksendungenAuflisten(),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaStatusError);
+      assert.equal(err.statusCode, 'constructor');
+      return true;
+    },
+  );
+});
+
+test('auflisten: 557 wirft, statt eine leere Liste vorzutäuschen', async () => {
+  await assert.rejects(
+    () => mitAntwort(auflistenAntwort('557')).ruecksendungenAuflisten(),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaStatusError);
+      assert.equal(err.statusCode, '557');
+      return true;
+    },
+  );
+});
+
+test('empfangen: 000 liefert zustand datei mit Inhalt', async () => {
+  const b64 = Buffer.from('<protokoll/>').toString('base64');
+  const elda = mitAntwort(
+    empfangenAntwort(
+      '000',
+      `<datei><id>199565708</id><name>mitteilung.xml</name><dateiTyp>1</dateiTyp><md5>abc</md5><payload>${b64}</payload></datei>`,
+    ),
+  );
+  const erg = await elda.empfangen('155764332');
+  assert.equal(erg.zustand, 'datei');
+  if (erg.zustand !== 'datei') return; // Verengung für TypeScript
+  assert.equal(erg.datei.name, 'mitteilung.xml');
+  assert.equal(erg.datei.dateiTyp, 1);
+  assert.equal(erg.datei.md5, 'abc');
+  assert.equal(erg.datei.inhalt.toString('utf8'), '<protokoll/>');
+  assert.equal(erg.statusCode, '000');
+  assert.equal(erg.meldung, 'M-000');
+});
+
+test('empfangen: 406 und 408 sind Zustände, kein Fehler', async () => {
+  const nichtVorhanden = await mitAntwort(empfangenAntwort('406')).empfangen('1');
+  assert.equal(nichtVorhanden.zustand, 'nichtVorhanden');
+  assert.equal(nichtVorhanden.statusCode, '406');
+  assert.equal(nichtVorhanden.meldung, 'M-406');
+  assert.equal((await mitAntwort(empfangenAntwort('408')).empfangen('1')).zustand, 'bereitsEmpfangen');
+  assert.equal((await mitAntwort(empfangenAntwort('404')).empfangen('1')).zustand, 'nochInArbeit');
+});
+
+test('empfangen: 407 wirft', async () => {
+  await assert.rejects(() => mitAntwort(empfangenAntwort('407')).empfangen('1'), EldaStatusError);
+});
+
+test('roh: empfangen bleibt bei 407 wurffrei, obwohl die komfortable Variante dort wirft', async () => {
+  const erg = await mitAntwort(empfangenAntwort('407')).roh.empfangen('1');
+  assert.equal(erg.ok, false);
+  assert.equal(erg.statusCode, '407');
+});
+
+test('empfangen: 000 ohne <datei> wirft, statt eine leere Datei vorzutäuschen', async () => {
+  await assert.rejects(() => mitAntwort(empfangenAntwort('000')).empfangen('1'), EldaProtocolError);
+});
+
+test('empfangen: 000 ohne <datei> — Fehlertext nennt Status-Code/Meldung, ergebnis ist gesetzt', async () => {
+  await assert.rejects(
+    () => mitAntwort(empfangenAntwort('000')).empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      assert.match(err.message, /000/);
+      assert.match(err.message, /M-000/);
+      assert.equal((err.ergebnis as EmpfangenErgebnis).statusCode, '000');
+      return true;
+    },
+  );
+});
+
+test('empfangen: 408 mit <datei> ist ein Widerspruch — Inhalt bleibt über den Fehler erreichbar', async () => {
+  const inhalt = '<protokoll/>';
+  const b64 = Buffer.from(inhalt).toString('base64');
+  const elda = mitAntwort(
+    empfangenAntwort('408', `<datei><name>mitteilung.xml</name><payload>${b64}</payload></datei>`),
+  );
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      assert.match(err.message, /408/);
+      // Der Fehlertext darf NICHT zu einem zweiten Abholversuch anleiten — `empfangen` ist
+      // einmalig, ein erneuter Aufruf wäre kein verlässlicher Weg an den Inhalt.
+      assert.ok(!err.message.includes('elda.roh.empfangen'));
+      const ergebnis = err.ergebnis as EmpfangenErgebnis;
+      assert.equal(ergebnis.statusCode, '408');
+      assert.equal(ergebnis.datei?.inhalt.toString('utf8'), inhalt);
+      return true;
+    },
+  );
+  // Eigenständiger Beleg, dass die rohe Schicht bei 408 grundsätzlich nicht wirft — unabhängig
+  // vom obigen Fehler, nicht als empfohlener zweiter Versuch nach ihm.
+  const roh = await elda.roh.empfangen('1');
+  assert.equal(roh.statusCode, '408');
+  assert.equal(roh.datei?.inhalt.toString('utf8'), inhalt);
+});
+
+test('roh: fachliche Codes werfen dort weiterhin nicht', async () => {
+  const elda = mitAntwort(sendenAntwort('558'));
+  const erg = await elda.roh.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
+  assert.equal(erg.ok, false);
+  assert.equal(erg.statusCode, '558');
+  assert.equal(erg.meldung, 'M-558');
+});
+
+test('roh: auflisten und empfangen bleiben ebenfalls wurffrei', async () => {
+  const a = await mitAntwort(auflistenAntwort('557')).roh.ruecksendungenAuflisten();
+  assert.equal(a.ok, false);
+  assert.deepEqual(a.ruecksendungen, []);
+  const e = await mitAntwort(empfangenAntwort('406')).roh.empfangen('1');
+  assert.equal(e.ok, false);
+  assert.equal(e.datei, undefined);
+});
+
+test('beide Wege benutzen denselben Transport (eine Konfiguration)', async () => {
+  const ziele: string[] = [];
+  const elda = createEldaTransfer(
+    cfg(async (url: string) => {
+      ziele.push(url);
+      return new Response(sendenAntwort('000', '<protokollnummer>1</protokollnummer>'), { status: 200 });
+    }),
+  );
   await elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
-  const hash = createHash('sha512').update('geheim', 'utf8').digest('hex');
-  assert.ok(body.includes(`<kundenpasswort>${hash}</kundenpasswort>`), 'SHA-512-Hex fehlt im Request');
-  assert.ok(!body.includes('geheim'), 'Klartext-Passwort steht im Request');
-  // alle fünf securityParameters, in der von ELDA erwarteten Reihenfolge
-  assert.match(
-    body,
-    /<securityParameters><apiKey>K1<\/apiKey><created>[^<]+<\/created><kundenpasswort>[0-9a-f]{128}<\/kundenpasswort><nonce>[^<]+<\/nonce><seriennummer>S1<\/seriennummer><\/securityParameters>/,
-  );
+  await elda.roh.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
+  assert.equal(ziele.length, 2);
+  assert.equal(ziele[0], ziele[1]);
+  assert.equal(ziele[0], 'https://online-test.elda.at/eldaws/transfer/v4/TransferService');
 });
 
-test('senden: SOAPAction und Content-Type der Anfrage (Status 559 = unerlaubter Content-Type)', async () => {
-  let headers: Record<string, string> = {};
-  const elda = createEldaTransfer(
-    cfg(async (_u: string, init: { headers: Record<string, string> }) => {
-      headers = init.headers;
-      return new Response(sendenOk(), { status: 200 });
-    }),
-  );
+test('elda.roh bleibt über mehrere Zugriffe und Methodenaufrufe hinweg dieselbe Instanz', async () => {
+  const elda = mitAntwort(sendenAntwort('000', '<protokollnummer>1</protokollnummer>'));
+  const rohVorher = elda.roh;
+  assert.equal(elda.roh, rohVorher);
   await elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
-  assert.equal(headers['Content-Type'], 'text/xml; charset=utf-8');
-  assert.equal(headers['SOAPAction'], '"senden"');
-});
-
-// --- I4: Wiederholung mit frischem nonce ----------------------------------
-
-const nonceVon = (body: string) => /<nonce>([^<]+)<\/nonce>/.exec(body)?.[1];
-
-const retryCfg = (retries: number, fetchImpl: unknown): EldaConfig => ({
-  seriennummer: 'S1',
-  kundenpasswort: 'p',
-  apiKey: 'K1',
-  umgebung: 'kundentest',
-  transport: { retries, fetchImpl: fetchImpl as typeof fetch },
-});
-
-test('retry: zweiter Versuch trägt einen FRISCHEN nonce (kein 552-Replay)', async () => {
-  const bodies: string[] = [];
-  let n = 0;
-  const elda = createEldaTransfer(
-    retryCfg(1, async (_u: string, init: { body: string }) => {
-      bodies.push(init.body);
-      n++;
-      if (n === 1) throw new Error('ECONNRESET');
-      return new Response(sendenOk('<protokollnummer>155764331</protokollnummer>'), { status: 200 });
-    }),
-  );
-  const r = await elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
-  assert.equal(r.ok, true);
-  assert.equal(r.protokollnummer, '155764331');
-  assert.equal(bodies.length, 2);
-  assert.ok(nonceVon(bodies[0]!), 'erster Request hat keinen nonce');
-  assert.notEqual(nonceVon(bodies[0]!), nonceVon(bodies[1]!));
-});
-
-test('retry: erschöpfte Versuche werfen FonTransportError', async () => {
-  let n = 0;
-  const elda = createEldaTransfer(
-    retryCfg(1, async () => {
-      n++;
-      throw new Error('ECONNRESET');
-    }),
-  );
-  await assert.rejects(
-    () => elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' }),
-    (err: unknown) => err instanceof FonTransportError,
-  );
-  assert.equal(n, 2); // 1 Versuch + 1 Wiederholung
-});
-
-test('retry: fachlicher Status-Code wird NICHT wiederholt', async () => {
-  let n = 0;
-  const resp = soap(
-    '<ns2:sendenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>fehlerCode: E1</messages><statusCode>403</statusCode></serviceResult></return></ns2:sendenResponse>',
-  );
-  const elda = createEldaTransfer(
-    retryCfg(2, async () => {
-      n++;
-      return new Response(resp, { status: 200 });
-    }),
-  );
-  const r = await elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
-  assert.equal(r.statusCode, '403');
-  assert.equal(n, 1);
-});
-
-test('retry: retries NaN (z. B. unbesetzte Env-Variable) läuft NICHT endlos, sondern genau ein Versuch', async () => {
-  let n = 0;
-  const elda = createEldaTransfer(
-    retryCfg(Number(process.env.ELDA_RETRIES_UNSET_XYZ), async () => {
-      n++;
-      throw new Error('ECONNRESET');
-    }),
-  );
-  await assert.rejects(
-    () => elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' }),
-    (err: unknown) => err instanceof FonTransportError,
-  );
-  assert.equal(n, 1);
-});
-
-test('retry: retries Infinity wird wie 0 behandelt (kein Endlos-Retry)', async () => {
-  let n = 0;
-  const elda = createEldaTransfer(
-    retryCfg(Infinity, async () => {
-      n++;
-      throw new Error('ECONNRESET');
-    }),
-  );
-  await assert.rejects(
-    () => elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' }),
-    (err: unknown) => err instanceof FonTransportError,
-  );
-  assert.equal(n, 1);
-});
-
-test('retry: negative retries werden wie 0 behandelt', async () => {
-  let n = 0;
-  const elda = createEldaTransfer(
-    retryCfg(-1, async () => {
-      n++;
-      throw new Error('ECONNRESET');
-    }),
-  );
-  await assert.rejects(
-    () => elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' }),
-    (err: unknown) => err instanceof FonTransportError,
-  );
-  assert.equal(n, 1);
-});
-
-test('retry: SOAP-Fault wird NICHT wiederholt', async () => {
-  let n = 0;
-  const fault = soap(
-    '<soap:Fault><faultcode>soap:Server</faultcode><faultstring>Boom</faultstring></soap:Fault>',
-  );
-  const elda = createEldaTransfer(
-    retryCfg(2, async () => {
-      n++;
-      return new Response(fault, { status: 500 });
-    }),
-  );
-  await assert.rejects(
-    () => elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' }),
-    (err: unknown) => err instanceof FonSoapFaultError,
-  );
-  assert.equal(n, 1);
+  assert.equal(elda.roh, rohVorher);
+  await elda.roh.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
+  assert.equal(elda.roh, rohVorher);
 });

@@ -27,102 +27,172 @@ Für `createEldaTransfer` werden drei Zugangsdaten benötigt:
   lowercase) gehasht, wie von ELDA gefordert.
 - **API-Key** — separat **bei ELDA anfordern**, unabhängig von Seriennummer/Kundenpasswort.
 
-Der Aufruf geht je nach `umgebung` an einen von drei Endpoints (`ELDA_ENDPOINTS`):
+Diese drei Felder sind Pflicht: Fehlt eines oder ist es leer, wirft
+`createEldaTransfer` bereits beim Bauen einen `EldaError` — ohne diese Prüfung
+würde ELDA jeden Aufruf nur mit einem kryptischen Status `558` beantworten.
+
+`umgebung` bestimmt zusätzlich den Endpoint (`ELDA_ENDPOINTS`) und ist ebenfalls
+**Pflicht** — bewusst **ohne** Produktions-Default: ein vergessenes Feld darf
+nicht versehentlich echte Meldungen in den Echtbetrieb schicken.
 
 | Umgebung     | Zweck                                  |
 | ------------ | --------------------------------------- |
-| `produktion` | Echtbetrieb (Standard, wenn nicht gesetzt) |
+| `produktion` | Echtbetrieb                             |
 | `kundentest` | ELDA-Kundentestsystem                   |
 | `sit`        | ELDA-Systemintegrationstest              |
 
 Alternativ kann `endpoint` explizit gesetzt werden (hat Vorrang vor `umgebung`,
-z. B. für einen abweichenden Proxy).
+z. B. für einen abweichenden Proxy) — dann ist `umgebung` optional.
 
 ## End-to-End-Beispiel
 
 ```ts
-import { createEldaTransfer, zuordnung } from '@kreiseck/elda';
+import { createEldaTransfer, findeRuecksendung } from '@kreiseck/elda';
 
 const elda = createEldaTransfer({
   seriennummer: 'DEINE_SERIENNUMMER',
   kundenpasswort: 'DEIN_KUNDENPASSWORT', // Klartext; wird intern SHA-512-gehasht
   apiKey: 'DEIN_API_KEY',                // bei ELDA anfordern
-  umgebung: 'kundentest',                // 'produktion' | 'kundentest' | 'sit'
+  umgebung: 'kundentest',                // Pflicht: 'produktion' | 'kundentest' | 'sit'
 });
 
-// 1) Meldung (Datei-XML) senden
+// 1) Meldung senden. Falsche Zugangsdaten oder ein ungültiger Dateiname werfen —
+//    ein vergessener Statuscheck ist damit nicht mehr möglich.
 const gesendet = await elda.senden({ dateiName: 'mbgm.xml', inhalt: meldungsXml });
-if (!gesendet.ok) throw new Error(`Senden fehlgeschlagen: ${gesendet.statusCode} ${gesendet.meldung}`);
-const meineNr = gesendet.protokollnummer!; // merken! statusCode '000' heißt "empfangen", nicht "verarbeitet" (siehe unten)
+if (gesendet.zustand === 'duplikat') {
+  // ELDA hatte die Datei schon (z. B. Wiederholung nach Timeout) — kein Fehler.
+}
+const meineNr = gesendet.protokollnummer; // persistieren!
 
-// 2) später: Liste der abholbereiten Rücksendungen (Verarbeitungsprotokolle) holen
-const liste = await elda.ruecksendungenAuflisten();
-if (!liste.ok) throw new Error(`Auflisten fehlgeschlagen: ${liste.statusCode} ${liste.meldung}`);
-
-// 3) die zur eigenen Sendung gehörende Rücksendung finden
-const rs = zuordnung(meineNr, liste.ruecksendungen);
-if (rs) {
-  // 4) Rücksendung abholen (einmalig! danach nicht mehr per Protokollnummer verfügbar)
-  const antwort = await elda.empfangen(rs.protokollnummer);
-  if (antwort.ok && antwort.datei) {
-    // antwort.datei.inhalt = Buffer mit dem Protokoll-XML -> parsen
+// 2) später: Warteschlange der Rücksendungen leeren
+for (const rs of await elda.ruecksendungenAuflisten()) {
+  const erg = await elda.empfangen(rs.protokollnummer); // einmalig, unwiderruflich
+  if (erg.zustand === 'datei') {
+    speichere(erg.datei.inhalt); // Buffer mit dem Protokoll-XML — erst sichern, dann parsen
   }
 }
+
+// 3) gezielt die Rücksendung zu einer eigenen Sendung suchen
+const meine = findeRuecksendung(meineNr!, await elda.ruecksendungenAuflisten());
 ```
 
-**Wichtig:** `liste` ist kein Array, sondern ein `AuflistenErgebnis` mit
-`statusCode`/`ok`/`ruecksendungen`/`meldung` — genau wie bei `senden`/`empfangen`
-geht dadurch keine Status-Information verloren. Ein leeres `liste.ruecksendungen`
-bei `liste.ok === false` bedeutet **nicht** "keine Rücksendungen offen", sondern
-dass der Aufruf selbst fehlgeschlagen ist (z. B. ungültiger API-Key).
+**Zu `findeRuecksendung`:** Der Vergleich ist ziffernscharf — die Protokollnummer
+darf im `dateiName` weder links noch rechts von einer weiteren Ziffer stehen.
+ELDA vergibt fortlaufende Nummern, `1557643` ist damit Präfix von `15576431`; ein
+reiner Teilstring-Vergleich würde die falsche Rücksendung liefern, und die wäre
+nach dem `empfangen` unwiederbringlich verbraucht. Eine leere Protokollnummer
+wirft einen `EldaError`, statt irgendeine fremde Rücksendung zu liefern.
 
-**Zu `zuordnung`:** Der Vergleich ist ziffernscharf — die Protokollnummer darf im
-`dateiName` weder links noch rechts von einer weiteren Ziffer stehen. ELDA vergibt
-fortlaufende Nummern, `1557643` ist damit Präfix von `15576431`; ein reiner
-Teilstring-Vergleich würde die falsche Rücksendung liefern, und die wäre nach dem
-`empfangen` unwiederbringlich verbraucht. Eine leere Protokollnummer wirft einen
-`EldaError`, statt irgendeine fremde Rücksendung zu liefern.
+## `senden` mit `zustand: 'angenommen'` heißt „empfangen", nicht „verarbeitet"
 
-## `senden` mit statusCode '000' heißt „empfangen", nicht „verarbeitet"
-
-`gesendet.ok === true` (statusCode `'000'`) bedeutet nur, dass ELDA die Datei
-**entgegengenommen** hat. Die **fachliche Verarbeitung** läuft asynchron und
-das Ergebnis kommt erst später — abrufbar über `ruecksendungenAuflisten` (+
-`zuordnung`) und `empfangen`. Ein technisch angenommener Sendevorgang kann
-fachlich trotzdem scheitern (z. B. Status `'403'`, siehe Tabelle unten).
+`senden` kehrt nur zurück, wenn ELDA die Datei entgegengenommen hat — dafür gibt
+es kein `ok`-Feld mehr, sondern `zustand`. `'angenommen'` (Status `000`) bedeutet
+nur, dass ELDA die Datei **entgegengenommen** hat. Die **fachliche Verarbeitung**
+läuft asynchron und das Ergebnis kommt erst später — abrufbar über
+`ruecksendungenAuflisten` (+ `findeRuecksendung`) und `empfangen`. Ein technisch
+angenommener Sendevorgang kann fachlich trotzdem scheitern (z. B. Status `403`,
+siehe Tabelle unten — der wirft dann allerdings als `EldaStatusError`, weil er
+kein von `senden` behandelbarer Zustand ist).
 
 ## Status-Codes (`ELDA_STATUS`)
 
-Alle Antworten tragen einen `statusCode` aus `serviceResult.statusCode`. Über
-`istOk(statusCode)` lässt sich der technische Erfolg prüfen (`=== '000'`); die
-Ergebnisse aller drei Methoden setzen `ok` bereits entsprechend.
+Alle Antworten tragen einen `statusCode` aus `serviceResult.statusCode`. Die
+folgende Tabelle ist die vollständige Liste aus der Spec; die Spalte „Zustand"
+zeigt, wo ein Code bei `senden`/`empfangen`/`ruecksendungenAuflisten` als
+`zustand` zurückkommt — überall sonst wirft die Methode einen `EldaStatusError`.
 
-| Code  | Bedeutung                                                          |
-| ----- | ------------------------------------------------------------------- |
-| `000` | OK                                                                   |
-| `500` | Interner Verarbeitungsfehler                                         |
-| `551` | Request abgelaufen (created älter als 60 Sekunden)                   |
-| `552` | Nonce wurde bereits verwendet                                        |
-| `553` | Seriennummer für dieses Service nicht berechtigt                     |
-| `554` | Nonce nicht gesetzt                                                  |
-| `555` | created nicht gesetzt                                                |
-| `557` | API-Key ungültig                                                     |
-| `558` | Seriennummer und/oder Kundenpasswort falsch                          |
-| `559` | Unerlaubter Content-Type                                             |
-| `401` | dateiName zu lang (max 255)                                          |
-| `402` | dateiName nicht gesetzt                                              |
-| `403` | Datei nicht verarbeitet (auslösender Fehlercode in der Meldung)      |
-| `404` | Datei wird noch verarbeitet (Verarbeitung > 40 Sekunden)              |
-| `405` | Datei ist Duplikat (Protokollnummer des Originals in der Meldung)     |
-| `406` | Datei mit Protokollnummer nicht vorhanden                             |
-| `407` | Keine Berechtigung, Datei zu empfangen (Seriennummer stimmt nicht überein) |
-| `408` | Datei laut Protokollnummer wurde bereits empfangen                   |
+| Code  | Bedeutung                                                          | Zustand bei          |
+| ----- | ------------------------------------------------------------------- | --------------------- |
+| `000` | OK                                                                   | `senden`: `angenommen`, `empfangen`: `datei`, `ruecksendungenAuflisten`: Liste |
+| `500` | Interner Verarbeitungsfehler                                         | wirft überall |
+| `551` | Request abgelaufen (created älter als 60 Sekunden)                   | wirft überall |
+| `552` | Nonce wurde bereits verwendet                                        | wirft überall |
+| `553` | Seriennummer für dieses Service nicht berechtigt                     | wirft überall |
+| `554` | Nonce nicht gesetzt                                                  | wirft überall |
+| `555` | created nicht gesetzt                                                | wirft überall |
+| `557` | API-Key ungültig                                                     | wirft überall |
+| `558` | Seriennummer und/oder Kundenpasswort falsch                          | wirft überall |
+| `559` | Unerlaubter Content-Type                                             | wirft überall |
+| `401` | dateiName zu lang (max 255)                                          | wirft (nur bei `senden` relevant) |
+| `402` | dateiName nicht gesetzt                                              | wirft (nur bei `senden` relevant) |
+| `403` | Datei nicht verarbeitet (auslösender Fehlercode in der Meldung)      | wirft (nur bei `senden` relevant) |
+| `404` | Datei wird noch verarbeitet (Verarbeitung > 40 Sekunden)              | `senden`/`empfangen`: `nochInArbeit` |
+| `405` | Datei ist Duplikat (Protokollnummer des Originals in der Meldung)     | `senden`: `duplikat` |
+| `406` | Datei mit Protokollnummer nicht vorhanden                             | `empfangen`: `nichtVorhanden` |
+| `407` | Keine Berechtigung, Datei zu empfangen (Seriennummer stimmt nicht überein) | wirft (nur bei `empfangen` relevant) |
+| `408` | Datei laut Protokollnummer wurde bereits empfangen                   | `empfangen`: `bereitsEmpfangen` |
+
+## Fehler oder Zustand?
+
+Nur die Codes, die ein Aufrufer sinnvoll und ohne Rückfrage weiterverarbeiten
+kann, kommen als `zustand` zurück (siehe Tabelle oben) — dafür gibt es dann kein
+`ok`-Feld, sondern eine über `zustand` verengbare Vereinigung (`Gesendet`,
+`Empfangen`). Erwartete Zustände wie `'duplikat'` oder `'nochInArbeit'` sind kein
+Kontrollfluss über Ausnahmen: Sie treten im Normalbetrieb regelmäßig auf und
+sollen nicht per `try/catch` behandelt werden müssen.
+
+Alle übrigen Status-Codes — falsche Zugangsdaten, abgelaufener Request,
+ungültiger Dateiname, interner Fehler — wirft die Methode als `EldaStatusError`.
+Das ist bewusst so: Ein nicht vorgesehener Status-Code an der Aufrufstelle zu
+übersehen (weil niemand ihn behandelt hat) wäre ein stiller Fehler; als Ausnahme
+lässt er sich nicht überzeugend ignorieren. `EldaStatusError` trägt `statusCode`,
+die Klartext-`meldung` von ELDA und das vollständige rohe `ergebnis` — es geht
+nichts verloren.
+
+## Volle Kontrolle: `elda.roh`
+
+Wer lieber jede Entscheidung selbst trifft — z. B. um einen Status-Code
+loggen, aber trotzdem weiterlaufen zu lassen, den die Komfortschicht werfen
+würde — greift auf die rohe Variante zu. Sie nutzt denselben Transport und
+dieselbe Konfiguration wie `elda`, wirft aber nie bei fachlichen Status-Codes:
+
+```ts
+const erg = await elda.roh.senden({ dateiName: 'mbgm.xml', inhalt: meldungsXml });
+if (!erg.ok) {
+  // erg.statusCode, erg.meldung — nichts wird geworfen, alles selbst entscheiden
+}
+```
+
+`elda.roh` ist vom Typ `EldaTransferRoh` und lässt sich auch unabhängig von
+`createEldaTransfer` direkt über `createEldaTransferRoh(config)` erzeugen.
+
+## `empfangen` ist unwiderruflich
+
+`empfangen` holt eine Rücksendung **einmalig** — danach gilt sie bei ELDA als
+abgeholt und ist über ihre Protokollnummer nicht mehr abrufbar. Der Inhalt muss
+deshalb gesichert sein, bevor mit ihm weitergearbeitet wird (z. B. bevor er
+geparst wird und das Parsen scheitern könnte).
+
+Zwei Fehlerfälle rund um `empfangen` sind absichtlich **kein** stilles
+Wegwerfen von Inhalt:
+
+- Meldet die Antwort `zustand: 'datei'` (Status `000`), aber ohne `<datei>`,
+  wirft `empfangen` einen `EldaProtocolError` — die Rücksendung gilt bei ELDA
+  bereits als abgeholt, ohne dass ein Inhalt vorläge, und das wird nicht als
+  leeres Ergebnis durchgereicht.
+- Liefert ELDA umgekehrt eine `<datei>` zu einem Status-Code, der dafür gar
+  nicht vorgesehen ist, wirft `empfangen` einen Fehler, statt den
+  mitgelieferten Inhalt kommentarlos zu verwerfen — welche Fehlerklasse das
+  ist, hängt vom Status-Code ab: Ist der Code selbst ein von `empfangen`
+  behandelter Zustand ohne vorgesehene `<datei>` (z. B. `408`, „bereits
+  empfangen"), meldet `empfangen` einen `EldaProtocolError`. Ist der Code
+  dagegen ohnehin kein behandelbarer Zustand (z. B. `407`, „keine
+  Berechtigung"), wirft bereits die Zustandsprüfung zuerst einen
+  `EldaStatusError` — auch der trägt die widersprüchliche `<datei>` über
+  `ergebnis.datei` weiter.
+
+In **beiden** Fällen hängt das bereits von ELDA ausgelieferte rohe
+Ergebnisobjekt am Fehler (`err.ergebnis`, ggf. mit `ergebnis.datei`) — der
+Inhalt ist damit aus dem Fehler selbst wiederherstellbar. Ein erneuter Aufruf
+von `empfangen` ist dagegen **kein** verlässlicher Weg, den Inhalt zu holen:
+`empfangen` ist einmalig, die Rücksendung gilt bereits als abgeholt, und ein
+zweiter Versuch liefert typischerweise nur noch `nichtVorhanden` oder
+`bereitsEmpfangen` — ohne die Datei.
 
 ## Fehlerbehandlung
 
-Fachliche Status-Codes werden **nie** geworfen — sie stecken in `ok`/`statusCode`/
-`meldung` des jeweiligen Ergebnisses (siehe oben). Geworfen wird nur, wenn die
-Antwort technisch nicht sinnvoll auswertbar ist:
+Fachliche Status-Codes, die als `zustand` behandelbar sind, werden **nie**
+geworfen (siehe „Fehler oder Zustand?" oben). Geworfen wird in folgenden Fällen:
 
 - **`FonSoapFaultError`** (aus `@kreiseck/finanzonline-core`) — ein echter SOAP-Fault.
 - **`FonTransportError`** (aus `@kreiseck/finanzonline-core`) — die Anfrage kam
@@ -133,19 +203,27 @@ Antwort technisch nicht sinnvoll auswertbar ist:
 - **`EldaProtocolError`** (aus diesem Paket, Basis `EldaError`) — die Antwort ist
   XML, aber inhaltlich nicht auswertbar: kein `<return>`-Element, kein
   `<serviceResult><statusCode>`, eine `<ruecksendungen>` ohne Protokollnummer,
-  oder bei `empfangen` ein `<payload>`, der XOP-referenziert (`<xop:Include>`)
-  bzw. trotz `statusCode '000'` leer ist.
+  ein `<payload>`, der XOP-referenziert (`<xop:Include>`) bzw. trotz Status `000`
+  leer ist, oder den ersten der beiden Fälle aus „`empfangen` ist unwiderruflich"
+  oben (der zweite Fall wirft je nach Status-Code stattdessen einen
+  `EldaStatusError`, siehe dort). Trägt optional das rohe Ergebnis als `err.ergebnis`.
+- **`EldaStatusError`** (aus diesem Paket, Basis `EldaError`) — ein Status-Code,
+  der keinen behandelbaren Zustand beschreibt (siehe Tabelle oben). Trägt
+  `statusCode`, `meldung` und das vollständige rohe `ergebnis`.
 
 ```ts
-import { EldaError, EldaProtocolError } from '@kreiseck/elda';
+import { EldaError, EldaProtocolError, EldaStatusError } from '@kreiseck/elda';
 import { FonProtocolError } from '@kreiseck/finanzonline-core';
 
 try {
   await elda.empfangen(protokollnummer);
 } catch (err) {
-  if (err instanceof EldaProtocolError) {
+  if (err instanceof EldaStatusError) {
+    // nicht behandelbarer Status-Code — err.statusCode, err.meldung, err.ergebnis
+  } else if (err instanceof EldaProtocolError) {
     // Antwort ist XML, aber inhaltlich nicht auswertbar (fehlendes <return>,
-    // fehlender statusCode, XOP-Referenz statt Base64 …)
+    // fehlender statusCode, XOP-Referenz statt Base64, widersprüchliche <datei> …)
+    // — err.ergebnis trägt ggf. den bereits ausgelieferten Inhalt
   } else if (err instanceof EldaError) {
     // reserviert für künftige elda-spezifische Fehlerarten
   } else if (err instanceof FonProtocolError) {
@@ -167,9 +245,9 @@ SOAP-Faults, Protokollfehler und fachliche Status-Codes werden unverändert
 durchgereicht.
 
 Zu beachten: ein Timeout heißt nicht, dass ELDA die Datei nicht bekommen hat. Ein
-wiederholtes `senden` kann daher fachlich als Duplikat (`405`, mit der
-Protokollnummer des Originals in der Meldung) beantwortet werden — das ist der
-gewollte, auswertbare Ausgang, kein Datenverlust.
+wiederholtes `senden` kann daher fachlich als `zustand: 'duplikat'` (Status `405`,
+mit der Protokollnummer des Originals in der Meldung) beantwortet werden — das
+ist der gewollte, auswertbare Ausgang, kein Datenverlust.
 
 ## Hinweis zu MTOM/XOP
 

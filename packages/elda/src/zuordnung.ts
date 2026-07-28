@@ -12,7 +12,7 @@ function maskiere(wert: string): string {
 }
 
 /**
- * Ordnet eine Sendung ihrer Rücksendung zu: laut ELDA steckt die Protokollnummer
+ * Findet eine Sendung ihrer Rücksendung zugehörig: laut ELDA steckt die Protokollnummer
  * der ursprünglichen Sendung im `dateiName` der Rücksendung (FAQ 8.1). Liefert die
  * erste passende Rücksendung oder `undefined`.
  *
@@ -26,14 +26,14 @@ function maskiere(wert: string): string {
  * @throws EldaError wenn `sendungsProtokollnummer` leer oder nur Whitespace ist —
  * eine leere Nadel würde sonst auf die erste beliebige Rücksendung passen.
  */
-export function zuordnung(
+export function findeRuecksendung(
   sendungsProtokollnummer: string,
   ruecksendungen: Ruecksendung[],
 ): Ruecksendung | undefined {
   const nr = sendungsProtokollnummer.trim();
   if (nr === '') {
     throw new EldaError(
-      'zuordnung: sendungsProtokollnummer ist leer. Ohne Protokollnummer ist keine ' +
+      'findeRuecksendung: sendungsProtokollnummer ist leer. Ohne Protokollnummer ist keine ' +
         'Zuordnung möglich — sonst würde eine beliebige fremde Rücksendung zurückgeliefert.',
     );
   }

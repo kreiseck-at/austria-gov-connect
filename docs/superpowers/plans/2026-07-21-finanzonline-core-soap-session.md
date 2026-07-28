@@ -1,6 +1,7 @@
 # finanzonline-core: SOAP-Layer + Session — Implementierungsplan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Umsetzung:** Task für Task, test-first. Schritte sind als Checkbox
+> (`- [ ]`) geführt.
 
 **Goal:** Das npm-Workspace-Gerüst und das Paket `@kreiseck/finanzonline-core` aufbauen — selbstgeschriebener SOAP-Layer (Envelope, Parser, Fault) plus zustandslose `login`/`logout`-Session gegen den FinanzOnline Session-Webservice.
 
@@ -14,7 +15,7 @@
 - **Node ≥ 18.18** (lokales Dev-Env ist 18.20.5). Kein experimentelles Flag.
 - **TypeScript `strict: true`**, Kompilat CommonJS, `declaration` + `sourceMap` an.
 - **Lizenz Apache-2.0**, `"license": "Apache-2.0"` (SPDX) in jeder `package.json`.
-- **No footprint:** keine Hinweise auf KI/Assistenten in Code, Kommentaren, Commits, Dateinamen. Commits ohne Co-Author-/Tool-Trailer.
+- **Committete Artefakte sind ununterscheidbar von handgeschriebener Arbeit:** in Code, Kommentaren, Commits, Dateinamen. Commits ohne Co-Author-/Tool-Trailer.
 - **Feldreihenfolge ist bindend** (document/literal). Envelope-Felder werden als geordnetes Array übergeben, nie als ungeordnetes Objekt.
 - **Verifizierte Session-Fakten** (Quelle: `sessionService.wsdl`, `session.xsd`, BMF-Session-Webservice-PDF; siehe `docs/design.md` §2.1):
   - Endpoint `https://finanzonline.bmf.gv.at/fonws/ws/session`, Namespace `https://finanzonline.bmf.gv.at/fon/ws/session`.

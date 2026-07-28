@@ -194,6 +194,36 @@ brechen).
 
 ## @kreiseck/elda
 
+### 0.2.0 — 2026-07-28
+
+- **Breaking:** `umgebung` ist jetzt in jeder Konfiguration ohne expliziten
+  `endpoint` Pflicht — der bisherige Produktions-Default entfällt, damit ein
+  vergessenes Feld nicht mehr unbemerkt echte Meldungen in den Echtbetrieb
+  schickt.
+- **Breaking:** `zuordnung` heißt jetzt `findeRuecksendung` (gleiche Signatur).
+- **Neu:** `createEldaTransfer(config)` liefert die komfortable Oberfläche.
+  `senden` und `empfangen` liefern kein `ok`-Feld mehr, sondern ein über
+  `zustand` verengbares Ergebnis (`Gesendet`/`Empfangen`) — behandelbare
+  Status-Codes (u. a. `duplikat`, `nochInArbeit`, `bereitsEmpfangen`) sind
+  damit kein Kontrollfluss über Ausnahmen mehr. `ruecksendungenAuflisten`
+  liefert die Liste der Rücksendungen direkt als Array statt als
+  `AuflistenErgebnis`. Alle übrigen, nicht behandelbaren Status-Codes wirft die
+  Methode jetzt als `EldaStatusError` (Code, Klartext-Meldung und volles
+  rohes Ergebnis).
+- **Neu:** `empfangen` wirft `EldaProtocolError`, wenn Status `000` ohne
+  `<datei>` kommt oder wenn ein Status ohne vorgesehenen Dateiinhalt (z. B.
+  `408`) dennoch eine `<datei>` mitliefert — in beiden Fällen hängt das bereits
+  ausgelieferte rohe Ergebnis am Fehler (`err.ergebnis`), weil `empfangen`
+  einmalig ist und ein zweiter Aufruf den Inhalt nicht mehr verlässlich holen
+  kann.
+- Das bisherige Verhalten (Ergebnisobjekte mit `ok`/`statusCode`/`meldung`,
+  nie werfend bei fachlichen Status-Codes) bleibt unverändert erreichbar über
+  `elda.roh` bzw. weiterhin direkt über `createEldaTransferRoh`.
+- **Breaking:** der Barrel-Export exportiert kein Innenleben mehr — `baueSecurity`,
+  `SecurityFelder`, `SecurityQuelle`, `baueEldaEnvelope`, `EldaFeld`,
+  `ELDA_NAMESPACE` und `istOk` sind nicht mehr Teil der öffentlichen Oberfläche
+  (die Module bestehen intern unverändert weiter).
+
 ### 0.1.0 — 2026-07-25
 
 - Erstveröffentlichung: Transport-Schicht des ELDA Transfer-Webservice v4
