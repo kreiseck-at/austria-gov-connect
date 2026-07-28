@@ -91,7 +91,11 @@ function codepunkt(zeichen: string): number | undefined {
  */
 export function pruefeVorrat(text: string, klasse: Feldklasse, feld: string): void {
   const vorrat = vorratFuer(klasse);
-  const zeichen = [...text];
+  // NFC statt NFD: Manche Quellen (u. a. das macOS-Dateisystem) liefern
+  // Umlaute zerlegt als Grundbuchstabe + kombinierendes Zeichen. Das ist
+  // dieselbe Zeichenfolge, nur anders kodiert, und darf nicht als unzulässig
+  // abgewiesen werden — deshalb vor der Prüfung zusammensetzen.
+  const zeichen = [...text.normalize('NFC')];
   for (let i = 0; i < zeichen.length; i++) {
     const z = zeichen[i]!;
     const code = codepunkt(z);
@@ -115,7 +119,11 @@ export function pruefeVorrat(text: string, klasse: Feldklasse, feld: string): vo
  * nichts ersetzt und nichts weggelassen.
  */
 export function nachIso885915(text: string, feld: string): Buffer {
-  const zeichen = [...text];
+  // Siehe pruefeVorrat: NFC zusammensetzen, damit zerlegt vorliegende Umlaute
+  // (Grundbuchstabe + kombinierendes Zeichen) nicht fälschlich als nicht
+  // darstellbar gelten. Die Positions- und Längenangabe bezieht sich danach
+  // konsistent auf die normalisierte Fassung.
+  const zeichen = [...text.normalize('NFC')];
   const bytes = Buffer.alloc(zeichen.length);
   for (let i = 0; i < zeichen.length; i++) {
     const z = zeichen[i]!;

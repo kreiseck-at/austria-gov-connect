@@ -67,3 +67,49 @@ test('Vorrat frei: prüft nur die Darstellbarkeit', () => {
   assert.doesNotThrow(() => pruefeVorrat('á', 'frei', 'INF1'));
   assert.throws(() => pruefeVorrat('đ', 'frei', 'INF1'), EldaError);
 });
+
+test('ISO-8859-15: NFD-Eingabe (zerlegter Umlaut) wird akzeptiert wie die vorkomponierte Form', () => {
+  // 'u' (U+0075) + kombinierende Trema (U+0308) statt des vorkomponierten 'ü' (U+00FC) —
+  // so liefern u. a. macOS-Dateisysteme Umlaute. Dieselbe Zeichenfolge, nur anders kodiert.
+  const nfd = 'Müller';
+  const nfc = 'Müller';
+  assert.notEqual(nfd, nfc, 'Testvoraussetzung: nfd liegt tatsächlich zerlegt vor');
+  assert.deepEqual(nachIso885915(nfd, 'FANA'), nachIso885915(nfc, 'FANA'));
+  assert.doesNotThrow(() => pruefeVorrat(nfd, 'personenname', 'FANA'));
+});
+
+test('ISO-8859-15: leere Eingabe liefert einen leeren Buffer und wirft nicht', () => {
+  assert.deepEqual(nachIso885915('', 'FANA'), Buffer.alloc(0));
+  assert.doesNotThrow(() => pruefeVorrat('', 'personenname', 'FANA'));
+  assert.doesNotThrow(() => pruefeVorrat('', 'unternehmen', 'DGNA'));
+  assert.doesNotThrow(() => pruefeVorrat('', 'frei', 'INF1'));
+});
+
+test('ISO-8859-15: ein Zeichen außerhalb der BMP (Emoji) ist nicht darstellbar und wirft mit Feldnamen', () => {
+  assert.throws(
+    () => nachIso885915('😀', 'FANA'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaError);
+      assert.match((err as Error).message, /FANA/);
+      return true;
+    },
+  );
+});
+
+test('ISO-8859-15: ein Surrogatpaar zählt als EIN Zeichen, nicht als zwei', () => {
+  // Das Emoji besteht aus zwei UTF-16-Code-Units (Surrogatpaar), aber aus genau einem
+  // Codepoint. `[...text]` iteriert über Codepoints — die Fehlermeldung muss deshalb
+  // Position 1 nennen und das vollständige Emoji zitieren. Eine künftige Implementierung,
+  // die stattdessen über UTF-16-Code-Units iteriert (etwa `text.length`/`text[i]` statt
+  // `[...text]`), würde nur die verwaiste halbe Surrogat-Codeeinheit zitieren — dieser
+  // Test schlägt dann fehl, weil die Meldung das vollständige Emoji nicht mehr enthält.
+  assert.throws(
+    () => nachIso885915('😀', 'FANA'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaError);
+      assert.match((err as Error).message, /😀/);
+      assert.match((err as Error).message, /Position 1\b/);
+      return true;
+    },
+  );
+});
