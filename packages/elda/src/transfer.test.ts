@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createEldaTransfer } from './transfer';
+import type { EmpfangenErgebnis } from './transfer-roh';
 import { EldaStatusError, EldaProtocolError } from './errors';
 
 const cfg = (fetchImpl: unknown) => ({
@@ -152,20 +153,22 @@ test('empfangen: 000 ohne <datei> wirft, statt eine leere Datei vorzutäuschen',
   await assert.rejects(() => mitAntwort(empfangenAntwort('000')).empfangen('1'), EldaProtocolError);
 });
 
-test('empfangen: 000 ohne <datei> — Fehlertext nennt Status-Code und ELDA-Meldung', async () => {
+test('empfangen: 000 ohne <datei> — Fehlertext nennt Status-Code/Meldung, ergebnis ist gesetzt', async () => {
   await assert.rejects(
     () => mitAntwort(empfangenAntwort('000')).empfangen('1'),
     (err: unknown) => {
       assert.ok(err instanceof EldaProtocolError);
       assert.match(err.message, /000/);
       assert.match(err.message, /M-000/);
+      assert.equal((err.ergebnis as EmpfangenErgebnis).statusCode, '000');
       return true;
     },
   );
 });
 
-test('empfangen: 408 mit <datei> ist ein Widerspruch — komfortabel wirft, roh liefert den Inhalt', async () => {
-  const b64 = Buffer.from('<protokoll/>').toString('base64');
+test('empfangen: 408 mit <datei> ist ein Widerspruch — Inhalt bleibt über den Fehler erreichbar', async () => {
+  const inhalt = '<protokoll/>';
+  const b64 = Buffer.from(inhalt).toString('base64');
   const elda = mitAntwort(
     empfangenAntwort('408', `<datei><name>mitteilung.xml</name><payload>${b64}</payload></datei>`),
   );
@@ -174,12 +177,20 @@ test('empfangen: 408 mit <datei> ist ein Widerspruch — komfortabel wirft, roh 
     (err: unknown) => {
       assert.ok(err instanceof EldaProtocolError);
       assert.match(err.message, /408/);
+      // Der Fehlertext darf NICHT zu einem zweiten Abholversuch anleiten — `empfangen` ist
+      // einmalig, ein erneuter Aufruf wäre kein verlässlicher Weg an den Inhalt.
+      assert.ok(!err.message.includes('elda.roh.empfangen'));
+      const ergebnis = err.ergebnis as EmpfangenErgebnis;
+      assert.equal(ergebnis.statusCode, '408');
+      assert.equal(ergebnis.datei?.inhalt.toString('utf8'), inhalt);
       return true;
     },
   );
+  // Eigenständiger Beleg, dass die rohe Schicht bei 408 grundsätzlich nicht wirft — unabhängig
+  // vom obigen Fehler, nicht als empfohlener zweiter Versuch nach ihm.
   const roh = await elda.roh.empfangen('1');
   assert.equal(roh.statusCode, '408');
-  assert.equal(roh.datei?.inhalt.toString('utf8'), '<protokoll/>');
+  assert.equal(roh.datei?.inhalt.toString('utf8'), inhalt);
 });
 
 test('roh: fachliche Codes werfen dort weiterhin nicht', async () => {

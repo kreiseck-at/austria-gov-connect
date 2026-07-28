@@ -21,6 +21,14 @@ test('EldaStatusError bleibt bei unbekanntem Code aussagekräftig', () => {
   assert.equal(err.meldung, undefined);
 });
 
-test('EldaProtocolError bleibt unverändert eine EldaError', () => {
-  assert.ok(new EldaProtocolError('x') instanceof EldaError);
+test('EldaProtocolError bleibt unverändert eine EldaError, ergebnis bleibt optional', () => {
+  const err = new EldaProtocolError('x');
+  assert.ok(err instanceof EldaError);
+  assert.equal(err.ergebnis, undefined);
+});
+
+test('EldaProtocolError kann das rohe Ergebnis mitführen', () => {
+  const ergebnis = { statusCode: '408', ok: false, datei: { inhalt: Buffer.from('x') } };
+  const err = new EldaProtocolError('y', ergebnis);
+  assert.equal(err.ergebnis, ergebnis);
 });

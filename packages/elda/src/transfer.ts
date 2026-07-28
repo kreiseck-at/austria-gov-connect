@@ -141,6 +141,7 @@ export function createEldaTransfer(config: EldaConfig): EldaTransfer {
               'Die Rücksendung gilt bei ELDA damit als abgeholt, ohne dass Inhalt vorliegt — ' +
               'das wird nicht als leeres Ergebnis durchgereicht.' +
               meldungZusatz,
+            erg,
           );
         }
         const treffer: Empfangen = { zustand, datei: erg.datei, statusCode: erg.statusCode };
@@ -148,12 +149,18 @@ export function createEldaTransfer(config: EldaConfig): EldaTransfer {
         return treffer;
       }
       if (erg.datei) {
+        // ELDA hat die <datei> in genau diesem Aufruf bereits ausgeliefert — sie liegt in `erg`
+        // vor. Ein zweiter `empfangen`-Aufruf ist KEIN verlässlicher Weg, sie erneut zu holen:
+        // `empfangen` ist einmalig, die Rücksendung gilt damit bereits als abgeholt. Deshalb wird
+        // der Inhalt nicht kommentarlos verworfen, sondern am Fehler mitgeführt (`ergebnis.datei`).
         throw new EldaProtocolError(
           `Antwort auf 'empfangen' meldet statusCode ${erg.statusCode} ('${zustand}'), enthält aber dennoch ` +
-            'eine <datei> — dieser Status sieht keinen Dateiinhalt vor. Der Widerspruch wird nicht ' +
-            'stillschweigend aufgelöst, indem der Inhalt verworfen wird: wer ihn braucht, verwendet ' +
-            "elda.roh.empfangen(...), das 'datei' unabhängig vom statusCode liefert." +
+            'eine <datei> — dieser Status sieht keinen Dateiinhalt vor. Der bereits ausgelieferte Inhalt ' +
+            'wird nicht verworfen, sondern hängt am Fehler (siehe `ergebnis.datei`): ein erneuter Aufruf ' +
+            'von empfangen wäre KEIN verlässlicher Weg, ihn zu holen, weil die Rücksendung damit bereits ' +
+            'als abgeholt gilt.' +
             meldungZusatz,
+          erg,
         );
       }
       const ohneDatei: Empfangen = { zustand, statusCode: erg.statusCode };

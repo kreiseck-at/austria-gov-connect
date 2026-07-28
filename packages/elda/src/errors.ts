@@ -15,8 +15,22 @@ export class EldaError extends Error {
  * fachlichen Status-Codes (`statusCode`/`ok` im Ergebnis): Ein `EldaProtocolError`
  * bedeutet, dass die Antwort nicht sinnvoll ausgewertet werden kann, nicht dass
  * ELDA einen fachlichen Fehler gemeldet hat.
+ *
+ * Trägt optional das rohe Ergebnisobjekt, sofern beim Auftreten des Fehlers
+ * bereits eines vorlag (z. B. wenn ELDA zu einem Status-Code widersprüchlich
+ * eine `<datei>` mitgeliefert hat, die die Komfortschicht nicht ausliefern
+ * kann). Darüber ist ein bereits von ELDA ausgelieferter Dateiinhalt weiterhin
+ * erreichbar — ohne einen zweiten, ggf. folgenlosen Aufruf zu riskieren.
  */
-export class EldaProtocolError extends EldaError {}
+export class EldaProtocolError extends EldaError {
+  /** Das rohe Ergebnisobjekt zum Zeitpunkt des Fehlers, sofern eines vorlag. */
+  readonly ergebnis?: unknown;
+
+  constructor(message: string, ergebnis?: unknown, options?: ErrorOptions) {
+    super(message, options);
+    if (ergebnis !== undefined) this.ergebnis = ergebnis;
+  }
+}
 
 /**
  * ELDA hat einen Status-Code gemeldet, der keinen behandelbaren Zustand
