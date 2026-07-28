@@ -41,7 +41,14 @@ export function zustandOderWurf<T extends string>(
   karte: Readonly<Record<string, T>>,
   ergebnis: { statusCode: string; meldung?: string },
 ): T {
-  const zustand = karte[ergebnis.statusCode];
+  // `karte[...]` löst auch über die Prototyp-Kette auf: Ein `statusCode` von
+  // z. B. `'constructor'` oder `'toString'` läge dann NICHT bei `undefined`,
+  // obwohl er gar nicht in der Karte steht — die Wurf-Garantie dieser Funktion
+  // wäre lautlos ausgehebelt. `Object.hasOwn` prüft ausschließlich Eigenschaften
+  // der Karte selbst und hält die drei Karten dabei als gewöhnliche, gut lesbare
+  // Objekt-Literale (Alternative wäre `Object.create(null)` beim Bau der Karten
+  // — das an dieser einzigen Zugriffsstelle abzusichern ist einfacher und lokaler).
+  const zustand = Object.hasOwn(karte, ergebnis.statusCode) ? karte[ergebnis.statusCode] : undefined;
   if (zustand === undefined) {
     throw new EldaStatusError(ergebnis.statusCode, ergebnis, ergebnis.meldung);
   }

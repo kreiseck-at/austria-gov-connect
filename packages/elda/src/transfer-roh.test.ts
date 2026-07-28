@@ -194,6 +194,33 @@ test('empfangen: MTOM/XOP-referenzierter Payload wirft statt leeres Buffer zu li
   );
 });
 
+test('empfangen: XOP-Referenz — ergebnis trägt Status, Meldung und die bereits gelesenen Datei-Metadaten', async () => {
+  // ELDA hat die einmalige Zustellung zu diesem Zeitpunkt bereits verbraucht — die Bytes sind
+  // nicht zu retten, aber statusCode/meldung/id/name/md5 dürfen dem Aufrufer nicht verloren gehen.
+  const resp = soap(
+    '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>199565708</id><name>mitteilung.xml</name><md5>abc</md5><payload><xop:Include xmlns:xop="http://www.w3.org/2004/08/xop/include" href="cid:abc@elda.at"/></payload></datei></return></ns2:empfangenResponse>',
+  );
+  const elda = createEldaTransferRoh(cfg(async () => new Response(resp, { status: 200 })));
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      const ergebnis = err.ergebnis as {
+        statusCode: string;
+        meldung?: string;
+        datei?: { id?: string; name?: string; md5?: string; inhalt?: unknown };
+      };
+      assert.equal(ergebnis.statusCode, '000');
+      assert.equal(ergebnis.meldung, 'OK');
+      assert.equal(ergebnis.datei?.id, '199565708');
+      assert.equal(ergebnis.datei?.name, 'mitteilung.xml');
+      assert.equal(ergebnis.datei?.md5, 'abc');
+      assert.equal(ergebnis.datei?.inhalt, undefined); // Payload ist nicht referenzierbar — bewusst nicht vorgetäuscht
+      return true;
+    },
+  );
+});
+
 test('empfangen: leerer Payload bei statusCode 000 wirft statt eine leere Datei vorzutäuschen', async () => {
   const resp = soap(
     '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><name>x.xml</name><payload></payload></datei></return></ns2:empfangenResponse>',
@@ -202,6 +229,24 @@ test('empfangen: leerer Payload bei statusCode 000 wirft statt eine leere Datei 
   await assert.rejects(
     () => elda.empfangen('1'),
     (err: unknown) => err instanceof EldaProtocolError,
+  );
+});
+
+test('empfangen: leerer Payload bei 000 — ergebnis trägt Status und die bereits gelesenen Datei-Metadaten', async () => {
+  const resp = soap(
+    '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><name>x.xml</name><payload></payload></datei></return></ns2:empfangenResponse>',
+  );
+  const elda = createEldaTransferRoh(cfg(async () => new Response(resp, { status: 200 })));
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      const ergebnis = err.ergebnis as { statusCode: string; datei?: { id?: string; name?: string } };
+      assert.equal(ergebnis.statusCode, '000');
+      assert.equal(ergebnis.datei?.id, '1');
+      assert.equal(ergebnis.datei?.name, 'x.xml');
+      return true;
+    },
   );
 });
 

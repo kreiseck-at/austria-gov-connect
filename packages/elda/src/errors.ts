@@ -50,7 +50,12 @@ export class EldaStatusError extends EldaError {
   readonly ergebnis: unknown;
 
   constructor(statusCode: string, ergebnis: unknown, meldung?: string, options?: ErrorOptions) {
-    const beschreibung = ELDA_STATUS[statusCode] ?? 'unbekannter Status-Code';
+    // Wie in klassifikation.ts: `ELDA_STATUS[statusCode]` löst auch über die Prototyp-Kette
+    // auf (`statusCode === 'toString'` läge sonst bei der eingebauten Funktion statt bei
+    // `undefined`). `Object.hasOwn` schließt das aus.
+    const beschreibung =
+      (Object.hasOwn(ELDA_STATUS, statusCode) ? ELDA_STATUS[statusCode] : undefined) ??
+      'unbekannter Status-Code';
     super(`ELDA-Status ${statusCode}: ${beschreibung}${meldung ? ` — ${meldung}` : ''}`, options);
     this.statusCode = statusCode;
     this.ergebnis = ergebnis;

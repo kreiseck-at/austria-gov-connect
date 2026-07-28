@@ -171,9 +171,15 @@ Wegwerfen von Inhalt:
   bereits als abgeholt, ohne dass ein Inhalt vorläge, und das wird nicht als
   leeres Ergebnis durchgereicht.
 - Liefert ELDA umgekehrt eine `<datei>` zu einem Status-Code, der dafür gar
-  nicht vorgesehen ist (z. B. `408`, „bereits empfangen"), wirft `empfangen`
-  ebenfalls einen `EldaProtocolError` — statt den mitgelieferten Inhalt
-  kommentarlos zu verwerfen.
+  nicht vorgesehen ist, wirft `empfangen` einen Fehler, statt den
+  mitgelieferten Inhalt kommentarlos zu verwerfen — welche Fehlerklasse das
+  ist, hängt vom Status-Code ab: Ist der Code selbst ein von `empfangen`
+  behandelter Zustand ohne vorgesehene `<datei>` (z. B. `408`, „bereits
+  empfangen"), meldet `empfangen` einen `EldaProtocolError`. Ist der Code
+  dagegen ohnehin kein behandelbarer Zustand (z. B. `407`, „keine
+  Berechtigung"), wirft bereits die Zustandsprüfung zuerst einen
+  `EldaStatusError` — auch der trägt die widersprüchliche `<datei>` über
+  `ergebnis.datei` weiter.
 
 In **beiden** Fällen hängt das bereits von ELDA ausgelieferte rohe
 Ergebnisobjekt am Fehler (`err.ergebnis`, ggf. mit `ergebnis.datei`) — der
@@ -198,8 +204,9 @@ geworfen (siehe „Fehler oder Zustand?" oben). Geworfen wird in folgenden Fäll
   XML, aber inhaltlich nicht auswertbar: kein `<return>`-Element, kein
   `<serviceResult><statusCode>`, eine `<ruecksendungen>` ohne Protokollnummer,
   ein `<payload>`, der XOP-referenziert (`<xop:Include>`) bzw. trotz Status `000`
-  leer ist, oder einer der beiden Fälle aus „`empfangen` ist unwiderruflich"
-  oben. Trägt optional das rohe Ergebnis als `err.ergebnis`.
+  leer ist, oder den ersten der beiden Fälle aus „`empfangen` ist unwiderruflich"
+  oben (der zweite Fall wirft je nach Status-Code stattdessen einen
+  `EldaStatusError`, siehe dort). Trägt optional das rohe Ergebnis als `err.ergebnis`.
 - **`EldaStatusError`** (aus diesem Paket, Basis `EldaError`) — ein Status-Code,
   der keinen behandelbaren Zustand beschreibt (siehe Tabelle oben). Trägt
   `statusCode`, `meldung` und das vollständige rohe `ergebnis`.

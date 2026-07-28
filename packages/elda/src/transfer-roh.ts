@@ -248,12 +248,38 @@ export function createEldaTransferRoh(config: EldaConfig): EldaTransferRoh {
       const erg: EmpfangenErgebnis = { statusCode, ok: istOk(statusCode) };
       const datei = findDescendant(resp, 'datei');
       if (datei) {
+        // Metadaten VOR dem Payload lesen: Sie hängen unten an beiden Protokollfehlern mit, denn
+        // ELDA hat die einmalige Zustellung in beiden Fällen bereits verbraucht — die Bytes selbst
+        // sind nicht mehr zu retten, aber diese Felder sind alles, was von der Antwort sonst übrig
+        // bliebe. Ausschließlich aus der geparsten Antwort, nie aus Konfiguration oder Request.
+        const bekannteMetadaten: Pick<EldaDatei, 'id' | 'name' | 'md5' | 'dateiTyp'> = {};
+        const id = feldText(datei, 'id');
+        if (id) bekannteMetadaten.id = id;
+        const name = feldText(datei, 'name');
+        if (name) bekannteMetadaten.name = name;
+        const md5 = feldText(datei, 'md5');
+        if (md5) bekannteMetadaten.md5 = md5;
+        const dateiTyp = feldText(datei, 'dateiTyp');
+        if (dateiTyp) {
+          const parsed = Number.parseInt(dateiTyp, 10);
+          if (Number.isFinite(parsed)) bekannteMetadaten.dateiTyp = parsed;
+        }
+        const teilErgebnis: {
+          statusCode: string;
+          ok: boolean;
+          meldung?: string;
+          datei?: Omit<EldaDatei, 'inhalt'>;
+        } = { statusCode, ok: istOk(statusCode) };
+        if (meldung) teilErgebnis.meldung = meldung;
+        if (Object.keys(bekannteMetadaten).length > 0) teilErgebnis.datei = bekannteMetadaten;
+
         const payloadNode = firstChild(datei, 'payload');
         const xopReferenz = payloadNode?.children.some((c) => c.name === 'Include');
         if (xopReferenz) {
           throw new EldaProtocolError(
             'Payload ist MTOM/XOP-referenziert (<xop:Include>), dieser Client erwartet inline Base64. ' +
               'MTOM wird von diesem Client derzeit nicht unterstützt.',
+            teilErgebnis,
           );
         }
         const inhaltB64 = payloadNode?.text.trim() ?? '';
@@ -261,21 +287,10 @@ export function createEldaTransferRoh(config: EldaConfig): EldaTransferRoh {
           throw new EldaProtocolError(
             'Antwort meldet statusCode 000 mit einer <datei>, aber der Payload ist leer ' +
               '(weder Base64 noch MTOM/XOP-Referenz) — die Datei wäre sonst stillschweigend verloren.',
+            teilErgebnis,
           );
         }
-        const d: EldaDatei = { inhalt: Buffer.from(inhaltB64, 'base64') };
-        const id = feldText(datei, 'id');
-        if (id) d.id = id;
-        const name = feldText(datei, 'name');
-        if (name) d.name = name;
-        const md5 = feldText(datei, 'md5');
-        if (md5) d.md5 = md5;
-        const dateiTyp = feldText(datei, 'dateiTyp');
-        if (dateiTyp) {
-          const parsed = Number.parseInt(dateiTyp, 10);
-          if (Number.isFinite(parsed)) d.dateiTyp = parsed;
-        }
-        erg.datei = d;
+        erg.datei = { inhalt: Buffer.from(inhaltB64, 'base64'), ...bekannteMetadaten };
       }
       if (meldung) erg.meldung = meldung;
       return erg;

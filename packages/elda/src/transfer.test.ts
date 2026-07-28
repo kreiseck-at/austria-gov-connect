@@ -100,6 +100,21 @@ test('auflisten: leere Liste bedeutet eindeutig "keine offen"', async () => {
   assert.deepEqual(await mitAntwort(auflistenAntwort('000')).ruecksendungenAuflisten(), []);
 });
 
+test('auflisten: statusCode "constructor" wirft, statt über die Prototyp-Kette eine leere Liste vorzutäuschen', async () => {
+  // Regressionstest zur Object.hasOwn-Absicherung in zustandOderWurf: Ohne sie würde
+  // `AUFLISTEN_ZUSTAENDE['constructor']` über Object.prototype auflösen, kein `undefined`
+  // liefern, und `ruecksendungenAuflisten` gäbe fälschlich eine leere Liste zurück — genau
+  // das "keine Rücksendungen offen", das laut diesem Umbau eindeutig sein soll.
+  await assert.rejects(
+    () => mitAntwort(auflistenAntwort('constructor')).ruecksendungenAuflisten(),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaStatusError);
+      assert.equal(err.statusCode, 'constructor');
+      return true;
+    },
+  );
+});
+
 test('auflisten: 557 wirft, statt eine leere Liste vorzutäuschen', async () => {
   await assert.rejects(
     () => mitAntwort(auflistenAntwort('557')).ruecksendungenAuflisten(),

@@ -21,6 +21,15 @@ test('EldaStatusError bleibt bei unbekanntem Code aussagekräftig', () => {
   assert.equal(err.meldung, undefined);
 });
 
+test('EldaStatusError: Status-Code aus der Prototyp-Kette liefert "unbekannter Status-Code"', () => {
+  // Ohne Object.hasOwn-Absicherung würde `ELDA_STATUS['constructor']` die eingebaute
+  // Function liefern und in die Nachricht interpoliert werden (z. B. "function constructor() { [native code] }").
+  for (const code of ['toString', 'constructor', '__proto__', 'valueOf', 'hasOwnProperty']) {
+    const err = new EldaStatusError(code, {});
+    assert.match(err.message, /unbekannter Status-Code/, `sollte "unbekannter Status-Code" liefern: ${code}`);
+  }
+});
+
 test('EldaProtocolError bleibt unverändert eine EldaError, ergebnis bleibt optional', () => {
   const err = new EldaProtocolError('x');
   assert.ok(err instanceof EldaError);

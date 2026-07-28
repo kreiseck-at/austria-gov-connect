@@ -97,6 +97,21 @@ test('der Wurf trägt Meldung und Ergebnis weiter', () => {
   }
 });
 
+test('Status-Codes aus der Prototyp-Kette sind kein Treffer (Object.hasOwn-Absicherung)', () => {
+  // Ein `statusCode` wie 'constructor' oder 'toString' liegt bei einem gewöhnlichen
+  // Objekt-Literal über die Prototyp-Kette IMMER auf einem wahren Wert — ohne Absicherung
+  // würde `karte[ergebnis.statusCode]` das liefern und die Wurf-Garantie wäre ausgehebelt.
+  for (const karte of [SENDEN_ZUSTAENDE, EMPFANGEN_ZUSTAENDE, AUFLISTEN_ZUSTAENDE]) {
+    for (const code of ['toString', 'constructor', '__proto__', 'valueOf', 'hasOwnProperty', 'prototype']) {
+      assert.throws(
+        () => zustandOderWurf(karte, { statusCode: code }),
+        EldaStatusError,
+        `sollte werfen: ${code}`,
+      );
+    }
+  }
+});
+
 test('jeder Code der Tabelle ist je Methode entweder Zustand oder Wurf', () => {
   // Vollständigkeitsprobe: keine Lücke, kein Code ohne definiertes Verhalten.
   for (const code of Object.keys(ELDA_STATUS)) {
