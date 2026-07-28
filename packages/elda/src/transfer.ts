@@ -1,0 +1,131 @@
+import { createEldaTransferRoh, type EldaDatei, type EldaTransferRoh } from './transfer-roh';
+import type { EldaConfig } from './konfiguration';
+import {
+  AUFLISTEN_ZUSTAENDE,
+  EMPFANGEN_ZUSTAENDE,
+  SENDEN_ZUSTAENDE,
+  zustandOderWurf,
+} from './klassifikation';
+import { EldaProtocolError } from './errors';
+import type { Ruecksendung } from './zuordnung';
+
+/**
+ * Ergebnis von {@link EldaTransfer.senden}. Die Methode kehrt nur zurück, wenn
+ * die Datei bei ELDA liegt — ein `ok`-Feld gibt es deshalb nicht.
+ */
+export interface Gesendet {
+  /**
+   * `'angenommen'` (Status 000), `'nochInArbeit'` (404 — angenommen, die
+   * Verarbeitung dauert über 40 Sekunden) oder `'duplikat'` (405 — die Datei lag
+   * ELDA bereits vor). Keiner der drei Fälle ist ein Fehler.
+   */
+  zustand: 'angenommen' | 'nochInArbeit' | 'duplikat';
+  /**
+   * Von ELDA vergebene Protokollnummer — der Schlüssel, mit dem später das
+   * Verarbeitungsprotokoll abgeholt wird. Bei `'duplikat'` die der
+   * Originalsendung, sofern ELDA sie im Feld mitliefert.
+   */
+  protokollnummer?: string;
+  /** Interne ELDA-Datei-ID der übermittelten Sendung. */
+  dateiId?: string;
+  /** Zeitstempel (ISO-8601 mit Offset), zu dem ELDA die Datei angenommen hat. */
+  eldaZeitstempel?: string;
+  /** Klartext-Meldung von ELDA; bei `'duplikat'` nennt sie die Protokollnummer des Originals. */
+  meldung?: string;
+  /** Der Status-Code, der zu diesem Ergebnis geführt hat. */
+  statusCode: string;
+}
+
+/** Ergebnis von {@link EldaTransfer.empfangen}. Über `zustand` verengbar. */
+export type Empfangen =
+  | { zustand: 'datei'; datei: EldaDatei; statusCode: string; meldung?: string }
+  | { zustand: 'nichtVorhanden'; statusCode: string; meldung?: string }
+  | { zustand: 'bereitsEmpfangen'; statusCode: string; meldung?: string }
+  | { zustand: 'nochInArbeit'; statusCode: string; meldung?: string };
+
+/**
+ * ELDA-Transfer-Client. Fachliche Status-Codes, die ein Aufrufer sinnvoll
+ * behandeln kann, kommen als `zustand` zurück; alle übrigen werfen einen
+ * `EldaStatusError`, der Code, Meldung und das vollständige rohe Ergebnis
+ * mitführt.
+ */
+export interface EldaTransfer {
+  /**
+   * Überträgt eine Datei (= eine Meldung) an ELDA. `inhalt` wird base64-kodiert.
+   *
+   * Rückkehr heißt: ELDA hat die Datei. Es heißt NICHT, dass sie fachlich in
+   * Ordnung ist — die inhaltliche Rückmeldung kommt asynchron als Rücksendung
+   * über {@link ruecksendungenAuflisten} und {@link empfangen}.
+   */
+  senden(args: { dateiName: string; inhalt: Buffer | string }): Promise<Gesendet>;
+  /**
+   * Listet die abholbereiten Rücksendungen (Verarbeitungsprotokolle). Ein leeres
+   * Array heißt eindeutig „keine offen" — ein Zugangs- oder Serverfehler hätte
+   * geworfen.
+   */
+  ruecksendungenAuflisten(): Promise<Ruecksendung[]>;
+  /**
+   * Holt EINE Rücksendung per Protokollnummer. **Einmalig und unwiderruflich** —
+   * danach ist sie bei ELDA nicht mehr abrufbar. Den Inhalt dauerhaft sichern,
+   * bevor weitergearbeitet wird.
+   */
+  empfangen(protokollnummer: string | number): Promise<Empfangen>;
+  /**
+   * Die rohe Variante: gibt Ergebnisobjekte mit `ok`/`statusCode`/`meldung`
+   * zurück und wirft bei fachlichen Status-Codes nie. Für Aufrufer, die jede
+   * Entscheidung selbst treffen wollen. Nutzt denselben Transport und dieselbe
+   * Konfiguration.
+   */
+  readonly roh: EldaTransferRoh;
+}
+
+/**
+ * Baut den ELDA-Transfer-Client. Zustandslos außer der übergebenen
+ * Konfiguration; die Konfiguration wird beim Bauen geprüft.
+ */
+export function createEldaTransfer(config: EldaConfig): EldaTransfer {
+  const roh = createEldaTransferRoh(config);
+
+  return {
+    roh,
+
+    async senden(args): Promise<Gesendet> {
+      const erg = await roh.senden(args);
+      const gesendet: Gesendet = {
+        zustand: zustandOderWurf(SENDEN_ZUSTAENDE, erg),
+        statusCode: erg.statusCode,
+      };
+      if (erg.protokollnummer !== undefined) gesendet.protokollnummer = erg.protokollnummer;
+      if (erg.dateiId !== undefined) gesendet.dateiId = erg.dateiId;
+      if (erg.eldaZeitstempel !== undefined) gesendet.eldaZeitstempel = erg.eldaZeitstempel;
+      if (erg.meldung !== undefined) gesendet.meldung = erg.meldung;
+      return gesendet;
+    },
+
+    async ruecksendungenAuflisten(): Promise<Ruecksendung[]> {
+      const erg = await roh.ruecksendungenAuflisten();
+      zustandOderWurf(AUFLISTEN_ZUSTAENDE, erg);
+      return erg.ruecksendungen;
+    },
+
+    async empfangen(protokollnummer): Promise<Empfangen> {
+      const erg = await roh.empfangen(protokollnummer);
+      const zustand = zustandOderWurf(EMPFANGEN_ZUSTAENDE, erg);
+      if (zustand === 'datei') {
+        if (!erg.datei) {
+          throw new EldaProtocolError(
+            "Antwort auf 'empfangen' meldet statusCode 000, enthält aber keine <datei>. " +
+              'Die Rücksendung gilt bei ELDA damit als abgeholt, ohne dass Inhalt vorliegt — ' +
+              'das wird nicht als leeres Ergebnis durchgereicht.',
+          );
+        }
+        const treffer: Empfangen = { zustand, datei: erg.datei, statusCode: erg.statusCode };
+        if (erg.meldung !== undefined) treffer.meldung = erg.meldung;
+        return treffer;
+      }
+      const ohneDatei: Empfangen = { zustand, statusCode: erg.statusCode };
+      if (erg.meldung !== undefined) ohneDatei.meldung = erg.meldung;
+      return ohneDatei;
+    },
+  };
+}
