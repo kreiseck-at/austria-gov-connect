@@ -32,8 +32,9 @@ Konfigurationsprüfung zieht in `konfiguration.ts`.
   wird er absichtlich angepasst und die Anpassung im Commit begründet.
 - Doku, Kommentare und Commit-Nachrichten auf Deutsch, im Stil der
   Nachbarpakete (`packages/finanzonline-core`, `packages/uid`, `packages/rksv`).
-- **Keine Hinweise auf Werkzeuge, KI oder Assistenten** in Code, Kommentaren,
-  Doku, Dateinamen oder Commit-Nachrichten. Keine `Co-Authored-By`-Trailer.
+- **Committete Artefakte sind ununterscheidbar von handgeschriebener Arbeit** —
+  Code, Kommentare, Doku, Dateinamen und Commit-Nachrichten. Keine
+  `Co-Authored-By`-Trailer.
 - Breaking Changes sind erlaubt — das Paket ist unveröffentlicht.
 - Alle Kommandos ab Repo-Root. Node 22 voranstellen:
   `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 22`

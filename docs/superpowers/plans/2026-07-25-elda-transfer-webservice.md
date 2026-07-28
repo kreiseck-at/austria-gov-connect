@@ -1,6 +1,8 @@
 # @kreiseck/elda Transfer-Webservice v1 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Umsetzung:** Task für Task, test-first. Jeder Task beginnt mit einem
+> fehlschlagenden Test und endet mit grüner Suite und einem Commit. Schritte sind
+> als Checkbox (`- [ ]`) geführt.
 
 **Goal:** Ein neues Monorepo-Paket `@kreiseck/elda` bauen, das den ELDA
 Transfer-Webservice v4 (senden / ruecksendungenAuflisten / empfangen) zu 100 %

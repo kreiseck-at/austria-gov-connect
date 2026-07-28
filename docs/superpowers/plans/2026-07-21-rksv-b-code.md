@@ -1,6 +1,7 @@
 # Plan B — `@kreiseck/rksv/code` (Offline-Belegcode) Implementierungsplan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Umsetzung:** Task für Task, test-first. Schritte sind als Checkbox
+> (`- [ ]`) geführt.
 
 **Goal:** Den Subpath-Export `@kreiseck/rksv/code` bauen: netzfreies Dekodieren und Prüfen des RKSV-Belegcodes (13 Segmente, OCR-Variante, ES256-Signaturprüfung, SHA-256-Verkettung), abhängig ausschließlich von `node:crypto`.
 
@@ -19,7 +20,7 @@
 - **OCR-Variante:** Segmente 10, 12, 13 in Base32 statt Base64; `decode` normalisiert nach Base64.
 - **Ergebnisform** spiegelt den amtlichen Webservice: je Einzelprüfung `{ name, status: 'PASS'|'FAIL'|'NOT_EXECUTED', detail? }`. Ohne Schlüssel: Signatur `NOT_EXECUTED`, kein Fehler.
 - No Dritt-Deps; `strict` + `noUncheckedIndexedAccess`; Node ≥ 18.18; Apache-2.0.
-- No footprint: keine KI-/Assistenten-Marker in Code, Kommentaren, Commits, Dateinamen. Commits ohne Co-Author-/Tool-Trailer.
+- Committete Artefakte sind ununterscheidbar von handgeschriebener Arbeit: keine Marker in Code, Kommentaren, Commits, Dateinamen. Commits ohne Co-Author-/Tool-Trailer.
 
 **Voraussetzung:** `@kreiseck/finanzonline-core` gebaut (`dist/`). `code/` nutzt es zwar nicht, aber der Paket-Testlauf kompiliert das ganze `src`. Falls nötig: `npm run build -w @kreiseck/finanzonline-core` einmal.
 

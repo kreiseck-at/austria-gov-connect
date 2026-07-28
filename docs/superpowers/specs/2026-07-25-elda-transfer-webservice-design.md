@@ -13,8 +13,8 @@ Erweiterungspunkt für v2 (brauchen die SV-Datensatzbeschreibung — nicht raten
   jedes Request-/Result-Feld, jeder Status-Code der Transfer-Webservice-Spec V4
   ist umgesetzt und getestet.
 - **Vollständige Doku + Beispiele.** JSDoc am gesamten öffentlichen API + eine
-  README mit realen End-to-End-Beispielen, sodass ein späterer Integrator (Mensch
-  ODER LLM) sich zu 100 % auskennt, ohne die BMF-/ELDA-PDFs lesen zu müssen.
+  README mit realen End-to-End-Beispielen, sodass sich ein späterer Integrator
+  zu 100 % auskennt, ohne die BMF-/ELDA-PDFs lesen zu müssen.
 - **Sehr einfach zu implementieren** (klares API, sinnvolle Defaults, ein
   `create…`-Factory wie die anderen Pakete).
 - Monorepo-Standard: **keine Laufzeitabhängigkeiten** (außer ggf.
@@ -151,7 +151,7 @@ Raten — es wird live getestet, bevor der Sendepfad festgeschrieben wird.
   (Datei senden → protokollnummer → auflisten → zuordnen → empfangen → Protokoll),
   einer Status-Code-Tabelle, dem async/„empfangen einmalig"-Hinweis, und einem
   klaren Abschnitt „Was v1 (Transport) kann und was die Meldungs-Builder (v2) tun
-  werden". Ziel: 100 % Selbsterklärung für spätere Integratoren (Mensch/LLM).
+  werden". Ziel: 100 % Selbsterklärung für spätere Integratoren.
 
 ## Datei-/Modul-Struktur
 

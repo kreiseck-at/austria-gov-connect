@@ -1,6 +1,7 @@
 # Plan A — `@kreiseck/rksv` (rkdb-SOAP-Paket) Implementierungsplan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Umsetzung:** Task für Task, test-first. Schritte sind als Checkbox
+> (`- [ ]`) geführt.
 
 **Goal:** Das Paket `@kreiseck/rksv` bauen: Übermittlung von Registrierkassen-/Signatureinheit-Vorgängen an den FinanzOnline rkdb-Webservice (registrieren, Ausfall, Wiederinbetriebnahme, Außerbetriebnahme, Belegprüfung, Statusabfrage), synchron/asynchron sichtbar, fachliche Returncodes typisiert.
 
@@ -20,7 +21,7 @@
 - Muster (§2.4): `vda_id` `[A-Z]{2}[1-9][0-9]?`; `zertifikatsseriennummer` `[0-9A-Fa-f]+` (max 50); `benutzerschluessel` `[0-9a-zA-Z+/=]{44}`; `art_se` ∈ {SIGNATURKARTE, EIGENES_HSM, HSM_DIENSTLEISTER}. Begründungscodes: Ausfall SEE {1,2,99}, Ausfall Kasse {1,5,99}, Außerbetriebnahme {6,7}.
 - `art_uebermittlung='T'` erlaubt `vda_id='AT9'`; sonst rc 999.
 - No runtime deps außer `@kreiseck/finanzonline-core`. `strict` + `noUncheckedIndexedAccess`. Node ≥ 18.18. Lizenz Apache-2.0.
-- No footprint: keine KI-/Assistenten-Marker in Code, Kommentaren, Commits, Dateinamen. Commit-Messages ohne Co-Author-/Tool-Trailer.
+- Committete Artefakte sind ununterscheidbar von handgeschriebener Arbeit: keine Marker in Code, Kommentaren, Commits, Dateinamen. Commit-Messages ohne Co-Author-/Tool-Trailer.
 - **GGS (`status_ggs`, `registrierung_ggs` etc.) ist NICHT Teil dieses Plans** (design.md §7).
 
 **Voraussetzung:** `@kreiseck/finanzonline-core` muss gebaut sein (`dist/`), bevor `@kreiseck/rksv` kompiliert/getestet wird. Task 1 baut es einmalig; da `src/finanzonline-core` in diesem Plan nur additiv (Task 1) verändert wird, bleibt `dist/` danach gültig.
