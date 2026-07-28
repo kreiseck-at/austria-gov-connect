@@ -5,7 +5,7 @@ import * as elda from './index';
 test('index exportiert die öffentliche API', () => {
   assert.equal(typeof elda.createEldaTransfer, 'function');
   assert.equal(typeof elda.baueSecurity, 'function');
-  assert.equal(typeof elda.zuordnung, 'function');
+  assert.equal(typeof elda.findeRuecksendung, 'function');
   assert.equal(typeof elda.istOk, 'function');
   assert.ok(elda.ELDA_ENDPOINTS.produktion);
   assert.ok(elda.ELDA_STATUS['000']);
