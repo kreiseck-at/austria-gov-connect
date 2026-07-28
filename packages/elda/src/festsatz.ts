@@ -20,6 +20,7 @@ export interface Feld {
   pos: number;
   /** Feldlänge in Zeichen. */
   laenge: number;
+  /** Feldtyp, bestimmt Ausrichtung, Grundstellung und zulässigen Zeichenvorrat. */
   typ: Feldtyp;
   /** Zeichenvorrat-Klasse; ohne Angabe wird nur auf Darstellbarkeit geprüft. */
   klasse?: Feldklasse;
@@ -54,7 +55,14 @@ export function pruefeFeldtabelle(felder: readonly Feld[], satzlaenge: number): 
 }
 
 function fuelle(wert: string | undefined, feld: Feld): string {
-  const roh = wert ?? '';
+  // NFC einmal herstellen und ab hier ausschließlich mit dieser Fassung
+  // arbeiten: Länge, Ziffernprüfung und Auffüllung müssen dieselbe
+  // Zeichenfolge sehen wie später `nachIso885915`. Manche Quellen (u. a. das
+  // macOS-Dateisystem) liefern Umlaute zerlegt als Grundbuchstabe + kombinierendes
+  // Zeichen — dieselbe Zeichenfolge, aber mit mehr `string`-Elementen. Würde
+  // hier auf der Rohfassung gemessen und aufgefüllt, aber später auf der
+  // NFC-Fassung kodiert, verschöben sich Feldlänge und Satzpositionen.
+  const roh = (wert ?? '').normalize('NFC');
   if (roh.length > feld.laenge) {
     throw new EldaError(
       `Feld ${feld.name}: Wert ist ${roh.length} Zeichen lang, zulässig sind ${feld.laenge}. ` +
