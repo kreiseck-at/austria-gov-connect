@@ -125,10 +125,15 @@ test('empfangen: 000 liefert zustand datei mit Inhalt', async () => {
   assert.equal(erg.datei.dateiTyp, 1);
   assert.equal(erg.datei.md5, 'abc');
   assert.equal(erg.datei.inhalt.toString('utf8'), '<protokoll/>');
+  assert.equal(erg.statusCode, '000');
+  assert.equal(erg.meldung, 'M-000');
 });
 
 test('empfangen: 406 und 408 sind Zustände, kein Fehler', async () => {
-  assert.equal((await mitAntwort(empfangenAntwort('406')).empfangen('1')).zustand, 'nichtVorhanden');
+  const nichtVorhanden = await mitAntwort(empfangenAntwort('406')).empfangen('1');
+  assert.equal(nichtVorhanden.zustand, 'nichtVorhanden');
+  assert.equal(nichtVorhanden.statusCode, '406');
+  assert.equal(nichtVorhanden.meldung, 'M-406');
   assert.equal((await mitAntwort(empfangenAntwort('408')).empfangen('1')).zustand, 'bereitsEmpfangen');
   assert.equal((await mitAntwort(empfangenAntwort('404')).empfangen('1')).zustand, 'nochInArbeit');
 });
@@ -137,8 +142,44 @@ test('empfangen: 407 wirft', async () => {
   await assert.rejects(() => mitAntwort(empfangenAntwort('407')).empfangen('1'), EldaStatusError);
 });
 
+test('roh: empfangen bleibt bei 407 wurffrei, obwohl die komfortable Variante dort wirft', async () => {
+  const erg = await mitAntwort(empfangenAntwort('407')).roh.empfangen('1');
+  assert.equal(erg.ok, false);
+  assert.equal(erg.statusCode, '407');
+});
+
 test('empfangen: 000 ohne <datei> wirft, statt eine leere Datei vorzutäuschen', async () => {
   await assert.rejects(() => mitAntwort(empfangenAntwort('000')).empfangen('1'), EldaProtocolError);
+});
+
+test('empfangen: 000 ohne <datei> — Fehlertext nennt Status-Code und ELDA-Meldung', async () => {
+  await assert.rejects(
+    () => mitAntwort(empfangenAntwort('000')).empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      assert.match(err.message, /000/);
+      assert.match(err.message, /M-000/);
+      return true;
+    },
+  );
+});
+
+test('empfangen: 408 mit <datei> ist ein Widerspruch — komfortabel wirft, roh liefert den Inhalt', async () => {
+  const b64 = Buffer.from('<protokoll/>').toString('base64');
+  const elda = mitAntwort(
+    empfangenAntwort('408', `<datei><name>mitteilung.xml</name><payload>${b64}</payload></datei>`),
+  );
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      assert.match(err.message, /408/);
+      return true;
+    },
+  );
+  const roh = await elda.roh.empfangen('1');
+  assert.equal(roh.statusCode, '408');
+  assert.equal(roh.datei?.inhalt.toString('utf8'), '<protokoll/>');
 });
 
 test('roh: fachliche Codes werfen dort weiterhin nicht', async () => {
@@ -171,4 +212,14 @@ test('beide Wege benutzen denselben Transport (eine Konfiguration)', async () =>
   assert.equal(ziele.length, 2);
   assert.equal(ziele[0], ziele[1]);
   assert.equal(ziele[0], 'https://online-test.elda.at/eldaws/transfer/v4/TransferService');
+});
+
+test('elda.roh bleibt über mehrere Zugriffe und Methodenaufrufe hinweg dieselbe Instanz', async () => {
+  const elda = mitAntwort(sendenAntwort('000', '<protokollnummer>1</protokollnummer>'));
+  const rohVorher = elda.roh;
+  assert.equal(elda.roh, rohVorher);
+  await elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
+  assert.equal(elda.roh, rohVorher);
+  await elda.roh.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
+  assert.equal(elda.roh, rohVorher);
 });

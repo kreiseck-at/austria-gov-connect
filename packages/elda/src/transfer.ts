@@ -36,12 +36,34 @@ export interface Gesendet {
   statusCode: string;
 }
 
+/** Felder, die alle Varianten von {@link Empfangen} gemeinsam tragen. */
+interface EmpfangenBasis {
+  /** Der Status-Code, der zu diesem Ergebnis geführt hat. */
+  statusCode: string;
+  /** Klartext-Meldung von ELDA, sofern vorhanden. */
+  meldung?: string;
+}
+
 /** Ergebnis von {@link EldaTransfer.empfangen}. Über `zustand` verengbar. */
 export type Empfangen =
-  | { zustand: 'datei'; datei: EldaDatei; statusCode: string; meldung?: string }
-  | { zustand: 'nichtVorhanden'; statusCode: string; meldung?: string }
-  | { zustand: 'bereitsEmpfangen'; statusCode: string; meldung?: string }
-  | { zustand: 'nochInArbeit'; statusCode: string; meldung?: string };
+  | (EmpfangenBasis & {
+      /** Die Rücksendung liegt vor (Status 000) — `datei` enthält den Inhalt. */
+      zustand: 'datei';
+      /** Die abgeholte Rücksendungsdatei. */
+      datei: EldaDatei;
+    })
+  | (EmpfangenBasis & {
+      /** Keine Rücksendung mit dieser Protokollnummer bekannt (Status 406). */
+      zustand: 'nichtVorhanden';
+    })
+  | (EmpfangenBasis & {
+      /** Die Rücksendung wurde bereits abgeholt und ist damit nicht mehr abrufbar (Status 408). */
+      zustand: 'bereitsEmpfangen';
+    })
+  | (EmpfangenBasis & {
+      /** Die Verarbeitung bei ELDA ist noch nicht abgeschlossen (Status 404). */
+      zustand: 'nochInArbeit';
+    });
 
 /**
  * ELDA-Transfer-Client. Fachliche Status-Codes, die ein Aufrufer sinnvoll
@@ -111,17 +133,28 @@ export function createEldaTransfer(config: EldaConfig): EldaTransfer {
     async empfangen(protokollnummer): Promise<Empfangen> {
       const erg = await roh.empfangen(protokollnummer);
       const zustand = zustandOderWurf(EMPFANGEN_ZUSTAENDE, erg);
+      const meldungZusatz = erg.meldung !== undefined ? ` ELDA-Meldung: ${erg.meldung}` : '';
       if (zustand === 'datei') {
         if (!erg.datei) {
           throw new EldaProtocolError(
-            "Antwort auf 'empfangen' meldet statusCode 000, enthält aber keine <datei>. " +
+            `Antwort auf 'empfangen' meldet statusCode ${erg.statusCode}, enthält aber keine <datei>. ` +
               'Die Rücksendung gilt bei ELDA damit als abgeholt, ohne dass Inhalt vorliegt — ' +
-              'das wird nicht als leeres Ergebnis durchgereicht.',
+              'das wird nicht als leeres Ergebnis durchgereicht.' +
+              meldungZusatz,
           );
         }
         const treffer: Empfangen = { zustand, datei: erg.datei, statusCode: erg.statusCode };
         if (erg.meldung !== undefined) treffer.meldung = erg.meldung;
         return treffer;
+      }
+      if (erg.datei) {
+        throw new EldaProtocolError(
+          `Antwort auf 'empfangen' meldet statusCode ${erg.statusCode} ('${zustand}'), enthält aber dennoch ` +
+            'eine <datei> — dieser Status sieht keinen Dateiinhalt vor. Der Widerspruch wird nicht ' +
+            'stillschweigend aufgelöst, indem der Inhalt verworfen wird: wer ihn braucht, verwendet ' +
+            "elda.roh.empfangen(...), das 'datei' unabhängig vom statusCode liefert." +
+            meldungZusatz,
+        );
       }
       const ohneDatei: Empfangen = { zustand, statusCode: erg.statusCode };
       if (erg.meldung !== undefined) ohneDatei.meldung = erg.meldung;
