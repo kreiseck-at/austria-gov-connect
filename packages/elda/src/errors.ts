@@ -1,3 +1,5 @@
+import { ELDA_STATUS } from './status';
+
 /** Basisklasse aller Fehler aus `@kreiseck/elda`. */
 export class EldaError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -15,3 +17,29 @@ export class EldaError extends Error {
  * ELDA einen fachlichen Fehler gemeldet hat.
  */
 export class EldaProtocolError extends EldaError {}
+
+/**
+ * ELDA hat einen Status-Code gemeldet, der keinen behandelbaren Zustand
+ * beschreibt — falsche Zugangsdaten, abgelaufener Request, ungültiger Dateiname,
+ * interner Fehler. Solche Codes an der Aufrufstelle zu übersehen ist immer ein
+ * Fehler, deshalb werden sie geworfen statt zurückgegeben.
+ *
+ * Es geht dabei nichts verloren: `statusCode`, die Klartext-`meldung` von ELDA
+ * und das vollständige rohe `ergebnis` hängen am Fehler.
+ */
+export class EldaStatusError extends EldaError {
+  /** ELDA-Status-Code, z. B. `'558'`. */
+  readonly statusCode: string;
+  /** Klartext-Meldung aus `serviceResult.messages`, sofern ELDA eine geliefert hat. */
+  readonly meldung?: string;
+  /** Das vollständige rohe Ergebnisobjekt, wie `elda.roh.*` es zurückgegeben hätte. */
+  readonly ergebnis: unknown;
+
+  constructor(statusCode: string, ergebnis: unknown, meldung?: string, options?: ErrorOptions) {
+    const beschreibung = ELDA_STATUS[statusCode] ?? 'unbekannter Status-Code';
+    super(`ELDA-Status ${statusCode}: ${beschreibung}${meldung ? ` — ${meldung}` : ''}`, options);
+    this.statusCode = statusCode;
+    this.ergebnis = ergebnis;
+    if (meldung !== undefined) this.meldung = meldung;
+  }
+}
