@@ -10,6 +10,25 @@ Dieses Paket kapselt die drei Methoden des Transfer-Webservice (`senden`,
 SHA-512-Hash) und Envelope-Bau. Es erzeugt **keine** SV-Meldungen (Anmeldung,
 Abmeldung, mBGM …) — dafür siehe „v2" unten.
 
+## Reifegrad
+
+Dieses Paket ist **noch nie gegen eine echte ELDA-Gegenstelle gelaufen**. Das
+Drahtformat stammt aus der offiziellen Schnittstellenbeschreibung V4; sämtliche
+Tests laufen gegen selbst geschriebene Antwort-Fixtures, die dieselbe Lesart der
+Spezifikation abbilden wie der Code. Eine Fehldeutung der Spezifikation wäre
+folglich in Code und Test gleichermaßen enthalten und bliebe unentdeckt.
+
+Ungeklärt, bis ein ELDA-Kundentest-Zugang vorliegt: ob der Payload inline als
+Base64 übertragen wird oder per MTOM/XOP; wie eine leere Rücksendungsliste auf
+dem Draht aussieht; ob `senden` bei Status `000` stets eine Protokollnummer
+mitliefert; ob bei Status `405` die Protokollnummer der Originalsendung in einem
+Feld oder nur im Meldungstext steht; ob Status `404` auch bei `empfangen`
+auftreten kann; ob `<messages>` mehrfach vorkommen kann.
+
+An all diesen Stellen schlägt der Client bewusst laut fehl, statt stillschweigend
+leere oder halb geparste Daten zu liefern — eine falsche Annahme fällt damit beim
+ersten echten Aufruf auf und nicht erst in den Daten.
+
 ## Installation
 
 ```bash
