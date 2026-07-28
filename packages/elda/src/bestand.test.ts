@@ -8,7 +8,11 @@ const OPT: BestandOptionen = {
   seriennummer: '1234567',
   versicherungstraeger: '11',
   datentraegernummer: '000001',
-  erstellt: new Date(Date.UTC(2026, 1, 3, 9, 30, 15)),
+  // Echter Zeitpunkt mit explizitem Offset statt Date.UTC: 09:30:15 Wiener
+  // Ortszeit im Winter (CET, +01:00) — genau das steht anschließend als
+  // EDAT/EZEI im Vorlaufsatz, weil baueBestand intern nach Europe/Vienna
+  // umrechnet.
+  erstellt: new Date('2026-02-03T09:30:15+01:00'),
   testdaten: true,
   hersteller: {
     name: 'Kreiseck',
@@ -69,6 +73,50 @@ test('Vorlaufsatz: Erstellungsdatum und -zeit', () => {
   const b = baueBestand([satz({ REFW: 'R' })], OPT).toString('latin1');
   assert.equal(b.slice(30, 38), '03022026');
   assert.equal(b.slice(38, 44), '093015');
+});
+
+// EDAT/EZEI bilden Wiener Ortszeit ab, nicht UTC. 2025-11-30T23:30:00Z liegt
+// bereits nach Ende der Sommerzeit (CET, +01:00) und ist damit 01.12.2025,
+// 00:30 Uhr Wiener Zeit — der Kalendertag wandelt sich sogar. Ein
+// UTC-basiertes Feld würde hier fälschlich 30.11.2025 liefern, das Kapitel
+// E.29 verlangt aber VERS=03 erst ab 01.12.2025.
+test('Erstellungsdatum: UTC-Tageswechsel wird zu Wiener Ortszeit umgerechnet', () => {
+  const b = baueBestand([satz({ REFW: 'R' })], {
+    ...OPT,
+    erstellt: new Date('2025-11-30T23:30:00Z'),
+  }).toString('latin1');
+  assert.equal(b.slice(30, 38), '01122025');
+  assert.equal(b.slice(38, 44), '003000');
+});
+
+test('Erstellungszeit: Sommerzeit (CEST, UTC+2) wandert in EZEI mit', () => {
+  const b = baueBestand([satz({ REFW: 'R' })], {
+    ...OPT,
+    erstellt: new Date('2026-07-15T10:00:00Z'),
+  }).toString('latin1');
+  assert.equal(b.slice(30, 38), '15072026');
+  assert.equal(b.slice(38, 44), '120000');
+});
+
+test('Erstellungszeit: Winterzeit (CET, UTC+1) wandert in EZEI mit', () => {
+  const b = baueBestand([satz({ REFW: 'R' })], {
+    ...OPT,
+    erstellt: new Date('2026-01-15T10:00:00Z'),
+  }).toString('latin1');
+  assert.equal(b.slice(30, 38), '15012026');
+  assert.equal(b.slice(38, 44), '110000');
+});
+
+test('Erstellungszeitpunkt: ein ungültiges Datum wirft mit klarer Aussage statt einer Feldlängen-Meldung', () => {
+  assert.throws(
+    () => baueBestand([satz({ REFW: 'R' })], { ...OPT, erstellt: new Date('quatsch') }),
+    (fehler: unknown) => fehler instanceof EldaError && /ist kein gültiges Datum/.test(fehler.message),
+  );
+});
+
+test('Vorlaufsatz: VNMF ist über mitteilungsfileVersion ansprechbar', () => {
+  const b = baueBestand([satz({ REFW: 'R' })], { ...OPT, mitteilungsfileVersion: '3.0' }).toString('latin1');
+  assert.equal(b.slice(241, 246), '3.0  ');
 });
 
 // Kapitel E.3: "Satzanzahl inkl. Vorlauf- und Schlusssatz" — SANZ zählt also

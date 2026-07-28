@@ -32,20 +32,30 @@ export interface BestandOptionen {
   /**
    * Erstellungszeitpunkt; liefert Datum und Zeit im Vorlaufsatz (Felder EDAT/EZEI).
    *
-   * Ausgewertet werden ausschließlich die UTC-Komponenten des `Date`-Objekts
-   * (`getUTC*`) — nicht die Zeitzone des ausführenden Systems. Ein `Date` ist
-   * lediglich ein Zeitpunkt und trägt keine Zeitzone; würde stattdessen mit
-   * lokalen Getter-Methoden (`getDate`, `getHours`, …) gearbeitet, hinge das
-   * Ergebnis vom Server ab, auf dem der Code läuft, statt allein vom
-   * übergebenen Wert. Soll das österreichische Ortsdatum abgebildet werden,
-   * muss der Aufrufer selbst umrechnen (z. B. via `Intl.DateTimeFormat` mit
-   * `timeZone: 'Europe/Vienna'`) und daraus ein `Date` konstruieren, dessen
-   * UTC-Felder bereits die gewünschte Ortszeit tragen.
+   * Ein echter Zeitpunkt — üblicherweise das Ergebnis von `new Date()`. Die
+   * Umrechnung in die Wanduhrzeit der maßgeblichen Zeitzone (siehe `zeitzone`)
+   * geschieht intern in `baueBestand`, inklusive Sommerzeit. Das Dokument
+   * kennt kein Zeitzonenfeld im Satz und erwähnt an keiner Stelle UTC — für
+   * ein rein österreichisches System kann die stillschweigende Konvention nur
+   * die Wiener Ortszeit sein. Es ist an dieser Stelle also weder nötig noch
+   * korrekt, selbst vorverschobene `Date`-Objekte zu konstruieren.
    */
   erstellt: Date;
+  /**
+   * Zeitzone für die Umrechnung von `erstellt` in EDAT/EZEI, als IANA-Kennung.
+   * Voreinstellung `'Europe/Vienna'`. Nur für Sonderfälle zu überschreiben —
+   * die Voreinstellung deckt den regulären Betrieb ab.
+   */
+  zeitzone?: string;
   /** `true` setzt PROJ auf `TM` (Testdaten), `false` auf `DM`. */
   testdaten: boolean;
   hersteller: Hersteller;
+  /**
+   * Versionsnummer Mitteilungsfile (Feld VNMF), steuert in welcher
+   * XML-Struktur-Version ELDA das Mitteilungsfile zurückmeldet — z. B. `'3.0'`.
+   * Optional laut Dokument; ohne Angabe verwendet ELDA seine Standardversion.
+   */
+  mitteilungsfileVersion?: string;
 }
 
 /** Ein noch nicht umschlossener Satz samt seiner Feldtabelle. */
@@ -72,12 +82,46 @@ const SART_VORLAUFSATZ = '00';
 /** Satzart des Schlusssatzes laut Kapitel E.3. */
 const SART_SCHLUSSSATZ = '99';
 
-function zweistellig(n: number): string {
-  return String(n).padStart(2, '0');
-}
+/** Zeitzone für EDAT/EZEI, sofern `BestandOptionen.zeitzone` nicht abweicht. */
+const ZEITZONE_STANDARD = 'Europe/Vienna';
 
-function vierstellig(n: number): string {
-  return String(n).padStart(4, '0');
+/**
+ * Zerlegt einen Zeitpunkt in die Wanduhrzeit-Bestandteile einer Zeitzone —
+ * Grundlage für EDAT/EZEI. Verwendet `Intl.DateTimeFormat`, das die
+ * IANA-Zeitzonendatenbank auswertet (Sommerzeit inklusive) und nicht von
+ * `process.env.TZ` abhängt; Node 22 bringt die dafür nötigen ICU-Daten mit.
+ */
+function wanduhrzeit(
+  zeitpunkt: Date,
+  zeitzone: string,
+): { tag: string; monat: string; jahr: string; stunde: string; minute: string; sekunde: string } {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: zeitzone,
+    calendar: 'gregory',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const teile = formatter.formatToParts(zeitpunkt);
+  const wert = (typ: string): string => {
+    const gefunden = teile.find((t) => t.type === typ)?.value;
+    if (gefunden === undefined) {
+      throw new EldaError(`Zeitzone '${zeitzone}': Bestandteil '${typ}' konnte nicht ermittelt werden.`);
+    }
+    return gefunden;
+  };
+  return {
+    tag: wert('day'),
+    monat: wert('month'),
+    jahr: wert('year').padStart(4, '0'),
+    stunde: wert('hour'),
+    minute: wert('minute'),
+    sekunde: wert('second'),
+  };
 }
 
 /**
@@ -147,11 +191,20 @@ export function baueBestand(saetze: readonly RohSatz[], opt: BestandOptionen): B
   if (saetze.length === 0) {
     throw new EldaError('Ein Datenbestand ohne Meldungssätze ergibt keinen Sinn und wird nicht erzeugt.');
   }
-  const satzlaenge = Math.max(...saetze.map((s) => s.satzlaenge));
+  if (Number.isNaN(opt.erstellt.getTime())) {
+    throw new EldaError('Erstellungszeitpunkt (opt.erstellt) ist kein gültiges Datum.');
+  }
+  // Reduktion statt Math.max(...spread): Ein Spread-Aufruf über sehr viele
+  // Sätze würde die Argumentliste sprengen und einen undurchsichtigen
+  // RangeError werfen statt eines EldaError.
+  const satzlaenge = saetze.reduce((max, s) => (s.satzlaenge > max ? s.satzlaenge : max), 0);
 
-  const d = opt.erstellt;
-  const edat = `${zweistellig(d.getUTCDate())}${zweistellig(d.getUTCMonth() + 1)}${vierstellig(d.getUTCFullYear())}`;
-  const ezei = `${zweistellig(d.getUTCHours())}${zweistellig(d.getUTCMinutes())}${zweistellig(d.getUTCSeconds())}`;
+  const { tag, monat, jahr, stunde, minute, sekunde } = wanduhrzeit(
+    opt.erstellt,
+    opt.zeitzone ?? ZEITZONE_STANDARD,
+  );
+  const edat = `${tag}${monat}${jahr}`;
+  const ezei = `${stunde}${minute}${sekunde}`;
 
   const teile: Buffer[] = [];
   let nummer = 1;
@@ -174,6 +227,7 @@ export function baueBestand(saetze: readonly RohSatz[], opt: BestandOptionen): B
         VERS: VERSION_SATZSTRUKTUR,
         HTEL: opt.hersteller.telefon,
         SOID: opt.hersteller.softwareId,
+        VNMF: opt.mitteilungsfileVersion,
       },
       satzlaenge,
     ),
