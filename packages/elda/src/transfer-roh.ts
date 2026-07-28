@@ -4,47 +4,18 @@ import {
   firstChild,
   childText,
   FonTransportError,
-  type TransportOptions,
   type XmlNode,
 } from '@kreiseck/finanzonline-core';
-import { ELDA_ENDPOINTS, type EldaUmgebung } from './endpoints';
-import { baueSecurity, type SecurityQuelle } from './security';
+import { baueSecurity } from './security';
 import { baueEldaEnvelope, type EldaFeld } from './envelope';
 import { istOk } from './status';
 import { EldaProtocolError } from './errors';
 import type { Ruecksendung } from './zuordnung';
+import { loeseEndpoint, type EldaConfig } from './konfiguration';
 
-/** Konfiguration für {@link createEldaTransfer}. */
-export interface EldaConfig extends SecurityQuelle {
-  /**
-   * Betriebsumgebung, bestimmt den Endpoint aus `ELDA_ENDPOINTS` (Produktion,
-   * Kundentest oder SIT). Standard: `'produktion'`.
-   */
-  umgebung?: EldaUmgebung;
-  /**
-   * Expliziter Endpoint-Override — hat Vorrang vor `umgebung` (z. B. für Tests
-   * oder einen abweichenden Proxy).
-   */
-  endpoint?: string;
-  /**
-   * Transport-Feineinstellungen (Timeout, Retries, `fetch`-Implementierung) —
-   * siehe `TransportOptions` aus `@kreiseck/finanzonline-core`.
-   *
-   * `retries` ist die Anzahl ZUSÄTZLICHER Versuche nach einem Transportfehler
-   * (Standard `0`). Dieser Client wiederholt selbst und baut dabei für jeden
-   * Versuch frische `securityParameters` (neuer `nonce`, neues `created`) und
-   * einen neuen Envelope: ELDA lehnt einen wiederholten `nonce` mit Status `552`
-   * ab und einen `created` älter als 60 Sekunden mit `551`. Wiederholt wird
-   * ausschließlich bei Transportfehlern (`FonTransportError`) — SOAP-Faults,
-   * Protokollfehler und fachliche Status-Codes werden unverändert durchgereicht.
-   * Ein ungültiger Wert (`NaN`, negativ, gebrochen oder `Infinity`, z. B. aus
-   * `Number(process.env.X)` mit unbesetzter Variable) wird wie `0` behandelt —
-   * also genau ein Versuch, statt endlos zu wiederholen.
-   */
-  transport?: TransportOptions;
-}
+export type { EldaConfig };
 
-/** Ergebnis von {@link EldaTransfer.senden}. `ok` = `statusCode === '000'` (= von ELDA EMPFANGEN). */
+/** Ergebnis von {@link EldaTransferRoh.senden}. `ok` = `statusCode === '000'` (= von ELDA EMPFANGEN). */
 export interface SendenErgebnis {
   /** ELDA-Status-Code aus `serviceResult.statusCode` (siehe `ELDA_STATUS`), z. B. `'000'` bei Erfolg. */
   statusCode: string;
@@ -52,8 +23,8 @@ export interface SendenErgebnis {
   ok: boolean;
   /**
    * Von ELDA vergebene Protokollnummer der Sendung — der Schlüssel, mit dem
-   * später über {@link EldaTransfer.ruecksendungenAuflisten} (per `findeRuecksendung`)
-   * oder direkt über {@link EldaTransfer.empfangen} das zugehörige
+   * später über {@link EldaTransferRoh.ruecksendungenAuflisten} (per `findeRuecksendung`)
+   * oder direkt über {@link EldaTransferRoh.empfangen} das zugehörige
    * Verarbeitungsprotokoll abgeholt wird. Nur gesetzt, wenn ELDA eine
    * Protokollnummer zurückliefert.
    */
@@ -66,30 +37,33 @@ export interface SendenErgebnis {
   meldung?: string;
 }
 
-/** Ergebnis von {@link EldaTransfer.empfangen}. */
+/** Eine von ELDA abgeholte Rücksendungsdatei. */
+export interface EldaDatei {
+  /** Interne ELDA-Datei-ID. */
+  id?: string;
+  /** Dateiname der Rücksendung, wie von ELDA vergeben. */
+  name?: string;
+  /** Dateiinhalt, aus dem inline übermittelten Base64 dekodiert. */
+  inhalt: Buffer;
+  /** Numerischer Dateityp laut ELDA. Nur gesetzt, wenn ELDA einen gültigen numerischen Wert liefert. */
+  dateiTyp?: number;
+  /** MD5-Prüfsumme des Dateiinhalts, wie von ELDA übermittelt. */
+  md5?: string;
+}
+
+/** Ergebnis von {@link EldaTransferRoh.empfangen}. */
 export interface EmpfangenErgebnis {
   /** ELDA-Status-Code, z. B. `'000'` bei Erfolg, `'406'` wenn keine Rücksendung mit dieser Protokollnummer existiert. */
   statusCode: string;
   /** `true` genau dann, wenn `statusCode === '000'`. */
   ok: boolean;
   /** Die abgeholte Rücksendungsdatei. Nur gesetzt, wenn ELDA eine `<datei>` geliefert hat. */
-  datei?: {
-    /** Interne ELDA-Datei-ID. */
-    id?: string;
-    /** Dateiname der Rücksendung, wie von ELDA vergeben. */
-    name?: string;
-    /** Dateiinhalt, aus dem inline übermittelten Base64 dekodiert. */
-    inhalt: Buffer;
-    /** Numerischer Dateityp laut ELDA (z. B. Protokoll- vs. Fehlerdatei). Nur gesetzt, wenn ELDA einen gültigen, numerischen Wert liefert. */
-    dateiTyp?: number;
-    /** MD5-Prüfsumme des Dateiinhalts, wie von ELDA übermittelt. */
-    md5?: string;
-  };
+  datei?: EldaDatei;
   /** Klartext-Meldung aus `serviceResult.messages`. */
   meldung?: string;
 }
 
-/** Ergebnis von {@link EldaTransfer.ruecksendungenAuflisten}. */
+/** Ergebnis von {@link EldaTransferRoh.ruecksendungenAuflisten}. */
 export interface AuflistenErgebnis {
   /**
    * ELDA-Status-Code des Aufrufs selbst (z. B. `'557'` bei ungültigem API-Key,
@@ -107,8 +81,8 @@ export interface AuflistenErgebnis {
   meldung?: string;
 }
 
-/** ELDA-Transfer-Client. */
-export interface EldaTransfer {
+/** ELDA-Transfer-Client (rohe Variante, siehe {@link createEldaTransferRoh}). */
+export interface EldaTransferRoh {
   /**
    * Überträgt eine Datei (= eine Meldung) an ELDA. `inhalt` ist der Datei-Payload
    * (String oder Buffer), wird base64-kodiert. `statusCode '000'` heißt „von ELDA
@@ -184,9 +158,15 @@ function holeReturn(root: XmlNode, methode: string): XmlNode {
   return resp;
 }
 
-/** Baut den ELDA-Transfer-Client. Zustandslos außer der übergebenen Konfiguration. */
-export function createEldaTransfer(config: EldaConfig): EldaTransfer {
-  const endpoint = config.endpoint ?? ELDA_ENDPOINTS[config.umgebung ?? 'produktion'];
+/**
+ * Baut den ELDA-Transfer-Client. Zustandslos außer der übergebenen Konfiguration.
+ *
+ * Rohe Variante — gibt Ergebnisobjekte zurück und wirft bei fachlichen
+ * Status-Codes nie. Der komfortable Einstieg ist `createEldaTransfer` aus
+ * `./transfer`.
+ */
+export function createEldaTransferRoh(config: EldaConfig): EldaTransferRoh {
+  const endpoint = loeseEndpoint(config);
 
   const { retries: retriesRoh = 0, ...transport } = config.transport ?? {};
   // Fail closed: ein ungültiger Wert (NaN, negativ, gebrochen, Infinity — etwa
@@ -283,7 +263,7 @@ export function createEldaTransfer(config: EldaConfig): EldaTransfer {
               '(weder Base64 noch MTOM/XOP-Referenz) — die Datei wäre sonst stillschweigend verloren.',
           );
         }
-        const d: EmpfangenErgebnis['datei'] = { inhalt: Buffer.from(inhaltB64, 'base64') };
+        const d: EldaDatei = { inhalt: Buffer.from(inhaltB64, 'base64') };
         const id = feldText(datei, 'id');
         if (id) d.id = id;
         const name = feldText(datei, 'name');

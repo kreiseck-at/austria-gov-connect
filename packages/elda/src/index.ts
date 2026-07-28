@@ -5,10 +5,11 @@ export { baueEldaEnvelope, type EldaFeld } from './envelope';
 export { findeRuecksendung, type Ruecksendung } from './zuordnung';
 export { EldaError, EldaProtocolError } from './errors';
 export {
-  createEldaTransfer,
+  createEldaTransferRoh,
+  type EldaTransferRoh,
+  type EldaDatei,
   type EldaConfig,
-  type EldaTransfer,
   type SendenErgebnis,
   type EmpfangenErgebnis,
   type AuflistenErgebnis,
-} from './transfer';
+} from './transfer-roh';

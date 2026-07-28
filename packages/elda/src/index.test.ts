@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as elda from './index';
 
 test('index exportiert die öffentliche API', () => {
-  assert.equal(typeof elda.createEldaTransfer, 'function');
+  assert.equal(typeof elda.createEldaTransferRoh, 'function');
   assert.equal(typeof elda.baueSecurity, 'function');
   assert.equal(typeof elda.findeRuecksendung, 'function');
   assert.equal(typeof elda.istOk, 'function');
