@@ -52,7 +52,7 @@ export interface SendenErgebnis {
   ok: boolean;
   /**
    * Von ELDA vergebene Protokollnummer der Sendung — der Schlüssel, mit dem
-   * später über {@link EldaTransfer.ruecksendungenAuflisten} (per `zuordnung`)
+   * später über {@link EldaTransfer.ruecksendungenAuflisten} (per `findeRuecksendung`)
    * oder direkt über {@link EldaTransfer.empfangen} das zugehörige
    * Verarbeitungsprotokoll abgeholt wird. Nur gesetzt, wenn ELDA eine
    * Protokollnummer zurückliefert.
@@ -252,7 +252,7 @@ export function createEldaTransfer(config: EldaConfig): EldaTransfer {
                 'als leerer Eintrag erfunden.',
             );
           }
-          // Ein fehlender dateiName macht die Rücksendung nur für `zuordnung`
+          // Ein fehlender dateiName macht die Rücksendung nur für `findeRuecksendung`
           // unbrauchbar, nicht für `empfangen` — deshalb kein Abbruch.
           return { protokollnummer, dateiName: feldText(c, 'dateiName') ?? '' };
         });
