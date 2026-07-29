@@ -447,7 +447,8 @@ ELDA erwartet Fixlängen-Dateien in ISO-8859-15. Dieses Paket kodiert selbst
 1. **Darstellbarkeit.** Jedes Zeichen muss überhaupt einen Codepunkt in
    ISO-8859-15 haben. Acht Positionen weichen dabei von ISO-8859-1 ab (u. a.
    `€` statt `¤`); alle anderen Positionen sind identisch.
-2. **Zeichenvorrat je Feldklasse**, laut dem separaten Zeichensatz-Dokument:
+2. **Zeichenvorrat je Feldklasse**, laut dem Abschnitt `ISO8859-15` des
+   separaten Zeichensatz-Dokuments (nicht dem `CP850`-Abschnitt darüber):
    - **Personennamen** (`FANA`, `VONA`): nur Leerzeichen, Apostroph,
      Bindestrich, Punkt, Ziffern, Groß- und Kleinbuchstaben sowie
      `Ä Ö Ü ß ä ö ü` — sonst nichts. Ein `é`, `ñ` oder `č` im Namen ist damit
@@ -467,7 +468,7 @@ zulässige Schreibweise festlegen, bevor der Wert an einen Builder geht.
 
 ### Was geprüft wird — und was nicht
 
-Jeder Builder prüft zweistufig, bevor er einen `RohSatz` liefert:
+Jeder Builder prüft mehrstufig, bevor er einen `RohSatz` liefert:
 
 **1. Pflichtmatrix (Kapitel E.29.1, `PFLICHT_E29`).** Jedes Feld trägt je
 Satzart eine von fünf Pflichtstufen (`Z` zwingend, `Z1` zwingend wenn
@@ -486,6 +487,7 @@ entscheidbar.** Umgesetzt sind:
 | Code | Prüft | Satzarten |
 | ---- | ----- | --------- |
 | `F7000` | `BKNR` darf nicht leer sein | alle |
+| `F7020` | Struktur `VSNR` (`LLLPTTMMJJ`, Tag `01`–`31`, Monat `01`–`12` bzw. `13`–`15` beim fingierten Datum, Kapitel D.6) | alle, wenn belegt |
 | `F7030` | Format `GEBD` (`TTMMJJJJ`, `00MMJJJJ` oder `0000JJJJ`, echte Monatslänge inkl. Schaltjahr) | alle, wenn belegt |
 | `F7050` | Ist `REFV` belegt, muss `GEBD` belegt sein | `M3`, `M4`, `M6` |
 | `F7051` | `VSNR` oder `GEBD` muss belegt sein; zusätzlich (eigene, aus Kapitel E.30.2 abgeleitete Ergänzung ohne eigenen Katalog-Code): fehlt die `VSNR`, muss neben `GEBD` auch `REFV` belegt sein | alle bzw. `M4`/`M6`/`M8` |
@@ -495,7 +497,7 @@ entscheidbar.** Umgesetzt sind:
 | `F7065` | `RDAT` darf nicht leer sein | `M8`, `M9` |
 | `F7066` | Format `RDAT` | `M8`, `M9` |
 | `F7067` | `RDAT` nicht vor 01.01.2019 | `M8`, `M9` |
-| `F7069` | `BBER` zwischen `01` und `13` | `M3` |
+| `F7069` | `BBER` gegen die Codeliste aus Kapitel D.39 (`01` bis `13`) | `M3`, `M6` (siehe unten) |
 | `F7096` | `AGRD` gegen die Codeliste aus Kapitel D.22 | `M4`, `M9` |
 | `F7104` | Format `UMDA` | `M4`, `M9`, `S4` |
 | `F7105` | Ist `UMDA` belegt, muss `AGRD` `12` sein | nur `M4` (Begründung für `M9` siehe unten) |
@@ -510,9 +512,51 @@ entscheidbar.** Umgesetzt sind:
 | `F7115` | `VWAZ` zwingend (siehe oben) | `M3` |
 | `F7116` | Format `VWAZ` (vierstellig) | `M3`, `M8` |
 
+**Zusätzlich: Regeln aus der Organisationsbeschreibung, für die der
+Prüfkatalog keinen Code führt.** Sie sind alle allein aus Feldwerten
+entscheidbar, und ihre Verletzung erzeugt jeweils einen strukturell
+einwandfreien, fachlich falschen Satz — ELDAs formale Prüfung nimmt ihn an.
+Weil es dafür keinen Fehlercode gibt, tragen diese Meldungen das
+**Quellkapitel** statt eines `F`-Codes:
+
+| Marker | Prüft | Satzarten |
+| ------ | ----- | --------- |
+| `E.29` | `GERF` nur `'J'` oder `'N'` (Feldtabelle E.29, Feld Nr. 19) | `M3`, `M4`, `M6`, `M9` |
+| `D.41` | `FRDV` nur `'J'` oder `'N'` (Kapitel D.41) | `M3`, `M6` |
+| `D.47` | `BVJN` nur `'J'` oder `'N'` (Kapitel D.47) | `M6` |
+| `E.29` | `BDAT`, `EBSV`, `KEAB`, `KEBI`, `UEAB`, `UEBI`, `BVAB`, `BVEN` sind gültige Kalenderdaten (`TTMMJJJJ`, echte Monatslänge inkl. Schaltjahr) | alle, wenn belegt |
+| `D.22` | Bei 19 Abmeldegründen mit `Z` in der Spalte EBSV (Seite 96) ist `EBSV` zwingend | `M4`, `M9` |
+| `D.22` | Bei `AGRD` `00` ist der Grund im Klartext in `SAGR` anzugeben (Seite 95) | `M4`, `M9` |
+| `D.22` | Bei `AGRD` `08`, `09`, `15`, `20` muss `BVEN` in Grundstellung bleiben | `M4`, `M9` |
+| `D.22` | Bei fünfzehn Abmeldegründen mit `-` in der Spalte KE/UE müssen `KEAB`/`KEBI`/`UEAB`/`UEBI` in Grundstellung bleiben | `M4`, `M9` |
+| `E.29.2` | `UEBI` muss mit `ADAT` übereinstimmen; `KEBI` ebenso, solange keine Urlaubsersatzleistung anfällt (Seite 307, Fußnote 60) | `M4` |
+| `D.43` | Der Referenzwert `REFW` kommt je Beitragskontonummer nur einmal im Bestand vor (geprüft in `erstelleBestand`) | alle |
+
+Die drei Kennzeichenfelder werden **nicht** stillschweigend groß­geschrieben:
+Ein `'n'` statt `'N'` geht als Byte unverändert auf die Leitung, und welche
+Schreibweise gemeint war, entscheidet der Aufrufer. Bei `FRDV` hing daran
+zusätzlich `F7115` — die Bedingung vergleicht zeichengenau gegen `'N'`, wie
+der Katalog sie formuliert; ein `'n'` hätte also zugleich die VWAZ-Pflicht
+ausgehebelt. Die Wertebereichsprüfungen laufen deshalb **vor** `F7115`.
+
+`F7069` prüft `BBER` überall, wo die Pflichtmatrix das Feld belegen lässt —
+also auch bei `M6`, wo der Katalog die Zeile nicht führt. Ein Code gehört
+zum Feld (Kapitel D.39), nicht zur Satzart.
+
+Nicht erzwungen bleiben aus der Abhängigkeitstabelle in Kapitel D.22 alle
+**bedingten** Zellen: `Z1` („zwingend wenn zutreffend", u. a. `EBSV` beim
+Abmeldegrund `13`), `Z3` („Angabe möglich", `BVEN` bei `07` und `29`) und
+das `Z` beim Abmeldegrund `00` — dessen Fußnote 32 nimmt Meldungen zur
+Sozialhilfe aus, und ob eine Meldung eine solche ist, sagen die Feldwerte
+nicht. Die Identität von `KEBI`/`UEBI` mit `ADAT` gilt nur für `M4`: Der
+Satz steht im `M4`-Abschnitt des Kapitels E.29.2, und Seite 97 dehnt
+ausdrücklich nur die Abhängigkeiten vom Abmeldegrund auf `M9` aus.
+
 Verletzt ein Satz mehrere dieser Regeln gleichzeitig, wirft die Prüfung beim
-**ersten** verletzten Code in der oben stehenden Reihenfolge — das ist eine
-Umsetzungsentscheidung dieses Pakets, keine Vorgabe des Katalogs. ELDA kann
+**ersten** verletzten Code — in der Reihenfolge, in der die Prüfungen in
+`pruefung-e29.ts` stehen (die Tabellen oben ordnen nach Fehlercode, nicht
+nach Auswertungsreihenfolge). Das ist eine Umsetzungsentscheidung dieses
+Pakets, keine Vorgabe des Katalogs. ELDA kann
 serverseitig deshalb bei einem mehrfach fehlerhaften Satz einen anderen Code
 melden als den, der hier zuerst geworfen wird.
 
@@ -531,7 +575,10 @@ machte aus `'1032026'` (10.03.2026, Monat ohne führende Null) klammheimlich
 `'01032026'` — den 01.03.2026. Für acht dieser Felder führt der Prüfkatalog
 überhaupt keine Formatzeile; der Fehler fiele also auch bei ELDA nicht auf.
 Deshalb gilt: ein belegter Wert muss dort die volle Stellenzahl haben, sonst
-**wirft** `erstelleBestand`.
+**wirft** `erstelleBestand`. Genau diese acht Felder (`BDAT`, `EBSV`,
+`KEAB`, `KEBI`, `UEAB`, `UEBI`, `BVAB`, `BVEN`) prüft der Builder
+zusätzlich gegen den Kalender — acht Ziffern allein machen aus `'31112026'`
+noch keinen 31. November.
 
 Umgekehrt ist ein numerischer Wert aus lauter Nullen — `''`, `'0'`, `'00000000'`
 — immer die **Grundstellung** des Feldes, also „leer". Ein `String(row.vsnr ?? 0)`
@@ -550,15 +597,27 @@ echter Abmeldegrund („sonstiger Grund").
 > diesen Wert. Wo `F7115` das Feld verlangt, wirft der Builder deshalb, statt
 > eine vereinbarte Arbeitszeit von 0,00 Stunden zu melden.
 
+**Danach ist der Satz unveränderlich.** Die Builder liefern ihren `RohSatz`
+eingefroren (`Object.freeze`, samt `werte`): Was nach den Prüfungen im Satz
+steht, steht dort auch beim Schreiben. Ein nachträgliches
+`satz.werte.AGRD = '99'` — aus JavaScript heraus oder nach einem `as`-Bruch —
+wirft, statt beide Prüfstufen zu umgehen.
+
 **Und beim Klammern:** `erstelleBestand` verlangt, dass alle übergebenen Sätze
-dieselbe Satzlänge haben — ein Bestand hat genau eine. Kapitel C.1.2 nennt
+dieselbe Satzlänge haben — ein Bestand hat genau eine — und dass kein
+Referenzwert (`REFW`) zu derselben Beitragskontonummer zweimal vorkommt
+(Kapitel D.43). Ein doppelter Referenzwert ließe eine spätere Richtigstellung
+oder ein Storno auf zwei Meldungen zugleich zeigen. Kapitel C.1.2 nennt
 Satzlängen und Satzanzahl als die ersten Prüfungen, die ELDA bei der Übernahme
 fährt; ein Fehler dort weist die gesamte Sendung zurück.
 
 **Ausdrücklich nicht umgesetzt** — ELDA prüft diese serverseitig:
 
 - Die **Prüfziffer der Versicherungsnummer** — das Verfahren steht in keiner
-  der verfügbaren Quellen.
+  der verfügbaren Quellen. Geprüft wird nur die Stellenfolge `LLLPTTMMJJ`
+  aus Kapitel D.6 (siehe `F7020` oben); die vierte Stelle bleibt
+  ungerechnet. Sie zu raten wäre schlimmer als sie wegzulassen: Eine falsch
+  berechnete Prüfziffer wiese gültige Versicherungsnummern ab.
 - Die **trägerabhängige Länge der Beitragskontonummer** — im Prüfkatalog nur
   als Warnung geführt, nicht als harter Fehler.
 - Die inhaltliche **Schreibweise von Namen** (`F7036`/`F7038`) — sie verlangt
@@ -601,7 +660,10 @@ gedacht.
   Version 42.7.0 (07/2026), Kapitel E.1 (Identifikationsteil), E.2
   (Vorlaufsatz), E.3 (Schlusssatz), E.29 (Versichertenmeldung reduziert:
   Feldtabelle, Pflichtmatrix, Erstellvorschriften mit Beispielen), D.22
-  (Abmeldegrund-Codeliste), D.39 (Beschäftigungsbereich-Codeliste).
+  (Abmeldegrund-Codeliste samt Abhängigkeitstabelle auf Seite 96), D.6
+  (Aufbau der Versicherungsnummer), D.39 (Beschäftigungsbereich-Codeliste),
+  D.41 (freier Dienstvertrag), D.43 (Referenzwert), D.47 (betriebliche
+  Vorsorge), E.30.2 (VSNR-Anforderung).
 - Prüfkatalog zur 42. Ergänzung, Blatt `VR`.
 - Das separate Zeichensatz-Dokument (Zeichenvorrat Personennamen bzw.
   Unternehmensnamen/Adressen in ISO-8859-15).
