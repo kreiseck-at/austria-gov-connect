@@ -538,7 +538,17 @@ Umgekehrt ist ein numerischer Wert aus lauter Nullen — `''`, `'0'`, `'00000000
 aus einer Datenbank-Spalte gilt damit nicht als belegte Versicherungsnummer, und
 ein aus einer Datei zurückgelesenes `UMDA = '00000000'` nicht als ungültiges
 Datum. Führende und nachgestellte Leerzeichen werden bei numerischen Feldern
-abgeschnitten.
+abgeschnitten. Die Regel gilt auf **allen drei Ebenen gleich** — Pflichtmatrix,
+Prüfkatalog und Serialisierung: Ein vollständig zurückgelesener 772-Byte-Satz
+läuft deshalb unverändert erneut durch einen Builder, ohne an seiner eigenen
+Grundstellung zu scheitern. Bei **alphanumerischen** Feldern gilt sie
+ausdrücklich nicht: Dort ist die Grundstellung blank, `AGRD = '00'` also ein
+echter Abmeldegrund („sonstiger Grund").
+
+> **Achtung bei `VWAZ`:** `'0000'` ist nach dieser Regel die Grundstellung, nicht
+> die Angabe „null Wochenstunden" — und `wochenarbeitszeit(0)` liefert genau
+> diesen Wert. Wo `F7115` das Feld verlangt, wirft der Builder deshalb, statt
+> eine vereinbarte Arbeitszeit von 0,00 Stunden zu melden.
 
 **Und beim Klammern:** `erstelleBestand` verlangt, dass alle übergebenen Sätze
 dieselbe Satzlänge haben — ein Bestand hat genau eine. Kapitel C.1.2 nennt

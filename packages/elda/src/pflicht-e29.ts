@@ -1,4 +1,5 @@
 import { EldaError } from './errors';
+import { FELDER_E29 } from './felder-e29';
 
 /** Satzarten der Versichertenmeldung reduziert (Kapitel E.29, Feld SART). */
 export type Satzart = 'M3' | 'M4' | 'M6' | 'M8' | 'M9' | 'S3' | 'S4';
@@ -143,8 +144,45 @@ export const PFLICHT_E29: Readonly<Record<Satzart, Readonly<Record<string, Pflic
   ),
 );
 
-function belegt(wert: string | undefined): boolean {
-  return wert !== undefined && wert.trim() !== '';
+/**
+ * Die numerischen Felder (Typ `n`) laut Feldtabelle des Kapitels E.29 — abgeleitet aus
+ * {@link FELDER_E29} statt hier erneut aufgezählt, damit die beiden Listen nicht
+ * auseinanderlaufen können. Die Schlüssel von {@link MATRIX} sind genau die Feldnamen jener
+ * Tabelle ohne den Identifikationsteil (in `pflicht-e29.test.ts` festgehalten), die
+ * Zuordnung ist also lückenlos.
+ */
+const NUMERISCHE_FELDER: ReadonlySet<string> = new Set(
+  FELDER_E29.filter((f) => f.typ === 'n').map((f) => f.name),
+);
+
+/**
+ * Entscheidet, ob ein Feld belegt ist — die einzige Stelle, an der diese Prüfung das tut.
+ *
+ * Für numerische Felder ist ein Wert aus lauter Nullen die Grundstellung des Feldes und
+ * damit unbelegt, unabhängig von seiner Stellenzahl. Das steht so im Dokument (Kapitel
+ * C.1.1 bzw. E.1: „n numerisch: rechtsbündig, Grundstellung 0, führende Nullen") und gilt
+ * hier aus demselben Grund wie in `pruefung-e29.ts` (`normalisiertNumerisch`) und in
+ * `festsatz.ts` (`fuelleNumerisch`): Führende Nullen tragen in dieser Kodierung keine
+ * Bedeutung, also bezeichnen `''`, `'0'` und `'00000000'` denselben Feldinhalt.
+ *
+ * Ohne diese Gleichsetzung widersprächen sich die drei Ebenen dieses Pakets. Ein
+ * zurückgelesenes `EBSV = '00000000'` galt hier als „Angabe" und wurde in einer Satzart,
+ * die das Feld auf `-` führt, mit „ist in Grundstellung zu übermitteln" abgewiesen — über
+ * einen Wert, der die Grundstellung IST. Betroffen war jeder 772-Byte-Satz, der aus einer
+ * Datei gelesen und erneut durch einen Builder geschickt wird; das ist im ELDA-Ablauf der
+ * Normalfall und nicht der Sonderfall.
+ *
+ * Für alphanumerische Felder gilt die Regel ausdrücklich nicht: Dort ist die Grundstellung
+ * blank, eine Ziffernfolge aus Nullen also ein echter Inhalt. Ein nicht-numerischer Wert in
+ * einem numerischen Feld bleibt ebenfalls „belegt" — er wird erst beim Bau des Satzes
+ * (`fuelle`) als Ziffernfehler abgewiesen, und das ist die Ebene, die dafür zuständig ist.
+ */
+function belegt(feld: string, wert: string | undefined): boolean {
+  if (wert === undefined) return false;
+  const getrimmt = wert.trim();
+  if (getrimmt === '') return false;
+  if (NUMERISCHE_FELDER.has(feld) && /^0+$/.test(getrimmt)) return false;
+  return true;
 }
 
 /**
@@ -156,12 +194,12 @@ function belegt(wert: string | undefined): boolean {
 export function pruefePflicht(satzart: Satzart, werte: Readonly<Record<string, string | undefined>>): void {
   for (const [feld, stufen] of Object.entries(MATRIX)) {
     const stufe = stufen[satzart];
-    if (stufe === 'Z' && !belegt(werte[feld])) {
+    if (stufe === 'Z' && !belegt(feld, werte[feld])) {
       throw new EldaError(
         `Satzart ${satzart} (${SATZART_TEXT[satzart]}): Feld ${feld} ist zwingend anzugeben.`,
       );
     }
-    if (stufe === '-' && belegt(werte[feld])) {
+    if (stufe === '-' && belegt(feld, werte[feld])) {
       throw new EldaError(
         `Satzart ${satzart} (${SATZART_TEXT[satzart]}): Feld ${feld} ist in Grundstellung zu übermitteln, ` +
           'eine Angabe ist hier nicht zulässig.',

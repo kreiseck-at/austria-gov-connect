@@ -297,3 +297,159 @@ test('C1: ein unvollstaendig formatiertes BVAB faellt spaetestens beim Bau des B
   const bestand = erstelleBestand([richtig], OPT);
   assert.equal(bestand.subarray(772 + 602, 772 + 610).toString('latin1'), '10032026');
 });
+
+// ---------------------------------------------------------------------------
+// Grundstellung numerischer Felder auf dem oeffentlichen Builder-Pfad
+// ---------------------------------------------------------------------------
+
+/**
+ * Die Felder, die die Pflichtmatrix bei einer Anmeldung (M3) auf `-` fuehrt und die laut
+ * Feldtabelle numerisch sind. Genau sie kommen aus einem zurueckgelesenen 772-Byte-Satz in
+ * Grundstellung — also als Ziffernfolge aus Nullen — wieder am Builder an.
+ */
+const M3_GRUNDSTELLUNG_NUMERISCH = [
+  'RDAT',
+  'EBSV',
+  'KEAB',
+  'KEBI',
+  'UEAB',
+  'UEBI',
+  'BVEN',
+  'UMDA',
+  'RUMD',
+] as const;
+
+test('I5: ein zurueckgelesener Satz laeuft durch den Builder, ohne an seiner eigenen Grundstellung zu scheitern', () => {
+  // pruefePflicht entschied "belegt" bisher allein ueber trim(): '00000000' galt als Angabe
+  // und wurde in einer Satzart, die das Feld auf '-' fuehrt, mit "ist in Grundstellung zu
+  // uebermitteln" abgewiesen — ueber einen Wert, der die Grundstellung IST.
+  const grundgestellt = Object.fromEntries(M3_GRUNDSTELLUNG_NUMERISCH.map((f) => [f, '00000000']));
+  assert.doesNotThrow(() =>
+    anmeldung({
+      ...BASIS,
+      FANA: 'Maier',
+      VONA: 'Anna',
+      ADAT: '01022026',
+      BBER: '05',
+      GERF: 'N',
+      FRDV: 'N',
+      ...grundgestellt,
+    }),
+  );
+  // Auch einzeln, damit ein spaeterer Rueckbau feldscharf auffaellt.
+  for (const feld of M3_GRUNDSTELLUNG_NUMERISCH) {
+    assert.doesNotThrow(
+      () =>
+        anmeldung({
+          ...BASIS,
+          FANA: 'Maier',
+          VONA: 'Anna',
+          ADAT: '01022026',
+          BBER: '05',
+          GERF: 'N',
+          FRDV: 'N',
+          [feld]: '00000000',
+        }),
+      feld,
+    );
+  }
+});
+
+test('I5: ein echter Wert in einem Grundstellungsfeld wird weiterhin abgewiesen', () => {
+  // Die Gegenrichtung: Die Lockerung darf ausschliesslich die Grundstellung betreffen.
+  for (const feld of M3_GRUNDSTELLUNG_NUMERISCH) {
+    assert.throws(
+      () =>
+        anmeldung({
+          ...BASIS,
+          FANA: 'Maier',
+          VONA: 'Anna',
+          ADAT: '01022026',
+          BBER: '05',
+          GERF: 'N',
+          FRDV: 'N',
+          [feld]: '01022026',
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof EldaError);
+        assert.match((err as Error).message, new RegExp(feld));
+        assert.match((err as Error).message, /Grundstellung/);
+        return true;
+      },
+      feld,
+    );
+  }
+  // Alphanumerische Felder behalten ihre Grundstellung blank: Dort ist eine Ziffernfolge
+  // aus Nullen ein echter Inhalt und bleibt unzulaessig.
+  assert.throws(
+    () =>
+      anmeldung({
+        ...BASIS,
+        FANA: 'Maier',
+        VONA: 'Anna',
+        ADAT: '01022026',
+        BBER: '05',
+        GERF: 'N',
+        FRDV: 'N',
+        AGRD: '00',
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaError);
+      assert.match((err as Error).message, /AGRD/);
+      return true;
+    },
+  );
+});
+
+test("VWAZ '0000': Bedeutungsaenderung — Grundstellung statt null Stunden", () => {
+  // VWAZ ist numerisch, '0000' ist damit die Grundstellung des Feldes und nicht die Angabe
+  // "null Wochenstunden". Vorher zaehlte '0000' als belegt: F7116 (vierstellig) griff, der
+  // Satz baute, und die Meldung behauptete eine vereinbarte Arbeitszeit von 0,00 Stunden.
+  // Jetzt gilt das Feld als unbelegt — dort, wo F7115 es verlangt, wirft der Builder.
+  assert.throws(
+    () =>
+      anmeldung({
+        ...BASIS,
+        FANA: 'Maier',
+        VONA: 'Anna',
+        ADAT: '01022026', // nach dem 31.12.2025
+        BBER: '01', // einer der fuenf Bereiche aus F7115
+        GERF: 'N',
+        FRDV: 'N', // kein freier Dienstvertrag
+        VWAZ: '0000',
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaError);
+      assert.match((err as Error).message, /F7115/);
+      return true;
+    },
+  );
+
+  // Die andere Richtung: Wo F7115 nicht greift (BBER 05 steht nicht in seiner Liste), bleibt
+  // '0000' zulaessig und landet als Grundstellung an Position 769.
+  const satz = anmeldung({
+    ...BASIS,
+    FANA: 'Maier',
+    VONA: 'Anna',
+    ADAT: '01022026',
+    BBER: '05',
+    GERF: 'N',
+    FRDV: 'N',
+    VWAZ: '0000',
+  });
+  const bestand = erstelleBestand([satz], OPT);
+  assert.equal(bestand.subarray(772 + 768, 772 + 772).toString('latin1'), '0000');
+
+  // Und dort, wo die Pflichtmatrix VWAZ auf '-' fuehrt (M4), ist '0000' jetzt zulaessig,
+  // ein echter Wert dagegen weiterhin nicht.
+  const abmeldeFelder = {
+    ...BASIS,
+    FANA: 'Maier',
+    VONA: 'Anna',
+    ADAT: '01022026',
+    GERF: 'N',
+    AGRD: '01',
+  };
+  assert.doesNotThrow(() => abmeldung({ ...abmeldeFelder, VWAZ: '0000' }));
+  assert.throws(() => abmeldung({ ...abmeldeFelder, VWAZ: '4000' }), EldaError);
+});

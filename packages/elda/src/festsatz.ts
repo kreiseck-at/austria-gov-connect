@@ -118,7 +118,7 @@ function fuelleNumerisch(roh: string, feld: Feld): string {
   }
 
   // Grundstellung: leer oder ausschließlich Nullen.
-  if (wert === '' || !/[1-9]/.test(wert)) return '0'.repeat(feld.laenge);
+  if (wert === '' || /^0+$/.test(wert)) return '0'.repeat(feld.laenge);
 
   if (feld.format !== undefined && wert.length !== feld.laenge) {
     throw new EldaError(
