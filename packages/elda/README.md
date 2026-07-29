@@ -26,8 +26,20 @@ Ungeklärt, bis ein ELDA-Kundentest-Zugang vorliegt: ob der Payload inline als
 Base64 übertragen wird oder per MTOM/XOP; wie eine leere Rücksendungsliste auf
 dem Draht aussieht; ob `senden` bei Status `000` stets eine Protokollnummer
 mitliefert; ob bei Status `405` die Protokollnummer der Originalsendung in einem
-Feld oder nur im Meldungstext steht; ob Status `404` auch bei `empfangen`
-auftreten kann; ob `<messages>` mehrfach vorkommen kann.
+Feld oder nur im Meldungstext steht; ob `<messages>` mehrfach vorkommen kann; ob
+`datei.dateiTyp` numerisch kommt (so die Tabelle in Abschnitt 4.2) oder als Text
+wie `XML` (so die Beispiel-Ausgabe in Abschnitt 7.4.3.3 desselben Dokuments —
+das Dokument widerspricht sich hier selbst, deshalb reicht dieses Paket den Wert
+unverändert als `string` durch).
+
+Status `404` bei `empfangen` ist **keine** offene Frage mehr: Die Status-Tabelle
+in Abschnitt 6 führt den Code für `EmpfangenResult` ausdrücklich als nicht
+zutreffend, und Abschnitt 3.6 listet ihn dort ebenfalls nicht. Er wird deshalb
+geworfen, nicht als `nochInArbeit` durchgereicht. Sollte der Kundentest zeigen,
+dass ELDA ihn bei `empfangen` doch schickt, gehört er mitsamt seiner dann
+belegten Bedeutung wieder in die Karte — bis dahin wäre ein stilles
+`nochInArbeit` genau die Falle, vor der der Rest dieses Abschnitts warnt: Der
+Aufrufer pollte endlos, statt laut zu scheitern.
 
 An all diesen Stellen schlägt der Client bewusst laut fehl, statt stillschweigend
 leere oder halb geparste Daten zu liefern — eine falsche Annahme fällt damit beim
@@ -175,7 +187,7 @@ zeigt, wo ein Code bei `senden`/`empfangen`/`ruecksendungenAuflisten` als
 | `401` | dateiName zu lang (max 255)                                          | wirft (nur bei `senden` relevant) |
 | `402` | dateiName nicht gesetzt                                              | wirft (nur bei `senden` relevant) |
 | `403` | Datei nicht verarbeitet (auslösender Fehlercode in der Meldung)      | wirft (nur bei `senden` relevant) |
-| `404` | Datei wird noch verarbeitet (Verarbeitung > 40 Sekunden)              | `senden`/`empfangen`: `nochInArbeit` |
+| `404` | Datei wird noch verarbeitet (Verarbeitung > 40 Sekunden)              | `senden`: `nochInArbeit`; bei `empfangen` laut Spec nicht vorgesehen → wirft |
 | `405` | Datei ist Duplikat (Protokollnummer des Originals in der Meldung)     | `senden`: `duplikat` |
 | `406` | Datei mit Protokollnummer nicht vorhanden                             | `empfangen`: `nichtVorhanden` |
 | `407` | Keine Berechtigung, Datei zu empfangen (Seriennummer stimmt nicht überein) | wirft (nur bei `empfangen` relevant) |
@@ -222,7 +234,14 @@ abgeholt und ist über ihre Protokollnummer nicht mehr abrufbar. Der Inhalt muss
 deshalb gesichert sein, bevor mit ihm weitergearbeitet wird (z. B. bevor er
 geparst wird und das Parsen scheitern könnte).
 
-Zwei Fehlerfälle rund um `empfangen` sind absichtlich **kein** stilles
+Daraus folgen zwei Dinge, die in diesem Paket bewusst anders sind als bei den
+übrigen Methoden: `transport.retries` gilt hier nicht (siehe „`retries` gilt für
+`empfangen` nicht"), und eine leere oder fehlende Protokollnummer wirft einen
+`EldaError`, statt einen sinnlosen Request abzusetzen — ELDA beantwortete den mit
+`406` („nicht vorhanden"), was von einer echten Fehladressierung nicht zu
+unterscheiden wäre.
+
+Drei Fehlerfälle rund um `empfangen` sind absichtlich **kein** stilles
 Wegwerfen von Inhalt:
 
 - Meldet die Antwort `zustand: 'datei'` (Status `000`), aber ohne `<datei>`,
@@ -239,8 +258,12 @@ Wegwerfen von Inhalt:
   Berechtigung"), wirft bereits die Zustandsprüfung zuerst einen
   `EldaStatusError` — auch der trägt die widersprüchliche `<datei>` über
   `ergebnis.datei` weiter.
+- Ist das `<serviceResult>` unbrauchbar (fehlender oder leerer `<statusCode>`),
+  wird die `<datei>` trotzdem **zuerst** gelesen und hängt am Fehler. Ohne
+  Status-Code lässt sich Erfolg nicht von Fehlschlag unterscheiden — die
+  Zustellung ist aber verbraucht, und die Bytes liegen bereits in der Antwort.
 
-In **beiden** Fällen hängt das bereits von ELDA ausgelieferte rohe
+In **allen** Fällen hängt das bereits von ELDA ausgelieferte rohe
 Ergebnisobjekt am Fehler (`err.ergebnis`, ggf. mit `ergebnis.datei`) — der
 Inhalt ist damit aus dem Fehler selbst wiederherstellbar. Ein erneuter Aufruf
 von `empfangen` ist dagegen **kein** verlässlicher Weg, den Inhalt zu holen:
@@ -258,14 +281,20 @@ geworfen (siehe „Fehler oder Zustand?" oben). Geworfen wird in folgenden Fäll
   nicht durch (Netzfehler, Zeitüberschreitung). Siehe „Wiederholungen" unten.
 - **`FonProtocolError`** (aus `@kreiseck/finanzonline-core`) — die Antwort ist
   kein gültiges XML (u. a. bei einer echten MTOM-Antwort, siehe unten) oder trägt
-  einen HTTP-Fehlerstatus ohne SOAP-Fault.
+  einen HTTP-Fehlerstatus ohne SOAP-Fault. Trägt `err.httpStatus` und
+  `err.rohantwort` (den ungeparsten Body, siehe „Hinweis zu MTOM/XOP").
 - **`EldaProtocolError`** (aus diesem Paket, Basis `EldaError`) — die Antwort ist
   XML, aber inhaltlich nicht auswertbar: kein `<return>`-Element, kein
   `<serviceResult><statusCode>`, eine `<ruecksendungen>` ohne Protokollnummer,
   ein `<payload>`, der XOP-referenziert (`<xop:Include>`) bzw. trotz Status `000`
-  leer ist, oder den ersten der beiden Fälle aus „`empfangen` ist unwiderruflich"
-  oben (der zweite Fall wirft je nach Status-Code stattdessen einen
-  `EldaStatusError`, siehe dort). Trägt optional das rohe Ergebnis als `err.ergebnis`.
+  leer ist, ein Payload, der kein wohlgeformtes Base64 ist oder nicht zur
+  mitgelieferten `md5` passt, oder einer der Fälle aus „`empfangen` ist
+  unwiderruflich" oben (bei einer widersprüchlichen `<datei>` wirft je nach
+  Status-Code stattdessen ein `EldaStatusError`, siehe dort). Trägt optional das
+  rohe Ergebnis als `err.ergebnis`.
+- **`EldaError`** selbst — die Argumente eines Aufrufs sind unbrauchbar, bevor
+  überhaupt ein Request abgeht: unvollständige Zugangsdaten, unbekannte
+  `umgebung`, leere Protokollnummer bei `empfangen` bzw. `findeRuecksendung`.
 - **`EldaStatusError`** (aus diesem Paket, Basis `EldaError`) — ein Status-Code,
   der keinen behandelbaren Zustand beschreibt (siehe Tabelle oben). Trägt
   `statusCode`, `meldung` und das vollständige rohe `ergebnis`.
@@ -308,6 +337,58 @@ wiederholtes `senden` kann daher fachlich als `zustand: 'duplikat'` (Status `405
 mit der Protokollnummer des Originals in der Meldung) beantwortet werden — das
 ist der gewollte, auswertbare Ausgang, kein Datenverlust.
 
+### `retries` gilt für `empfangen` nicht
+
+`empfangen` wird **nie** automatisch wiederholt, unabhängig vom eingestellten
+Wert. Der Grund ist die Einmaligkeit der Zustellung (FAQ 8.2): ELDA verbucht die
+Rücksendung als abgeholt, sobald sie ausgeliefert wird, und liefert sie danach
+kein zweites Mal.
+
+Ein Transportfehler beweist nicht, dass die Anfrage den Server nie erreicht hat.
+`timeoutMs` (Standard 30 000 ms) umfasst nicht nur den Verbindungsaufbau, sondern
+den **gesamten Body-Download**; bricht das Herunterladen eines großen Protokolls
+ab, sieht das exakt aus wie ein gewöhnlicher Netzfehler. Ein automatischer
+zweiter Versuch bekäme dann `408` („bereits empfangen") — und weil FAQ 8.2 genau
+diesen Code als typische Folge *gleichzeitiger Aufrufe mehrerer Clients*
+beschreibt, läse der Aufrufer den selbst verursachten Verlust als fremden Abruf.
+Ein normaler, behandelter `zustand: 'bereitsEmpfangen'`, hinter dem ein
+unwiederbringlich verlorenes Verarbeitungsprotokoll steckt. Deshalb: keine
+automatische Wiederholung.
+
+**Was das für Aufrufer heißt:** Ein `FonTransportError` aus `empfangen` heißt
+nicht „nichts passiert". Die Rücksendung kann bereits als abgeholt gelten. Vor
+einem eigenen zweiten Versuch prüfen, ob die Protokollnummer überhaupt noch in
+`ruecksendungenAuflisten` steht — und wenn `empfangen` unmittelbar danach `408`
+meldet, ist der wahrscheinlichere Grund der eigene abgebrochene Aufruf, nicht ein
+fremder Client. Bei einem Abbruch mitten im Body ist die letzte Kopie der Daten
+der rohe Antwort-Body; siehe „Hinweis zu MTOM/XOP" unten zu `err.rohantwort`.
+
+Für `senden` und `ruecksendungenAuflisten` ist die Wiederholung dagegen
+unbedenklich: `ruecksendungenAuflisten` verändert nichts, und eine doppelt
+angekommene Sendung beantwortet ELDA mit `405` (siehe oben).
+
+## Der Inhalt wird geprüft, nicht blind dekodiert
+
+`Buffer.from(x, 'base64')` überspringt ungültige Zeichen stillschweigend und
+akzeptiert abgeschnittene Eingaben ohne Fehler. Bei einer einmaligen Zustellung
+wäre das fatal: Ein unterwegs verstümmeltes Protokoll käme als geglückte Abholung
+mit falschen Bytes an, und einen zweiten Blick darauf gibt es nicht. `empfangen`
+prüft deshalb, bevor es ein Ergebnis liefert:
+
+- Der `<payload>` muss **wohlgeformtes Base64** sein (Zeilenumbrüche sind
+  erlaubt). Die Schnittstellenbeschreibung liefert selbst den Anschauungsfall:
+  In Abschnitt 7.4.1.2 stellt SoapUI eine Attachment-Referenz als
+  `<payload>cid:1526066113758</payload>` dar — `c`, `i` und `d` sind gültige
+  Base64-Zeichen, der Doppelpunkt würde übersprungen und das Ergebnis als Erfolg
+  gemeldet.
+- Liefert ELDA eine `md5` (Abschnitt 4.2), wird sie gegen den dekodierten Inhalt
+  geprüft.
+
+Schlägt eine der beiden Prüfungen fehl, wirft `empfangen` einen
+`EldaProtocolError`. Der Inhalt geht dabei **nicht** verloren: `err.ergebnis`
+trägt die Metadaten, `err.ergebnis.rohPayload` den Payload im Rohzustand und —
+bei einer MD5-Abweichung — `err.ergebnis.datei.inhalt` die dekodierten Bytes.
+
 ## Hinweis zu MTOM/XOP
 
 Dieser Client sendet und erwartet den Datei-Payload **inline als Base64**
@@ -318,7 +399,26 @@ verschiedenen Fehlern — je nachdem, wie die Antwort auf der Leitung aussieht:
 - **Echte MTOM-Antwort** (`multipart/related` mit MIME-Teilen): Der Body ist kein
   XML. Das Parsing scheitert bereits im Transport von
   `@kreiseck/finanzonline-core`, der Aufrufer bekommt einen **`FonProtocolError`**
-  („Antwort ist kein gültiges XML").
+  („Antwort ist kein gültiges XML"). Weil `empfangen` einmalig ist, ist der
+  ungeparste Body an dieser Stelle die **letzte existierende Kopie** der
+  Rücksendung — die Protokoll-Bytes stecken darin als MIME-Teil. Er hängt deshalb
+  am Fehler: `err.rohantwort` (dazu `err.httpStatus`). Bewusst nicht in der
+  Fehlermeldung und weder über `console.error(err)` noch über
+  `JSON.stringify(err)` sichtbar, denn er kann personenbezogene Daten enthalten;
+  wer ihn braucht, greift ihn gezielt ab und schreibt ihn selbst weg:
+
+  ```ts
+  import { FonProtocolError } from '@kreiseck/finanzonline-core';
+
+  try {
+    await elda.empfangen(protokollnummer);
+  } catch (err) {
+    if (err instanceof FonProtocolError && err.rohantwort) {
+      await fs.writeFile(`rohantwort-${protokollnummer}.bin`, err.rohantwort);
+    }
+    throw err;
+  }
+  ```
 - **Reguläre XML-Antwort mit XOP-Referenz** (`<payload><xop:Include href="cid:…"/></payload>`,
   z. B. wenn das Attachment fehlt oder von einer Zwischenstelle abgetrennt wurde):
   Das erkennt `empfangen` und wirft einen **`EldaProtocolError`** — statt still
@@ -396,6 +496,13 @@ const bestand = erstelleBestand([meldung], {
 // 3) Bestand unverändert an senden übergeben.
 await elda.senden({ dateiName: 'meldung.dat', inhalt: bestand });
 ```
+
+**Immer den `Buffer` übergeben, nie einen String.** `senden` kodiert einen
+`string` als **UTF-8**; ein E.29-Bestand ist dagegen ISO-8859-15. Bei einem von
+Hand zusammengesetzten String mit Umlauten (ä, ö, ü, ß) oder dem Euro-Zeichen
+ginge jedes betroffene Zeichen still als Mehrbyte-Sequenz auf die Leitung und
+verschöbe alle Fixlängenfelder dahinter. `erstelleBestand` liefert genau deshalb
+einen fertig kodierten `Buffer`.
 
 ### Die sieben Satzarten
 
