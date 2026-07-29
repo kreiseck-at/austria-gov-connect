@@ -21,3 +21,35 @@ test('index exportiert kein Innenleben mehr', () => {
     assert.equal((elda as Record<string, unknown>)[name], undefined, `sollte intern sein: ${name}`);
   }
 });
+
+test('index exportiert die Meldungs-Builder', () => {
+  for (const name of [
+    'anmeldung',
+    'abmeldung',
+    'aenderungsmeldung',
+    'richtigstellungAnmeldung',
+    'richtigstellungAbmeldung',
+    'stornoAnmeldung',
+    'stornoAbmeldung',
+    'erstelleBestand',
+    'wochenarbeitszeit',
+  ]) {
+    assert.equal(typeof (elda as Record<string, unknown>)[name], 'function', name);
+  }
+});
+
+test('index exportiert die Satzart-Tabellen, aber kein Innenleben der Versichertenmeldung', () => {
+  assert.ok(elda.PFLICHT_E29.M3);
+  assert.ok(elda.SATZART_TEXT.M3);
+  assert.ok(elda.ALTERNATIVGRUPPEN.length > 0);
+  for (const intern of [
+    'baueSatz',
+    'nachIso885915',
+    'pruefeVorrat',
+    'FELDER_E29',
+    'pruefeInhalt',
+    'pruefePflicht',
+  ]) {
+    assert.equal((elda as Record<string, unknown>)[intern], undefined, `sollte intern sein: ${intern}`);
+  }
+});

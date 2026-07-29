@@ -1,6 +1,6 @@
 {
   "name": "@kreiseck/elda",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "ELDA Transfer-Webservice (österreichische Sozialversicherung) für Node",
   "license": "Apache-2.0",
   "author": "Kreiseck",

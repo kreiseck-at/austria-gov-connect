@@ -194,6 +194,27 @@ brechen).
 
 ## @kreiseck/elda
 
+### 0.3.0 — 2026-07-29
+
+- **Neu:** Meldungs-Builder für die sieben Satzarten der Versichertenmeldung
+  reduziert (Kapitel E.29): `anmeldung`, `abmeldung`, `aenderungsmeldung`,
+  `richtigstellungAnmeldung`, `richtigstellungAbmeldung`, `stornoAnmeldung`,
+  `stornoAbmeldung`. Jeder Builder prüft vor dem Bau die Pflichtmatrix aus
+  E.29.1 (`PFLICHT_E29`) sowie die entscheidbaren Regeln des Prüfkatalogs
+  (Blatt `VR`) und wirft bei Verletzung einen `EldaError` mit Katalog-Code.
+- **Neu:** `erstelleBestand` klammert Meldungssätze zu einem vollständigen,
+  ISO-8859-15-kodierten Datenbestand (Vorlaufsatz, Meldungssätze,
+  Schlusssatz) — das Ergebnis geht unverändert als `inhalt` an `senden`.
+  Zeitstempel im Vorlaufsatz werden aus einem echten Zeitpunkt in Wiener
+  Ortszeit umgerechnet (Sommerzeit inklusive), konfigurierbar über
+  `BestandOptionen.zeitzone`.
+- **Neu:** `wochenarbeitszeit(stunden, minuten)` rechnet in das vierstellige
+  Format des Feldes `VWAZ` um.
+- **Neu:** Zeichensatz-Kodierung nach ISO-8859-15 mit engerem Zeichenvorrat
+  für Personennamen; ein nicht darstellbarer oder außerhalb des Vorrats
+  liegender Name wirft, statt transliteriert zu werden.
+- Additiv, keine Bruchstelle gegenüber 0.2.0.
+
 ### 0.2.0 — 2026-07-28
 
 - **Breaking:** `umgebung` ist jetzt in jeder Konfiguration ohne expliziten
