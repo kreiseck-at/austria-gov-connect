@@ -903,6 +903,46 @@ const M4_RAHMEN = { BKNR: '1', VSNR: '1234010180', ADAT: '01022026' };
 /** Dasselbe für M9 — dort kommt das richtige Abmeldedatum hinzu. */
 const M9_RAHMEN = { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '02022026' };
 
+/**
+ * Baut eine M4-Fixture, die zu einem gegebenen Abmeldegrund die Abhaengigkeiten aus Kapitel
+ * D.22 erfuellt: EBSV genau dann, wenn die Tabelle es zulaesst, und beim Code 00 zusaetzlich
+ * den Text in SAGR.
+ */
+function m4MitAbmeldegrund(agrd: string, ebsvStufe: string): Record<string, string> {
+  return {
+    BKNR: '1',
+    VSNR: '1234010180',
+    ADAT: '01022026',
+    AGRD: agrd,
+    ...(ebsvStufe === '-' ? {} : { EBSV: '31012026' }),
+    ...(agrd === '00' ? { SAGR: 'AUFLOESUNG' } : {}),
+  };
+}
+
+test('F7096: die Codeliste aus Kapitel D.22 ist vollstaendig — jeder der 33 Codes wird angenommen', () => {
+  // Vorher hielten nur Stichproben ('12', '00', '34') die Liste fest; ein geloeschter Code
+  // wie '17' oder '30' waere unbemerkt geblieben und haette eine gueltige Abmeldung
+  // abgewiesen.
+  assert.equal(D22_TABELLE.length, 33, 'Kapitel D.22, Seite 94: 33 Codes');
+  for (const [agrd, ebsv] of D22_TABELLE) {
+    assert.doesNotThrow(() => pruefeInhalt('M4', m4MitAbmeldegrund(agrd, ebsv)), agrd);
+  }
+});
+
+test('F7096: jeder zweistellige Code ausserhalb der Liste wird abgewiesen', () => {
+  // Die Gegenrichtung: Damit steht die Liste in beiden Richtungen fest. 26 und 28 fehlen im
+  // Dokument selbst (Kapitel D.22, Seite 94/95), 35 bis 99 gibt es dort nicht.
+  const gueltig = new Set(D22_TABELLE.map(([agrd]) => agrd));
+  let geprueft = 0;
+  for (let n = 0; n <= 99; n++) {
+    const agrd = String(n).padStart(2, '0');
+    if (gueltig.has(agrd)) continue;
+    wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: agrd }, 'F7096');
+    geprueft++;
+  }
+  assert.equal(geprueft, 100 - 33);
+});
+
 test('D.22: bei jedem Abmeldegrund mit `Z` in der Spalte EBSV wird das Ende zwingend verlangt', () => {
   // Die Gegenrichtung zu F7111. Eine Abmeldung wegen Kuendigung ohne arbeitsrechtliches Ende
   // baute frueher durch und war formal einwandfrei — genau die Art Fehler, die erst Monate
