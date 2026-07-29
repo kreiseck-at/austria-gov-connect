@@ -7,7 +7,48 @@ export class FonError extends Error {
 
 export class FonTransportError extends FonError {}
 
-export class FonProtocolError extends FonError {}
+/** Zusatzangaben zu einem {@link FonProtocolError}. Rein additiv — `new FonProtocolError(msg)` bleibt gültig. */
+export interface FonProtocolErrorOptions extends ErrorOptions {
+  /** HTTP-Status der Antwort, sofern überhaupt eine ankam. */
+  httpStatus?: number;
+  /**
+   * Der rohe, ungeparste Antwort-Body. Siehe {@link FonProtocolError.rohantwort}.
+   */
+  rohantwort?: string;
+}
+
+export class FonProtocolError extends FonError {
+  /** HTTP-Status der Antwort, sofern eine ankam. */
+  readonly httpStatus?: number;
+
+  readonly #rohantwort: string | undefined;
+
+  constructor(message: string, options?: FonProtocolErrorOptions) {
+    super(message, options);
+    if (options?.httpStatus !== undefined) this.httpStatus = options.httpStatus;
+    this.#rohantwort = options?.rohantwort;
+  }
+
+  /**
+   * Der rohe, ungeparste Antwort-Body — gesetzt, wenn eine Antwort ankam, aber
+   * nicht auswertbar war. Ohne ihn wäre der einzige Rest einer nicht parsbaren
+   * Antwort die Fehlermeldung des Parsers; der Body selbst ist bei manchen
+   * Diensten aber die einzige noch existierende Kopie der Nutzdaten. Beispiel:
+   * eine MTOM-Antwort (`multipart/related`) des ELDA-Transfer-Webservice auf
+   * `empfangen` — der Parser scheitert an den MIME-Teilen, die abgeholte
+   * Rücksendung ist bei ELDA damit aber schon verbraucht und steckt als
+   * MIME-Teil genau in diesem String.
+   *
+   * Bewusst **nicht** Teil der `message` und als Getter (statt eigener
+   * Eigenschaft) umgesetzt: Der Body kann personenbezogene Daten enthalten,
+   * und weder `console.error(err)`/`util.inspect` noch `JSON.stringify(err)`
+   * sollen ihn ungefragt in ein Log schreiben. Wer ihn braucht, greift ihn
+   * gezielt über `err.rohantwort` ab.
+   */
+  get rohantwort(): string | undefined {
+    return this.#rohantwort;
+  }
+}
 
 /**
  * Fachlicher/technischer Returncode ungleich 0 aus einer FON-Antwort. Subklasse
