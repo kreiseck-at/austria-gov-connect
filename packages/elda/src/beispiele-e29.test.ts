@@ -7,7 +7,10 @@ import {
   richtigstellungAnmeldung,
   richtigstellungAbmeldung,
   stornoAbmeldung,
+  erstelleBestand,
 } from './versichertenmeldung';
+import { FELDER_E29, SATZLAENGE_E29 } from './felder-e29';
+import type { BestandOptionen } from './bestand';
 
 /**
  * Die Beispiele aus Kapitel E.29.2 der Organisationsbeschreibung „Datenaustausch mit
@@ -41,6 +44,37 @@ const RAHMEN = { REFW: 'REF-1', BKNR: '1234567', DGNA: 'Muster GmbH', VSNR: '123
  */
 const NAME = { FANA: 'Muster', VONA: 'Maria' } as const;
 
+/**
+ * Rahmenangaben für einen Bestand (A3), analog zu bestand.test.ts und
+ * versichertenmeldung.test.ts — nur hier lokal, um diese Datei unabhängig zu halten.
+ */
+const OPT: BestandOptionen = {
+  seriennummer: '1234567',
+  versicherungstraeger: '11',
+  datentraegernummer: '000001',
+  erstellt: new Date('2026-02-03T09:30:15+01:00'),
+  testdaten: true,
+  hersteller: {
+    name: 'Kreiseck',
+    kfz: 'A',
+    plz: '1010',
+    ort: 'Wien',
+    strasse: 'Teststrasse 1',
+    mail: 'test@example.at',
+  },
+};
+
+/**
+ * Ermittelt Startposition (0-basiert) und Länge eines Feldes aus FELDER_E29 — für den
+ * Byte-Durchstich unten (A3), damit die geprüften Positionen aus der Feldtabelle selbst
+ * stammen und nicht ein zweites Mal von Hand abgeschrieben werden.
+ */
+function feldPosition(name: string): { start: number; laenge: number } {
+  const feld = FELDER_E29.find((f) => f.name === name);
+  assert.ok(feld, `Feld ${name} ist nicht in FELDER_E29 enthalten.`);
+  return { start: feld.pos - 1, laenge: feld.laenge };
+}
+
 // ---------------------------------------------------------------------------------------
 // Satzart M6 – Änderungsmeldung, Abschnitt „Beispiele:" (Seiten 308–313)
 //
@@ -48,7 +82,7 @@ const NAME = { FANA: 'Muster', VONA: 'Maria' } as const;
 // sich bezieht. Beide Tabellen sind erfasst, die vorangestellte als Satzart M3.
 // ---------------------------------------------------------------------------------------
 
-test('E.29.2 / M3, Beispiel „Wechsel geringfügige Beschäftigung zu Vollversicherung zum Versicherungsbeginn", Ausgangsanmeldung (Seite 308)', () => {
+test('E.29.2 / M3, Beispiel „Wechsel geringfügige Beschäftigung zu Vollversicherung zum Versicherungsbeginn", Ausgangsanmeldung (Seite 308/309)', () => {
   const satz = anmeldung({
     ...RAHMEN,
     ...NAME, // ergänzt: FANA/VONA sind bei M3 zwingend
@@ -62,6 +96,33 @@ test('E.29.2 / M3, Beispiel „Wechsel geringfügige Beschäftigung zu Vollversi
   assert.equal(satz.werte.BBER, '01');
   assert.equal(satz.werte.GERF, 'J');
   assert.equal(satz.werte.FRDV, 'N');
+
+  // A3: Der Test oben endet am RohSatz und sichert unbelegte Felder nur als `undefined` im
+  // Werteobjekt zu. Das nimmt stillschweigend an, dass `undefined` beim tatsächlichen Bau des
+  // Satzes (baueSatz, über erstelleBestand) auf die dokumentierte Grundstellung abgebildet
+  // wird: `00000000` bei einem numerischen Feld (hier GEBD, unbelegt, weil dieses Beispiel die
+  // VSNR nutzt), Leerzeichen bei einem alphanumerischen Feld (hier REFU, für eine Anmeldung
+  // ohnehin gegenstandslos). Die Positionen stammen aus FELDER_E29, nicht von Hand abgeschrieben.
+  const bestand = erstelleBestand([satz], OPT);
+  const meldungssatzStart = SATZLAENGE_E29; // Vorlaufsatz ist der erste Satz im Bestand.
+
+  const gebd = feldPosition('GEBD');
+  assert.equal(
+    bestand
+      .subarray(meldungssatzStart + gebd.start, meldungssatzStart + gebd.start + gebd.laenge)
+      .toString('latin1'),
+    '0'.repeat(gebd.laenge),
+    'unbelegtes numerisches Feld (GEBD) muss als Nullen in Grundstellung im Satz stehen',
+  );
+
+  const refu = feldPosition('REFU');
+  assert.equal(
+    bestand
+      .subarray(meldungssatzStart + refu.start, meldungssatzStart + refu.start + refu.laenge)
+      .toString('latin1'),
+    ' '.repeat(refu.laenge),
+    'unbelegtes alphanumerisches Feld (REFU) muss als Leerzeichen in Grundstellung im Satz stehen',
+  );
 });
 
 test('E.29.2 / M6, Beispiel „Wechsel geringfügige Beschäftigung zu Vollversicherung zum Versicherungsbeginn", Änderungsmeldung (Seite 309)', () => {
@@ -220,6 +281,10 @@ test('E.29.2 / M6, Beispiel für eine Änderungsmeldung mit zeitlicher Begrenzun
   assert.equal(satz.werte.ADAT, '01092024');
   assert.equal(satz.werte.BDAT, '22092024');
   assert.equal(satz.werte.BVJN, 'N');
+  // Wie beim BUAK-Beispiel (Seite 311): reine BV-Änderung ohne jedes SV-Feld.
+  assert.equal(satz.werte.BBER, undefined);
+  assert.equal(satz.werte.GERF, undefined);
+  assert.equal(satz.werte.FRDV, undefined);
 });
 
 test('E.29.2 / M3, Beispiel für eine Änderungsmeldung mit zeitlicher Begrenzung (Väterfrühkarenz im öffentlichen Dienst), Ausgangsanmeldung (Seite 312)', () => {
@@ -250,9 +315,13 @@ test('E.29.2 / M6, Beispiel für eine Änderungsmeldung mit zeitlicher Begrenzun
   assert.equal(satz.werte.ADAT, '05092024');
   assert.equal(satz.werte.BDAT, '25092024');
   assert.equal(satz.werte.BVJN, 'N');
+  // Wie beim BUAK-Beispiel (Seite 311): reine BV-Änderung ohne jedes SV-Feld.
+  assert.equal(satz.werte.BBER, undefined);
+  assert.equal(satz.werte.GERF, undefined);
+  assert.equal(satz.werte.FRDV, undefined);
 });
 
-test('E.29.2 / M6, Beispiel für eine „Richtigstellung" der Änderungsmeldung, Übertritt per 01.04.2019 (Seite 312/313)', () => {
+test('E.29.2 / M6, Beispiel für eine „Richtigstellung" der Änderungsmeldung, Übertritt per 01.04.2019 (Seite 313)', () => {
   const satz = aenderungsmeldung({
     ...RAHMEN,
     ...NAME, // ergänzt
