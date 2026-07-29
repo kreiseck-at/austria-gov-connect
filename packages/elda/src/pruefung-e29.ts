@@ -89,6 +89,59 @@ const UMDA_FORMAT_PRUEFUNG: ReadonlySet<Satzart> = new Set<Satzart>(['M4', 'M9',
 /** Satzarten, bei denen der Prüfkatalog SOUM (F7107) und ZTUM (F7114) prüft. */
 const UMMELDUNG_ZIEL_PRUEFUNG: ReadonlySet<Satzart> = new Set<Satzart>(['M4', 'M9']);
 
+/**
+ * Satzarten, bei denen der Prüfkatalog den Abmeldegrund (AGRD) führt und gegen die Codeliste
+ * aus Kapitel D.22 prüft (F7096; Blatt VR, Satzart-Spalte zu Nr. 27 „M4, M9"). Deckt sich mit
+ * der Pflichtmatrix aus `pflicht-e29.ts`, wo AGRD nur für M4/M9 eine Pflichtstufe ungleich
+ * `-` trägt.
+ */
+const AGRD_SATZARTEN: ReadonlySet<Satzart> = new Set<Satzart>(['M4', 'M9']);
+
+/**
+ * Abmeldegründe laut Kapitel D.22 („AGRD – Abmeldegrund, Code“), Seite 94: die dort
+ * abgedruckte Codeliste von „01 – Kündigung durch den Dienstgeber“ bis „00 – sonstiger Grund
+ * mit Ende des Beschäftigungsverhältnisses“. Die Codes 26 und 28 fehlen bewusst — dieselbe
+ * Lücke zeigt die zusammenfassende Aufzählung im Fließtext auf Seite 95 („Code 01 bis 25 oder
+ * Code 27, 30, 32, 34“), es handelt sich also nicht um einen Abschreibfehler dieses Pakets.
+ * Die Codes 31 und 33 sind im Dokument ausdrücklich als „interner SV-Abmeldegrund“
+ * gekennzeichnet, bleiben aber gültige Werte des Feldes und sind deshalb Teil der Liste.
+ */
+const AGRD_CODES: ReadonlySet<string> = new Set([
+  '00',
+  '01',
+  '02',
+  '03',
+  '04',
+  '05',
+  '06',
+  '07',
+  '08',
+  '09',
+  '10',
+  '11',
+  '12',
+  '13',
+  '14',
+  '15',
+  '16',
+  '17',
+  '18',
+  '19',
+  '20',
+  '21',
+  '22',
+  '23',
+  '24',
+  '25',
+  '27',
+  '29',
+  '30',
+  '31',
+  '32',
+  '33',
+  '34',
+]);
+
 /** Satzarten, bei denen der Prüfkatalog das Format von VWAZ prüft (F7116). */
 const VWAZ_FORMAT_PRUEFUNG: ReadonlySet<Satzart> = new Set<Satzart>(['M3', 'M8']);
 
@@ -143,11 +196,38 @@ const VSNR_FEHLT_REFV_PFLICHT: ReadonlySet<Satzart> = new Set<Satzart>(['M4', 'M
  * nicht unbemerkt ändert. Freitextfelder wie FANA/VONA werden hier bewusst nicht inhaltlich
  * geprüft (siehe F7036/F7038 unten).
  *
- * Nicht geprüft werden unter anderem die Prüfziffer der Versicherungsnummer (das Verfahren
- * ist in den Quellen nicht beschrieben), die trägerabhängige Länge der Beitragskontonummer,
- * die Schreibweise von Namen (F7036/F7038, erfordert manuelle Durchsicht) und die
- * fachlichen Kombinationsregeln rund um die Ummeldung (F7105, F7108, F7109, F7111–F7113).
- * ELDA prüft diese serverseitig.
+ * Ummeldung (Datenfelder 31–38, Kapitel E.29.2, Seite 319–321) und Abmeldegrund:
+ *
+ * - F7096: Der Abmeldegrund (AGRD) wird bei M4/M9 gegen die Codeliste aus Kapitel D.22
+ *   geprüft (siehe {@link AGRD_CODES}).
+ * - F7108/F7109/F7112/F7113: Ist das Ummeldedatum (UMDA) belegt, müssen Zielversicherungs-
+ *   träger (ZTUM) und Beitragskontonummer Ummeldung (ZKUM) es ebenfalls sein; ist UMDA leer,
+ *   müssen SOUM/ZTUM/ZKUM (bei M9 zusätzlich RUMD) ebenfalls leer bleiben. Zusammen bilden
+ *   diese vier — allesamt echten — Katalog-Codes genau die „alles oder nichts"-Form, die die
+ *   Matrix „Abmeldung mit Abmeldegrund 12 (Ummeldung)" (Seite 319, UMDA/ZTUM/ZKUM dort
+ *   gemeinsam `Z`) und ihre Ausnahme „Ummeldung ohne Zielangaben" (Seite 321, dieselben
+ *   Felder dort gemeinsam `-`) fordern — ohne dass dafür der Abmeldegrund (AGRD) selbst
+ *   bekannt sein müsste: Keiner der vier Codes stellt auf AGRD ab, sie sind allein über UMDA
+ *   entscheidbar.
+ *
+ * Bewusst NICHT umgesetzt ist F7105 („Feld UMDA befüllt und Feld AGRD ist nicht 12"), obwohl
+ * es in derselben thematischen Nähe liegt: Kapitel E.29.2, Seite 326/327 („Beispiel 6,
+ * Aufhebung einer Ummeldung") zeigt eine Richtigstellung (M9) mit AGRD = 02 bei zugleich
+ * belegtem UMDA/ZTUM/ZKUM — dieses dokumentierte, mit einem Zahlenbeispiel belegte Verhalten
+ * widerspricht F7105 wörtlich genommen. Es ist kein Extraktionsfehler: Die Matrix „Bei
+ * Richtigstellung einer Abmeldung mit Abmeldegrund 12 (Ummeldung) auf Abmeldegrund ungleich
+ * 12 (Ummeldung) zum Storno der Ummeldung" (Seite 320/321) führt UMDA/ZTUM/ZKUM ausdrücklich
+ * als `Z`, obwohl der (neue) Abmeldegrund dort nicht 12 ist — die Meldung braucht diese
+ * Felder, um die ursprüngliche Ummeldung am Zielkonto zu stornieren. F7105 wörtlich
+ * umzusetzen würde dieses belegte Verhalten als Fehler ablehnen; ob ELDA dort serverseitig
+ * eine engere, aus der Katalog-Zeile allein nicht ersichtliche Bedingung anwendet, bleibt
+ * offen. Bis das geklärt ist, bleibt F7105 hier unimplementiert.
+ *
+ * Nicht geprüft werden außerdem unter anderem die Prüfziffer der Versicherungsnummer (das
+ * Verfahren ist in den Quellen nicht beschrieben), die trägerabhängige Länge der
+ * Beitragskontonummer, die Schreibweise von Namen (F7036/F7038, erfordert manuelle
+ * Durchsicht) und die Abhängigkeit zwischen Abmeldegrund und Ende des
+ * Beschäftigungsverhältnisses (F7111, Kapitel D.22, Seite 96). ELDA prüft diese serverseitig.
  */
 export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
   const bknr = normalisiert(werte.BKNR);
@@ -161,8 +241,10 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
   const bber = normalisiert(werte.BBER);
   const soum = normalisiert(werte.SOUM);
   const ztum = normalisiert(werte.ZTUM);
+  const zkum = normalisiert(werte.ZKUM);
   const vwaz = normalisiert(werte.VWAZ);
   const frdv = normalisiert(werte.FRDV);
+  const agrd = normalisiert(werte.AGRD);
 
   if (bknr === undefined) wirf('F7000', 'Die Beitragskontonummer (BKNR) darf nicht leer sein.');
 
@@ -240,6 +322,11 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
     wirf('F7069', `Der Beschäftigungsbereich (BBER) '${bber}' ist ungültig. Zulässig sind 01 bis 13.`);
   }
 
+  // F7096 (Prüfkatalog): AGRD gegen die Codeliste aus Kapitel D.22 (siehe AGRD_CODES).
+  if (AGRD_SATZARTEN.has(satzart) && agrd !== undefined && !AGRD_CODES.has(agrd)) {
+    wirf('F7096', `Der Abmeldegrund (AGRD) '${agrd}' ist ungültig. Zulässige Codes siehe Kapitel D.22.`);
+  }
+
   if (UMMELDUNG_ZIEL_PRUEFUNG.has(satzart) && soum !== undefined && soum !== 'J') {
     wirf('F7107', `Der Sonderfall Ummeldung (SOUM) '${soum}' ist ungültig. Zulässig sind 'J' oder leer.`);
   }
@@ -248,6 +335,54 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
     wirf(
       'F7114',
       `Der Zielversicherungsträger Ummeldung (ZTUM) '${ztum}' ist ungültig. Zulässig sind 11 bis 19.`,
+    );
+  }
+
+  // F7108 (Prüfkatalog, A1): Ist das Ummeldedatum (UMDA) belegt, muss auch der
+  // Zielversicherungsträger Ummeldung (ZTUM) belegt sein.
+  if (UMMELDUNG_ZIEL_PRUEFUNG.has(satzart) && umda !== undefined && ztum === undefined) {
+    wirf(
+      'F7108',
+      `Der Zielversicherungsträger Ummeldung (ZTUM) darf bei Satzart ${satzart} nicht leer sein, ` +
+        'wenn das Ummeldedatum (UMDA) belegt ist.',
+    );
+  }
+
+  // F7109 (Prüfkatalog, A1): Ist das Ummeldedatum (UMDA) belegt, muss auch die
+  // Beitragskontonummer Ummeldung (ZKUM) belegt sein.
+  if (UMMELDUNG_ZIEL_PRUEFUNG.has(satzart) && umda !== undefined && zkum === undefined) {
+    wirf(
+      'F7109',
+      `Die Beitragskontonummer Ummeldung (ZKUM) darf bei Satzart ${satzart} nicht leer sein, ` +
+        'wenn das Ummeldedatum (UMDA) belegt ist.',
+    );
+  }
+
+  // F7112 (Prüfkatalog, A1, nur M4): Ist das Ummeldedatum (UMDA) leer, dürfen SOUM, ZTUM und
+  // ZKUM nicht belegt sein — sonst wäre die Ummeldung nur teilweise angegeben.
+  if (
+    satzart === 'M4' &&
+    umda === undefined &&
+    (soum !== undefined || ztum !== undefined || zkum !== undefined)
+  ) {
+    wirf(
+      'F7112',
+      'Ohne Ummeldedatum (UMDA) dürfen Sonderfall Ummeldung (SOUM), Zielversicherungsträger ' +
+        'Ummeldung (ZTUM) und Beitragskontonummer Ummeldung (ZKUM) nicht belegt sein.',
+    );
+  }
+
+  // F7113 (Prüfkatalog, A1, nur M9): wie F7112, zusätzlich mit RUMD (das Feld existiert nur bei M9).
+  if (
+    satzart === 'M9' &&
+    umda === undefined &&
+    (rumd !== undefined || soum !== undefined || ztum !== undefined || zkum !== undefined)
+  ) {
+    wirf(
+      'F7113',
+      'Ohne Ummeldedatum (UMDA) dürfen Richtiges Ummeldedatum (RUMD), Sonderfall Ummeldung (SOUM), ' +
+        'Zielversicherungsträger Ummeldung (ZTUM) und Beitragskontonummer Ummeldung (ZKUM) nicht ' +
+        'belegt sein.',
     );
   }
 
