@@ -30,7 +30,12 @@ Feld oder nur im Meldungstext steht; ob `<messages>` mehrfach vorkommen kann; ob
 `datei.dateiTyp` numerisch kommt (so die Tabelle in Abschnitt 4.2) oder als Text
 wie `XML` (so die Beispiel-Ausgabe in Abschnitt 7.4.3.3 desselben Dokuments —
 das Dokument widerspricht sich hier selbst, deshalb reicht dieses Paket den Wert
-unverändert als `string` durch).
+unverändert als `string` durch); worüber die in Abschnitt 4.2 gelieferte `md5`
+tatsächlich gebildet wird, sagt die Schnittstellenbeschreibung nicht — dieses
+Paket prüft sie gegen die dekodierten Bytes. Meint ELDA etwas anderes (z. B.
+den Base64-Text), scheitert eine eigentlich intakte Rücksendung mit
+`EldaProtocolError: MD5-Abweichung`; der Inhalt bleibt dabei über `err.ergebnis`
+erreichbar.
 
 Status `404` bei `empfangen` ist **keine** offene Frage mehr: Die Status-Tabelle
 in Abschnitt 6 führt den Code für `EmpfangenResult` ausdrücklich als nicht
@@ -382,7 +387,9 @@ prüft deshalb, bevor es ein Ergebnis liefert:
   Base64-Zeichen, der Doppelpunkt würde übersprungen und das Ergebnis als Erfolg
   gemeldet.
 - Liefert ELDA eine `md5` (Abschnitt 4.2), wird sie gegen den dekodierten Inhalt
-  geprüft.
+  geprüft — das ist die Lesart dieses Clients, siehe Vorbehalt oben, wonach die
+  Schnittstellenbeschreibung offenlässt, worüber die Prüfsumme tatsächlich
+  gebildet wird.
 
 Schlägt eine der beiden Prüfungen fehl, wirft `empfangen` einen
 `EldaProtocolError`. Der Inhalt geht dabei **nicht** verloren: `err.ergebnis`
