@@ -5,10 +5,14 @@ Anbindung an den ELDA Transfer-Webservice v4 (österreichische Sozialversicherun
 Basis von [`@kreiseck/finanzonline-core`](https://www.npmjs.com/package/@kreiseck/finanzonline-core)
 (Transport, XML-Parsing) — **keine** eigene Laufzeitabhängigkeit über das hinaus.
 
-Dieses Paket kapselt die drei Methoden des Transfer-Webservice (`senden`,
-`ruecksendungenAuflisten`, `empfangen`) samt Security-Parametern (`securityParameters`,
-SHA-512-Hash) und Envelope-Bau. Es erzeugt **keine** SV-Meldungen (Anmeldung,
-Abmeldung, mBGM …) — dafür siehe „v2" unten.
+Dieses Paket deckt zwei Stufen ab. **Transport:** die drei Methoden des
+Transfer-Webservice (`senden`, `ruecksendungenAuflisten`, `empfangen`) samt
+Security-Parametern (`securityParameters`, SHA-512-Hash) und Envelope-Bau.
+**Meldungsbau:** seit Version 0.3.0 zusätzlich die Sätze der **Versichertenmeldung
+reduziert** (Kapitel E.29 der Organisationsbeschreibung) — Anmeldung, Abmeldung,
+Änderungsmeldung, Richtigstellungen und Stornos — als fertigen, ISO-8859-15-kodierten
+Datenbestand, siehe „Meldungen erzeugen" unten. Andere Meldungsarten, insbesondere die
+monatliche Beitragsgrundlagenmeldung (mBGM), sind **nicht** enthalten.
 
 ## Reifegrad
 
@@ -44,7 +48,19 @@ Ungeklärt bleibt insbesondere: ob ELDA die Meldungssätze innerhalb eines
 Bestands tatsächlich ohne Trennzeichen aneinandergereiht erwartet (so baut es
 `erstelleBestand` — Fixlängensätze ohne Satztrenner, wie es die
 Identifikationsteil-Konvention aus Kapitel E.1 nahelegt, aber kein Beispiel des
-Dokuments zeigt einen kompletten Bestand als Byte-Strom); ob MTOM/XOP-Fragen
+Dokuments zeigt einen kompletten Bestand als Byte-Strom). Das ist die offenste
+Stelle des Meldungsbaus, und es gibt eine deutliche Gegenanzeige: Kapitel C.1
+sagt auf Seite 49 wörtlich „**Die Übermittlung erfolgt in variabler
+Satzlänge**". Eine variable Satzlänge lässt sich ohne Satztrenner (oder ein
+Längenpräfix) gar nicht auflösen — der Satz spricht also eher für einen Trenner
+als dagegen, auch wenn das Dokument an keiner Stelle sagt, welcher. Innerhalb
+eines einzelnen Bestands ist die Satzlänge allerdings konstant (`erstelleBestand`
+weist ungleich lange Sätze ab, Kapitel C.1.2 nennt die Satzlängen als erste
+Prüfung bei der Übernahme), sodass die Aussage sich plausibel auch nur auf die
+Unterschiede zwischen Verarbeitungen beziehen kann. **Das gehört als Erstes in
+den Kundentest**: denselben Bestand einmal ohne Trenner und einmal mit `\n` bzw.
+`\r\n` hochladen und die Mitteilungsfiles vergleichen. Weiter ungeklärt: ob
+MTOM/XOP-Fragen
 aus der Transport-Schicht (siehe oben) sich auf einen Meldungsbestand als
 Anhang genauso auswirken; und ob die in diesem Paket ergänzte Regel zu `REFV`
 (fehlt die VSNR bei Abmeldung, Änderungsmeldung oder Richtigstellung Anmeldung,
@@ -487,6 +503,7 @@ entscheidbar.** Umgesetzt sind:
 | `F7107` | `SOUM` nur `'J'` oder leer | `M4`, `M9` |
 | `F7108` | Ist `UMDA` belegt, muss `ZTUM` belegt sein | `M4`, `M9` |
 | `F7109` | Ist `UMDA` belegt, muss `ZKUM` belegt sein | `M4`, `M9` |
+| `F7111` | Bei `AGRD` `07`, `08`, `09`, `11`, `12`, `15`, `19`, `23`, `29`, `31`, `32`, `33` muss `EBSV` leer bleiben | `M4`, `M9` |
 | `F7112` | Ist `UMDA` leer, dürfen `SOUM`/`ZTUM`/`ZKUM` nicht belegt sein | `M4` |
 | `F7113` | wie `F7112`, zusätzlich `RUMD` | `M9` |
 | `F7114` | `ZTUM` zwischen `11` und `19` | `M4`, `M9` |
@@ -504,17 +521,48 @@ in Kapitel E.29.2 zeigt eine Richtigstellung mit belegtem `UMDA` und einem
 Abmeldegrund ungleich `12` — die wörtliche Regel würde dieses belegte
 Verhalten fälschlich ablehnen.
 
+**3. Format und Grundstellung numerischer Felder — beim Schreiben.** Numerische
+Felder sind laut Kapitel E.1 rechtsbündig mit führenden Nullen aufzufüllen. Für
+die dreizehn Datumsfelder (`GEBD`, `ADAT`, `BDAT`, `RDAT`, `EBSV`, `KEAB`,
+`KEBI`, `UEAB`, `UEBI`, `BVAB`, `BVEN`, `UMDA`, `RUMD`) und für die
+Versicherungsnummer wäre das falsch: Die Feldtabelle druckt dort eine
+stellenscharfe Vorgabe ab (`TTMMJJJJ` bzw. `LLLPTTMMJJ`), und ein Auffüllen
+machte aus `'1032026'` (10.03.2026, Monat ohne führende Null) klammheimlich
+`'01032026'` — den 01.03.2026. Für acht dieser Felder führt der Prüfkatalog
+überhaupt keine Formatzeile; der Fehler fiele also auch bei ELDA nicht auf.
+Deshalb gilt: ein belegter Wert muss dort die volle Stellenzahl haben, sonst
+**wirft** `erstelleBestand`.
+
+Umgekehrt ist ein numerischer Wert aus lauter Nullen — `''`, `'0'`, `'00000000'`
+— immer die **Grundstellung** des Feldes, also „leer". Ein `String(row.vsnr ?? 0)`
+aus einer Datenbank-Spalte gilt damit nicht als belegte Versicherungsnummer, und
+ein aus einer Datei zurückgelesenes `UMDA = '00000000'` nicht als ungültiges
+Datum. Führende und nachgestellte Leerzeichen werden bei numerischen Feldern
+abgeschnitten.
+
+**Und beim Klammern:** `erstelleBestand` verlangt, dass alle übergebenen Sätze
+dieselbe Satzlänge haben — ein Bestand hat genau eine. Kapitel C.1.2 nennt
+Satzlängen und Satzanzahl als die ersten Prüfungen, die ELDA bei der Übernahme
+fährt; ein Fehler dort weist die gesamte Sendung zurück.
+
 **Ausdrücklich nicht umgesetzt** — ELDA prüft diese serverseitig:
 
 - Die **Prüfziffer der Versicherungsnummer** — das Verfahren steht in keiner
   der verfügbaren Quellen.
 - Die **trägerabhängige Länge der Beitragskontonummer** — im Prüfkatalog nur
   als Warnung geführt, nicht als harter Fehler.
-- Vereinzelte **weitere Ummeldung-Kombinationsregeln** aus dem Prüfkatalog
-  (u. a. `F7111`, Zusammenhang zwischen Abmeldegrund und Ende des
-  Beschäftigungsverhältnisses) sowie die inhaltliche Schreibweise von Namen
-  (`F7036`/`F7038`) — beide verlangen eine manuelle fachliche Durchsicht, die
-  sich nicht allein aus den Feldwerten entscheiden lässt.
+- Die inhaltliche **Schreibweise von Namen** (`F7036`/`F7038`) — sie verlangt
+  eine manuelle fachliche Durchsicht, die sich nicht allein aus den Feldwerten
+  entscheiden lässt.
+- Die **Formalprüfung der Beitragskontonummer** selbst (`F7001`/`F7002` und,
+  wortgleich „Formalprüfung analog Feld BKNR", `F7110` für `ZKUM`) — welche Form
+  gültig ist, sagt der Katalog nur über die trägerabhängigen Längenwarnungen.
+- Die als **Warnungen** (Status `W`) geführten Zeilen — etwa `F7101`/`F7102`/
+  `F7103` (Beschäftigungsbereich, Geringfügigkeit und freier Dienstvertrag nur
+  teilweise belegt) oder die Längenwarnungen zur Beitragskontonummer. Sie weisen
+  eine Meldung nicht zurück.
+
+Diese Aufzählung ist nicht abschließend; maßgeblich ist die Tabelle oben.
 
 Unabhängig vom Prüfkatalog enthält Kapitel E.29.2 selbst fachliche Regeln,
 deren Verletzung eine **strukturell einwandfreie, aber inhaltlich falsche**
