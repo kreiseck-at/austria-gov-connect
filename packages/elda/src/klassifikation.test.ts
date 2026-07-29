@@ -38,9 +38,8 @@ test('senden: 000/404/405 sind Zustände, alles andere wirft', () => {
   }
 });
 
-test('empfangen: 000/404/406/408 sind Zustände, alles andere wirft', () => {
+test('empfangen: 000/406/408 sind Zustände, alles andere wirft', () => {
   assert.equal(zustandOderWurf(EMPFANGEN_ZUSTAENDE, { statusCode: '000' }), 'datei');
-  assert.equal(zustandOderWurf(EMPFANGEN_ZUSTAENDE, { statusCode: '404' }), 'nochInArbeit');
   assert.equal(zustandOderWurf(EMPFANGEN_ZUSTAENDE, { statusCode: '406' }), 'nichtVorhanden');
   assert.equal(zustandOderWurf(EMPFANGEN_ZUSTAENDE, { statusCode: '408' }), 'bereitsEmpfangen');
   for (const code of [
@@ -56,6 +55,7 @@ test('empfangen: 000/404/406/408 sind Zustände, alles andere wirft', () => {
     '401',
     '402',
     '403',
+    '404',
     '405',
     '407',
   ]) {
@@ -76,6 +76,18 @@ test('auflisten: nur 000 ist ein Zustand', () => {
       `sollte werfen: ${code}`,
     );
   }
+});
+
+test('empfangen: 404 ist KEIN Zustand — Spec-Tabelle (6) führt ihn für EmpfangenResult nicht', () => {
+  // Bewusste Umkehr einer früheren Erwartung: Abschnitt 6 markiert 404 für EmpfangenResult
+  // als nicht zutreffend, Abschnitt 3.6 listet ihn dort ebenfalls nicht. Als 'nochInArbeit'
+  // durchgereicht würde ein Aufrufer bei geänderter Bedeutung endlos pollen statt zu scheitern.
+  assert.throws(
+    () => zustandOderWurf(EMPFANGEN_ZUSTAENDE, { statusCode: '404' }),
+    (err: unknown) => err instanceof EldaStatusError && err.statusCode === '404',
+  );
+  // Bei `senden` bleibt 404 ein Zustand — dort führt die Tabelle ihn ausdrücklich.
+  assert.equal(zustandOderWurf(SENDEN_ZUSTAENDE, { statusCode: '404' }), 'nochInArbeit');
 });
 
 test('unbekannter Code wirft überall (sichere Vorgabe)', () => {

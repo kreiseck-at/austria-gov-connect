@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { FonSoapFaultError, FonTransportError } from '@kreiseck/finanzonline-core';
+import { FonProtocolError, FonSoapFaultError, FonTransportError } from '@kreiseck/finanzonline-core';
 import { createEldaTransferRoh, type EldaConfig } from './transfer-roh';
 import { ELDA_ENDPOINTS } from './endpoints';
-import { EldaProtocolError } from './errors';
+import { EldaError, EldaProtocolError } from './errors';
 
 const cfg = (fetchImpl: unknown) => ({
   seriennummer: 'S1',
@@ -140,10 +140,12 @@ test('ruecksendungenAuflisten: fachlicher Fehler (z. B. ungültiger API-Key) ist
   assert.deepEqual(erg.ruecksendungen, []);
 });
 
+const md5Von = (wert: string) => createHash('md5').update(Buffer.from(wert, 'utf8')).digest('hex');
+
 test('empfangen: parst statusCode + datei-Metadaten + inline base64 inhalt', async () => {
   const b64 = Buffer.from('<protokoll/>').toString('base64');
   const resp = soap(
-    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>199565708</id><name>mitteilung.xml</name><dateiTyp>1</dateiTyp><md5>abc</md5><payload>${b64}</payload></datei></return></ns2:empfangenResponse>`,
+    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>199565708</id><name>mitteilung.xml</name><dateiTyp>1</dateiTyp><md5>${md5Von('<protokoll/>')}</md5><payload>${b64}</payload></datei></return></ns2:empfangenResponse>`,
   );
   let body = '';
   const elda = createEldaTransferRoh(
@@ -157,8 +159,8 @@ test('empfangen: parst statusCode + datei-Metadaten + inline base64 inhalt', asy
   assert.equal(r.ok, true);
   assert.equal(r.datei?.id, '199565708'); // C2
   assert.equal(r.datei?.name, 'mitteilung.xml');
-  assert.equal(r.datei?.dateiTyp, 1); // C2
-  assert.equal(r.datei?.md5, 'abc');
+  assert.equal(r.datei?.dateiTyp, '1'); // C2
+  assert.equal(r.datei?.md5, md5Von('<protokoll/>'));
   assert.equal(r.datei?.inhalt.toString('utf8'), '<protokoll/>');
 });
 
@@ -173,10 +175,25 @@ test('empfangen: nicht vorhanden -> ok:false, kein datei', async () => {
   assert.equal(r.datei, undefined);
 });
 
-test('empfangen: nicht-numerischer dateiTyp wird nicht als NaN gesetzt', async () => {
+test('empfangen: nicht-numerischer dateiTyp ("XML") bleibt erhalten statt verworfen zu werden', async () => {
+  // Bewusste Umkehr einer früheren Erwartung (`dateiTyp === undefined`): Die Beispiel-Ausgabe
+  // der Spec zeigt in 7.4.3.3 wörtlich `Node dateiTyp with value XML`, während die Tabelle in
+  // 4.2 „Integer" nennt. Das Dokument widerspricht sich; der Wert wird deshalb unverändert als
+  // Text durchgereicht, statt einen von ELDA tatsächlich gesendeten Wert stillschweigend
+  // wegzuwerfen.
   const b64 = Buffer.from('<protokoll/>').toString('base64');
   const resp = soap(
-    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><name>x.xml</name><dateiTyp>unbekannt</dateiTyp><payload>${b64}</payload></datei></return></ns2:empfangenResponse>`,
+    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><name>x.xml</name><dateiTyp>XML</dateiTyp><payload>${b64}</payload></datei></return></ns2:empfangenResponse>`,
+  );
+  const elda = createEldaTransferRoh(cfg(async () => new Response(resp, { status: 200 })));
+  const r = await elda.empfangen('1');
+  assert.equal(r.datei?.dateiTyp, 'XML');
+});
+
+test('empfangen: fehlender dateiTyp bleibt undefined', async () => {
+  const b64 = Buffer.from('<protokoll/>').toString('base64');
+  const resp = soap(
+    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><name>x.xml</name><payload>${b64}</payload></datei></return></ns2:empfangenResponse>`,
   );
   const elda = createEldaTransferRoh(cfg(async () => new Response(resp, { status: 200 })));
   const r = await elda.empfangen('1');
@@ -355,7 +372,7 @@ test('empfangen: pretty-printed Antwort — datei-Felder und payload werden getr
           1
         </dateiTyp>
         <md5>
-          abc
+          ${md5Von('<protokoll/>')}
         </md5>
         <payload>
           ${b64}
@@ -369,8 +386,8 @@ test('empfangen: pretty-printed Antwort — datei-Felder und payload werden getr
   assert.equal(r.ok, true);
   assert.equal(r.datei?.id, '199565708');
   assert.equal(r.datei?.name, 'mitteilung.xml');
-  assert.equal(r.datei?.dateiTyp, 1);
-  assert.equal(r.datei?.md5, 'abc');
+  assert.equal(r.datei?.dateiTyp, '1');
+  assert.equal(r.datei?.md5, md5Von('<protokoll/>'));
   assert.equal(r.datei?.inhalt.toString('utf8'), '<protokoll/>');
 });
 
@@ -431,14 +448,20 @@ const retryCfg = (retries: number, fetchImpl: unknown): EldaConfig => ({
   transport: { retries, fetchImpl: fetchImpl as typeof fetch },
 });
 
-test('retry: zweiter Versuch trägt einen FRISCHEN nonce (kein 552-Replay)', async () => {
+const createdVon = (body: string) => /<created>([^<]+)<\/created>/.exec(body)?.[1];
+
+test('retry: zweiter Versuch trägt FRISCHEN nonce UND frisches created (kein 552/551)', async () => {
   const bodies: string[] = [];
   let n = 0;
   const elda = createEldaTransferRoh(
     retryCfg(1, async (_u: string, init: { body: string }) => {
       bodies.push(init.body);
       n++;
-      if (n === 1) throw new Error('ECONNRESET');
+      if (n === 1) {
+        // Kurz warten, damit sich `created` (Millisekunden-Auflösung) messbar unterscheidet.
+        await new Promise((r) => setTimeout(r, 5));
+        throw new Error('ECONNRESET');
+      }
       return new Response(sendenOk('<protokollnummer>155764331</protokollnummer>'), { status: 200 });
     }),
   );
@@ -448,6 +471,11 @@ test('retry: zweiter Versuch trägt einen FRISCHEN nonce (kein 552-Replay)', asy
   assert.equal(bodies.length, 2);
   assert.ok(nonceVon(bodies[0]!), 'erster Request hat keinen nonce');
   assert.notEqual(nonceVon(bodies[0]!), nonceVon(bodies[1]!));
+  // `created` muss ebenfalls neu sein: ELDA weist einen Request mit einem `created` älter
+  // als 60 Sekunden mit 551 ab. Ein Umbau, der nur den nonce erneuert und `created` aus dem
+  // ersten Versuch weiterreicht, käme unit-getestet durch und fiele erst live auf.
+  assert.ok(createdVon(bodies[0]!), 'erster Request hat kein created');
+  assert.notEqual(createdVon(bodies[0]!), createdVon(bodies[1]!));
 });
 
 test('retry: erschöpfte Versuche werfen FonTransportError', async () => {
@@ -542,4 +570,303 @@ test('retry: SOAP-Fault wird NICHT wiederholt', async () => {
     (err: unknown) => err instanceof FonSoapFaultError,
   );
   assert.equal(n, 1);
+});
+
+// --- H1: `empfangen` wird NIE automatisch wiederholt -----------------------
+
+test('retry: empfangen wird trotz retries NICHT wiederholt (einmalige Zustellung)', async () => {
+  // Der Kern des Problems: ELDA verbucht die Rücksendung als abgeholt und beginnt zu
+  // liefern; bricht die Übertragung ab, wüsste ein zweiter Versuch nur noch 408 zu melden —
+  // und der Aufrufer hielte den selbst verursachten Verlust für einen fremden Abruf.
+  let n = 0;
+  const elda = createEldaTransferRoh(
+    retryCfg(3, async () => {
+      n++;
+      throw new Error('ECONNRESET');
+    }),
+  );
+  await assert.rejects(
+    () => elda.empfangen('155764332'),
+    (err: unknown) => err instanceof FonTransportError,
+  );
+  assert.equal(n, 1, 'empfangen darf genau einmal auf die Leitung gehen');
+});
+
+test('retry: senden und ruecksendungenAuflisten werden weiterhin wiederholt', async () => {
+  // Gegenprobe: Die Abschaltung gilt nur für empfangen. Ein doppelt angekommenes `senden`
+  // beantwortet ELDA mit 405 (Duplikat), `ruecksendungenAuflisten` verändert nichts.
+  let nSenden = 0;
+  await createEldaTransferRoh(
+    retryCfg(1, async () => {
+      nSenden++;
+      if (nSenden === 1) throw new Error('ECONNRESET');
+      return new Response(sendenOk(), { status: 200 });
+    }),
+  ).senden({ dateiName: 'm.xml', inhalt: '<x/>' });
+  assert.equal(nSenden, 2);
+
+  let nListe = 0;
+  const listeOk = soap(
+    '<ns2:ruecksendungenAuflistenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult></return></ns2:ruecksendungenAuflistenResponse>',
+  );
+  await createEldaTransferRoh(
+    retryCfg(1, async () => {
+      nListe++;
+      if (nListe === 1) throw new Error('ECONNRESET');
+      return new Response(listeOk, { status: 200 });
+    }),
+  ).ruecksendungenAuflisten();
+  assert.equal(nListe, 2);
+});
+
+test('timeoutMs deckt auch den Body-Download ab — und empfangen wiederholt auch dann nicht', async () => {
+  // Belegt die Prämisse hinter H1: Das Zeitlimit von callSoap umfasst `await res.text()`.
+  // Ein Abbruch beim Herunterladen eines großen Protokolls ist deshalb von einem
+  // folgenlosen Verbindungsfehler nicht zu unterscheiden.
+  let n = 0;
+  const fetchImpl = (async (_u: string, init: { signal: AbortSignal }) => {
+    n++;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        // Antwort beginnt (Header sind da, Body läuft), endet aber nie von selbst.
+        controller.enqueue(new TextEncoder().encode('<soap:Envelope>'));
+        init.signal.addEventListener('abort', () => controller.error(new Error('aborted')), {
+          once: true,
+        });
+      },
+    });
+    return new Response(stream, { status: 200 });
+  }) as unknown as typeof fetch;
+  const elda = createEldaTransferRoh({
+    seriennummer: 'S1',
+    kundenpasswort: 'p',
+    apiKey: 'K1',
+    umgebung: 'kundentest',
+    transport: { timeoutMs: 20, retries: 3, fetchImpl },
+  });
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => err instanceof FonTransportError && /Zeitüberschreitung/.test(err.message),
+  );
+  assert.equal(n, 1);
+});
+
+test('ohne timeoutMs gilt die großzügige Vorgabe (30 s) — eine langsame Antwort läuft durch', async () => {
+  const fetchImpl = (async () => {
+    await new Promise((r) => setTimeout(r, 60));
+    return new Response(sendenOk('<protokollnummer>1</protokollnummer>'), { status: 200 });
+  }) as unknown as typeof fetch;
+  const r = await createEldaTransferRoh(cfg(fetchImpl)).senden({ dateiName: 'm.xml', inhalt: '<x/>' });
+  assert.equal(r.protokollnummer, '1');
+});
+
+// --- H2: echte MTOM-Antwort — die Bytes bleiben über err.rohantwort erreichbar
+
+test('empfangen: multipart/related-Antwort scheitert im Parser, der Body bleibt erhalten', async () => {
+  // Die Schnittstellenbeschreibung sagt in 4.2 und 7.4.3.3, dass der Payload als Attachment
+  // kommt; dieser Client kann nur inline-Base64. Die Zustellung ist dann bereits verbraucht —
+  // der ungeparste Body ist die letzte Stelle, an der die Protokoll-Bytes noch existieren.
+  const nutzdaten = '<protokoll>Verarbeitungsergebnis</protokoll>';
+  const body =
+    '--MIMEBoundary_abc\r\n' +
+    'Content-Type: application/xop+xml; charset=UTF-8; type="text/xml"\r\n' +
+    'Content-ID: <root.message@elda.at>\r\n\r\n' +
+    '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>' +
+    '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return>' +
+    '<serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult>' +
+    '<datei><id>1</id><name>mitteilung.xml</name>' +
+    '<payload><xop:Include xmlns:xop="http://www.w3.org/2004/08/xop/include" href="cid:payload"/></payload>' +
+    '</datei></return></ns2:empfangenResponse></soap:Body></soap:Envelope>\r\n' +
+    '--MIMEBoundary_abc\r\n' +
+    'Content-Type: application/octet-stream\r\n' +
+    'Content-ID: <payload>\r\n\r\n' +
+    nutzdaten +
+    '\r\n--MIMEBoundary_abc--\r\n';
+  const elda = createEldaTransferRoh(cfg(async () => new Response(body, { status: 200 })));
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof FonProtocolError, 'erwartet FonProtocolError aus dem Transport');
+      assert.ok(!(err instanceof EldaError));
+      assert.equal(err.rohantwort, body);
+      assert.ok(err.rohantwort!.includes(nutzdaten), 'die Protokoll-Bytes stecken im rohen Body');
+      // Der Body darf nicht ungefragt in Logs landen (personenbezogene Daten).
+      assert.ok(!err.message.includes(nutzdaten));
+      return true;
+    },
+  );
+});
+
+// --- M1: Base64-Wohlgeformtheit und MD5-Abgleich ---------------------------
+
+test('empfangen: <payload>cid:…</payload> (SoapUI-Darstellung, Spec 7.4.1.2) wirft statt Müll zu liefern', async () => {
+  // "cid:1526066113758" besteht bis auf den Doppelpunkt aus gültigen Base64-Zeichen —
+  // Buffer.from würde ':' überspringen und einen Erfolg mit falschen Bytes melden.
+  const resp = soap(
+    '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><name>x.xml</name><payload>cid:1526066113758</payload></datei></return></ns2:empfangenResponse>',
+  );
+  const elda = createEldaTransferRoh(cfg(async () => new Response(resp, { status: 200 })));
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      assert.match(err.message, /Base64/);
+      const ergebnis = err.ergebnis as { rohPayload?: string; datei?: { id?: string } };
+      assert.equal(ergebnis.rohPayload, 'cid:1526066113758');
+      assert.equal(ergebnis.datei?.id, '1');
+      return true;
+    },
+  );
+});
+
+test('empfangen: abgeschnittenes Base64 wirft (Node akzeptiert es sonst klaglos)', async () => {
+  const voll = Buffer.from('<protokoll>abcdefghij</protokoll>').toString('base64');
+  const abgeschnitten = voll.slice(0, voll.length - 3); // Länge nicht mehr durch 4 teilbar
+  assert.notEqual(abgeschnitten.length % 4, 0);
+  const resp = soap(
+    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><name>x.xml</name><payload>${abgeschnitten}</payload></datei></return></ns2:empfangenResponse>`,
+  );
+  const elda = createEldaTransferRoh(cfg(async () => new Response(resp, { status: 200 })));
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      assert.equal((err.ergebnis as { rohPayload?: string }).rohPayload, abgeschnitten);
+      return true;
+    },
+  );
+});
+
+test('empfangen: MD5-Abweichung wirft — der Inhalt bleibt über den Fehler erreichbar', async () => {
+  const inhalt = '<protokoll/>';
+  const b64 = Buffer.from(inhalt).toString('base64');
+  const resp = soap(
+    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><name>x.xml</name><md5>${md5Von('etwas ganz anderes')}</md5><payload>${b64}</payload></datei></return></ns2:empfangenResponse>`,
+  );
+  const elda = createEldaTransferRoh(cfg(async () => new Response(resp, { status: 200 })));
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      assert.match(err.message, /MD5-Abweichung/);
+      const ergebnis = err.ergebnis as { datei?: { inhalt?: Buffer }; rohPayload?: string };
+      assert.equal(ergebnis.datei?.inhalt?.toString('utf8'), inhalt);
+      assert.equal(ergebnis.rohPayload, b64);
+      return true;
+    },
+  );
+});
+
+test('empfangen: MD5 wird case-insensitiv verglichen (Groß-/Kleinschreibung von Hex)', async () => {
+  const inhalt = '<protokoll/>';
+  const b64 = Buffer.from(inhalt).toString('base64');
+  const resp = soap(
+    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><md5>${md5Von(inhalt).toUpperCase()}</md5><payload>${b64}</payload></datei></return></ns2:empfangenResponse>`,
+  );
+  const elda = createEldaTransferRoh(cfg(async () => new Response(resp, { status: 200 })));
+  const r = await elda.empfangen('1');
+  assert.equal(r.datei?.inhalt.toString('utf8'), inhalt);
+});
+
+test('empfangen: ohne <md5> wird nichts geprüft, der Inhalt kommt unverändert durch', async () => {
+  const inhalt = '<protokoll/>';
+  const b64 = Buffer.from(inhalt).toString('base64');
+  const resp = soap(
+    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><payload>${b64}</payload></datei></return></ns2:empfangenResponse>`,
+  );
+  const elda = createEldaTransferRoh(cfg(async () => new Response(resp, { status: 200 })));
+  assert.equal((await elda.empfangen('1')).datei?.inhalt.toString('utf8'), inhalt);
+});
+
+test('empfangen: mehrzeiliges Base64 (RFC-2045-Umbruch) wird korrekt dekodiert und geprüft', async () => {
+  const inhalt = '<protokoll>' + 'x'.repeat(200) + '</protokoll>';
+  const b64 = Buffer.from(inhalt).toString('base64');
+  const umgebrochen = b64.replace(/(.{40})/g, '$1\n');
+  const resp = soap(
+    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><md5>${md5Von(inhalt)}</md5><payload>${umgebrochen}</payload></datei></return></ns2:empfangenResponse>`,
+  );
+  const elda = createEldaTransferRoh(cfg(async () => new Response(resp, { status: 200 })));
+  assert.equal((await elda.empfangen('1')).datei?.inhalt.toString('utf8'), inhalt);
+});
+
+// --- M2: <datei> bleibt erhalten, auch wenn serviceResult unbrauchbar ist ---
+
+test('empfangen: <datei> mit Inhalt, aber ohne statusCode — der Inhalt hängt am Fehler', async () => {
+  const inhalt = '<protokoll>wichtig</protokoll>';
+  const b64 = Buffer.from(inhalt).toString('base64');
+  const resp = soap(
+    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages></serviceResult><datei><id>199565708</id><name>mitteilung.xml</name><md5>${md5Von(inhalt)}</md5><payload>${b64}</payload></datei></return></ns2:empfangenResponse>`,
+  );
+  const elda = createEldaTransferRoh(cfg(async () => new Response(resp, { status: 200 })));
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      assert.match(err.message, /statusCode/);
+      const ergebnis = err.ergebnis as {
+        meldung?: string;
+        datei?: { id?: string; name?: string; inhalt?: Buffer };
+      };
+      assert.equal(ergebnis.meldung, 'OK');
+      assert.equal(ergebnis.datei?.id, '199565708');
+      assert.equal(ergebnis.datei?.name, 'mitteilung.xml');
+      assert.equal(ergebnis.datei?.inhalt?.toString('utf8'), inhalt);
+      return true;
+    },
+  );
+});
+
+test('empfangen: <datei> mit leerem <serviceResult/> — der Inhalt hängt ebenfalls am Fehler', async () => {
+  const inhalt = '<protokoll/>';
+  const b64 = Buffer.from(inhalt).toString('base64');
+  const resp = soap(
+    `<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><statusCode>   </statusCode></serviceResult><datei><name>x.xml</name><payload>${b64}</payload></datei></return></ns2:empfangenResponse>`,
+  );
+  const elda = createEldaTransferRoh(cfg(async () => new Response(resp, { status: 200 })));
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      const ergebnis = err.ergebnis as { datei?: { inhalt?: Buffer } };
+      assert.equal(ergebnis.datei?.inhalt?.toString('utf8'), inhalt);
+      return true;
+    },
+  );
+});
+
+// --- M4: Protokollnummer wird geprüft, bevor sie auf die Leitung geht -------
+
+test('empfangen: leere/fehlende Protokollnummer wirft, ohne einen Request abzusetzen', async () => {
+  let n = 0;
+  const elda = createEldaTransferRoh(
+    cfg(async () => {
+      n++;
+      return new Response(sendenOk(), { status: 200 });
+    }),
+  );
+  for (const wert of ['', '   ', undefined as never, null as never, -1, 1.5, Number.NaN]) {
+    await assert.rejects(
+      () => elda.empfangen(wert),
+      (err: unknown) => err instanceof EldaError && !(err instanceof EldaProtocolError),
+      `sollte werfen: ${String(wert)}`,
+    );
+  }
+  assert.equal(n, 0, 'kein Request darf auf die Leitung gegangen sein');
+});
+
+test('empfangen: numerische Protokollnummer und getrimmter String gehen unverändert auf die Leitung', async () => {
+  const bodies: string[] = [];
+  const resp = soap(
+    '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>x</messages><statusCode>406</statusCode></serviceResult></return></ns2:empfangenResponse>',
+  );
+  const elda = createEldaTransferRoh(
+    cfg(async (_u: string, init: { body: string }) => {
+      bodies.push(init.body);
+      return new Response(resp, { status: 200 });
+    }),
+  );
+  await elda.empfangen(155764332);
+  await elda.empfangen('  155764333  ');
+  assert.match(bodies[0]!, /<protokollnummer>155764332<\/protokollnummer>/);
+  assert.match(bodies[1]!, /<protokollnummer>155764333<\/protokollnummer>/);
 });
