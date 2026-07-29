@@ -520,3 +520,204 @@ test('A3: Feldwerte werden vor dem Vergleich getrimmt (Füllzeichen aus einem Fe
     }),
   );
 });
+
+// ---------------------------------------------------------------------------
+// F7111 (Blatt VR, Nr. 35) — Abmeldegrund ohne Ende des Beschaeftigungsverhaeltnisses
+// ---------------------------------------------------------------------------
+
+/**
+ * Die zwoelf Abmeldegruende, die Blatt `VR` Nr. 35 woertlich aufzaehlt („Feld AGRD 07, 08,
+ * 09, 11, 12, 15, 19, 23, 29, 31, 32, 33 und EBSV nicht leer"). Kapitel D.22, Seite 96
+ * fuehrt genau fuer diese zwoelf — und fuer keinen weiteren Code — in der Spalte EBSV ein
+ * `-` („keine Angabe zulaessig, Feld Grundstellung").
+ */
+const AGRD_OHNE_EBSV = ['07', '08', '09', '11', '12', '15', '19', '23', '29', '31', '32', '33'];
+
+/** Alle uebrigen Codes der Liste aus Kapitel D.22 — dort steht in der EBSV-Spalte Z oder Z1. */
+const AGRD_MIT_EBSV = [
+  '00',
+  '01',
+  '02',
+  '03',
+  '04',
+  '05',
+  '06',
+  '10',
+  '13',
+  '14',
+  '16',
+  '17',
+  '18',
+  '20',
+  '21',
+  '22',
+  '24',
+  '25',
+  '27',
+  '30',
+  '34',
+];
+
+test('F7111: Abmeldegrund 09 (Zivildienst) mit belegtem EBSV wird abgewiesen', () => {
+  // Der nachgestellte Fall: baute frueher durch, ELDA weist ihn mit Status N zurueck.
+  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '09', EBSV: '31012026' }, 'F7111');
+});
+
+test('F7111: gilt fuer alle zwoelf Codes und fuer M4 wie M9', () => {
+  for (const agrd of AGRD_OHNE_EBSV) {
+    wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: agrd, EBSV: '31012026' }, 'F7111');
+    wirft(
+      'M9',
+      {
+        BKNR: '1',
+        VSNR: '1234010180',
+        ADAT: '01022026',
+        RDAT: '02022026',
+        AGRD: agrd,
+        EBSV: '31012026',
+      },
+      'F7111',
+    );
+  }
+});
+
+test('F7111: leeres EBSV ist bei denselben zwoelf Codes zulaessig', () => {
+  for (const agrd of AGRD_OHNE_EBSV) {
+    assert.doesNotThrow(
+      () => pruefeInhalt('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: agrd }),
+      agrd,
+    );
+  }
+  // Auch die Grundstellung als Ziffernfolge zaehlt als leer (siehe normalisiertNumerisch).
+  assert.doesNotThrow(() =>
+    pruefeInhalt('M4', {
+      BKNR: '1',
+      VSNR: '1234010180',
+      ADAT: '01022026',
+      AGRD: '09',
+      EBSV: '00000000',
+    }),
+  );
+});
+
+test('F7111: alle uebrigen Abmeldegruende duerfen EBSV belegen', () => {
+  for (const agrd of AGRD_MIT_EBSV) {
+    assert.doesNotThrow(
+      () =>
+        pruefeInhalt('M4', {
+          BKNR: '1',
+          VSNR: '1234010180',
+          ADAT: '01022026',
+          AGRD: agrd,
+          EBSV: '31012026',
+        }),
+      agrd,
+    );
+  }
+});
+
+test('F7111: greift nur bei M4 und M9 — der Katalog nennt keine weitere Satzart', () => {
+  assert.doesNotThrow(() =>
+    pruefeInhalt('M3', {
+      BKNR: '1',
+      VSNR: '1234010180',
+      ADAT: '01022026',
+      BBER: '05',
+      AGRD: '09',
+      EBSV: '31012026',
+    }),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// I5/M8 — Grundstellung numerischer Felder
+// ---------------------------------------------------------------------------
+
+test('I5: eine Versicherungsnummer aus lauter Nullen gilt in jeder Stellenzahl als unbelegt', () => {
+  // Realistischer Ausloeser: String(row.vsnr ?? 0) oder eine Integer-Spalte einer Datenbank.
+  // Frueher glich nur das Literal '0000000000' der Grundstellung; '0' galt als belegte
+  // Versicherungsnummer, obwohl der Satz niemanden identifiziert.
+  for (const vsnr of ['0', '00', '000000', '0000000000']) {
+    wirft('M3', { BKNR: '1', VSNR: vsnr, ADAT: '01022026', BBER: '05' }, 'F7051');
+  }
+});
+
+test('I5: ohne echte VSNR greift bei M4 weiterhin die REFV-Pflicht aus Kapitel E.30.2', () => {
+  // Der zweite Teil des Befundes: Mit VSNR = '0' galt vsnrBelegt als wahr und umging damit
+  // die REFV-Pflicht vollstaendig.
+  wirft('M4', { BKNR: '1', VSNR: '0', GEBD: '01011980', ADAT: '01022026' }, 'F7051');
+  assert.doesNotThrow(() =>
+    pruefeInhalt('M4', {
+      BKNR: '1',
+      VSNR: '0',
+      GEBD: '01011980',
+      REFV: 'REF-VSNR-1',
+      ADAT: '01022026',
+    }),
+  );
+});
+
+test('M8: ein zurueckgelesenes UMDA in Grundstellung ist leer, kein Formatfehler', () => {
+  // '00000000' aus einer Datei gelesen warf frueher F7104 („ungueltig"), obwohl es genau
+  // das Gegenteil bedeutet: ein leeres Feld.
+  assert.doesNotThrow(() =>
+    pruefeInhalt('M4', {
+      BKNR: '1',
+      VSNR: '1234010180',
+      ADAT: '01022026',
+      AGRD: '01',
+      UMDA: '00000000',
+    }),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// I6 — Personendaten gehoeren nicht in Fehlermeldungen
+// ---------------------------------------------------------------------------
+
+test('I6: Formatmeldungen zu Datumsfeldern nennen das Feld, nicht den Wert', () => {
+  const ohneWert = (
+    satzart: Parameters<typeof pruefeInhalt>[0],
+    werte: Record<string, string>,
+    code: string,
+    wert: string,
+  ) => {
+    assert.throws(
+      () => pruefeInhalt(satzart, werte),
+      (err: unknown) => {
+        const text = (err as Error).message;
+        assert.ok(err instanceof EldaError);
+        assert.match(text, new RegExp(code));
+        assert.ok(!text.includes(wert), `${code}: der Wert steht in der Meldung — ${text}`);
+        return true;
+      },
+      code,
+    );
+  };
+
+  ohneWert(
+    'M3',
+    { BKNR: '1', GEBD: '32011990', REFV: 'X', ADAT: '01022026', BBER: '05' },
+    'F7030',
+    '32011990',
+  );
+  ohneWert('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '31042026', BBER: '05' }, 'F7061', '31042026');
+  ohneWert('M8', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '31042026' }, 'F7066', '31042026');
+  ohneWert('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', UMDA: '31042026' }, 'F7104', '31042026');
+  ohneWert(
+    'M9',
+    {
+      BKNR: '1',
+      VSNR: '1234010180',
+      ADAT: '01022026',
+      RDAT: '02022026',
+      UMDA: '01022026',
+      RUMD: '31042026',
+      AGRD: '12',
+      ZTUM: '17',
+      ZKUM: '7788991',
+    },
+    'F7106',
+    '31042026',
+  );
+});

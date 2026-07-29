@@ -22,6 +22,32 @@ function normalisiert(wert: string | undefined): string | undefined {
   return getrimmt === '' ? undefined : getrimmt;
 }
 
+/**
+ * Wie {@link normalisiert}, zusätzlich mit der Grundstellung numerischer Felder: Ein Wert,
+ * der ausschließlich aus Nullen besteht, gilt als unbelegt — unabhängig von seiner
+ * Stellenzahl.
+ *
+ * Das folgt aus der Feldtyp-Beschreibung selbst (Kapitel C.1.1 bzw. E.1: „n numerisch:
+ * rechtsbündig, Grundstellung 0, führende Nullen"). Führende Nullen tragen in dieser
+ * Kodierung keine Bedeutung, also bezeichnen `''`, `'0'`, `'00'` und `'0000000000'` alle
+ * denselben Feldinhalt: die Grundstellung. Die Regel gehört deshalb an den Feldtyp und nicht
+ * an ein einzelnes Feld — ein Vergleich gegen genau ein Literal (früher `'0000000000'` bei
+ * VSNR) übersieht jede andere Schreibweise derselben Grundstellung. Ein `String(row.vsnr ?? 0)`
+ * oder eine Integer-Spalte einer Datenbank liefert `'0'`, und das galt vorher als belegte
+ * Versicherungsnummer: Der Satz identifizierte niemanden und umging zugleich die
+ * REFV-Pflicht aus Kapitel E.30.2. Umgekehrt kommt ein aus einer Datei zurückgelesenes
+ * `UMDA = '00000000'` so nicht mehr als Formatfehler (F7104) an, sondern als das, was es
+ * ist: ein leeres Feld.
+ *
+ * `fuelle` in `festsatz.ts` wendet dieselbe Gleichsetzung beim Schreiben an, damit Prüfung
+ * und Serialisierung denselben Begriff von „belegt" verwenden.
+ */
+function normalisiertNumerisch(wert: string | undefined): string | undefined {
+  const getrimmt = normalisiert(wert);
+  if (getrimmt === undefined) return undefined;
+  return /^0+$/.test(getrimmt) ? undefined : getrimmt;
+}
+
 /** Wandelt ein Datum der Form TTMMJJJJ in eine vergleichbare Zahl JJJJMMTT. */
 function alsZahl(datum: string): number {
   return Number(datum.slice(4, 8) + datum.slice(2, 4) + datum.slice(0, 2));
@@ -142,6 +168,47 @@ const AGRD_CODES: ReadonlySet<string> = new Set([
   '34',
 ]);
 
+/**
+ * Satzarten, für die der Prüfkatalog F7111 führt (Blatt `VR`, Nr. 35, Spalte Satzart
+ * wörtlich „M4,M9“, Status `N`).
+ */
+const F7111_SATZARTEN: ReadonlySet<Satzart> = new Set<Satzart>(['M4', 'M9']);
+
+/**
+ * Abmeldegründe, bei denen das Ende des Beschäftigungsverhältnisses (EBSV) leer bleiben muss.
+ *
+ * Zwei voneinander unabhängige Quellen nennen dieselben zwölf Codes:
+ *
+ * - Prüfkatalog, Blatt `VR`, Nr. 35, Spalte „Fehler wenn“ wörtlich: „Feld AGRD 07, 08, 09,
+ *   11, 12, 15, 19, 23, 29, 31, 32, 33 und EBSV nicht leer“ (Fehlercode F7111, Status `N`).
+ * - Kapitel D.22, Seite 96, Tabelle „Zusammenhang zwischen dem Abmeldegrundcode und den
+ *   abhängigen Feldern“: Genau für diese zwölf Codes — und für keinen weiteren — steht in
+ *   der Spalte EBSV ein `-`, laut Legende auf Seite 97 „keine Angabe zulässig, Feld
+ *   Grundstellung“. Alle übrigen Codes tragen dort `Z` oder `Z1`.
+ *
+ * Fachlich sind es die Gründe, bei denen das Beschäftigungsverhältnis gerade NICHT endet
+ * (Karenz, Präsenz-/Zivildienst, unbezahlter Urlaub, Ummeldung, Truppenübung, Unterbrechung
+ * der Gerichtspraxis, Bildungs-, Pflege- und Familienhospizkarenz, SV-Ende bei aufrechter
+ * Beschäftigung) — ein Ende-Datum wäre dort ein Widerspruch in sich.
+ *
+ * Anders als F7036/F7038 (Schreibweise von Namen) ist diese Regel allein aus zwei Feldwerten
+ * entscheidbar und deshalb umgesetzt.
+ */
+const AGRD_OHNE_EBSV: ReadonlySet<string> = new Set([
+  '07',
+  '08',
+  '09',
+  '11',
+  '12',
+  '15',
+  '19',
+  '23',
+  '29',
+  '31',
+  '32',
+  '33',
+]);
+
 /** Satzarten, bei denen der Prüfkatalog das Format von VWAZ prüft (F7116). */
 const VWAZ_FORMAT_PRUEFUNG: ReadonlySet<Satzart> = new Set<Satzart>(['M3', 'M8']);
 
@@ -209,6 +276,8 @@ const VSNR_FEHLT_REFV_PFLICHT: ReadonlySet<Satzart> = new Set<Satzart>(['M4', 'M
  *
  * - F7096: Der Abmeldegrund (AGRD) wird bei M4/M9 gegen die Codeliste aus Kapitel D.22
  *   geprüft (siehe {@link AGRD_CODES}).
+ * - F7111: Bei zwölf der Abmeldegründe endet das Beschäftigungsverhältnis nicht; dort muss
+ *   EBSV in Grundstellung bleiben (siehe {@link AGRD_OHNE_EBSV}).
  * - F7108/F7109/F7112/F7113: Ist das Ummeldedatum (UMDA) belegt, müssen Zielversicherungs-
  *   träger (ZTUM) und Beitragskontonummer Ummeldung (ZKUM) es ebenfalls sein; ist UMDA leer,
  *   müssen SOUM/ZTUM/ZKUM (bei M9 zusätzlich RUMD) ebenfalls leer bleiben. Zusammen bilden
@@ -240,37 +309,42 @@ const VSNR_FEHLT_REFV_PFLICHT: ReadonlySet<Satzart> = new Set<Satzart>(['M4', 'M
  *
  * Nicht geprüft werden außerdem unter anderem die Prüfziffer der Versicherungsnummer (das
  * Verfahren ist in den Quellen nicht beschrieben), die trägerabhängige Länge der
- * Beitragskontonummer, die Schreibweise von Namen (F7036/F7038, erfordert manuelle
- * Durchsicht) und die Abhängigkeit zwischen Abmeldegrund und Ende des
- * Beschäftigungsverhältnisses (F7111, Kapitel D.22, Seite 96). ELDA prüft diese serverseitig.
+ * Beitragskontonummer und die Schreibweise von Namen (F7036/F7038, erfordert manuelle
+ * Durchsicht). ELDA prüft diese serverseitig.
  */
 export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
   const bknr = normalisiert(werte.BKNR);
-  const gebd = normalisiert(werte.GEBD);
-  const vsnr = normalisiert(werte.VSNR);
+  // Numerische Felder (Typ `n` laut Feldtabelle): siehe normalisiertNumerisch — ein Wert aus
+  // lauter Nullen ist die Grundstellung des Feldes und damit unbelegt.
+  const gebd = normalisiertNumerisch(werte.GEBD);
+  const vsnr = normalisiertNumerisch(werte.VSNR);
+  const adat = normalisiertNumerisch(werte.ADAT);
+  const rdat = normalisiertNumerisch(werte.RDAT);
+  const ebsv = normalisiertNumerisch(werte.EBSV);
+  const umda = normalisiertNumerisch(werte.UMDA);
+  const rumd = normalisiertNumerisch(werte.RUMD);
+  const vwaz = normalisiertNumerisch(werte.VWAZ);
+  // Alphanumerische Felder (Typ `a/n`): dort ist die Grundstellung blank, eine Ziffernfolge
+  // aus Nullen also ein echter Inhalt und keine Grundstellung.
   const refv = normalisiert(werte.REFV);
-  const adat = normalisiert(werte.ADAT);
-  const rdat = normalisiert(werte.RDAT);
-  const umda = normalisiert(werte.UMDA);
-  const rumd = normalisiert(werte.RUMD);
   const bber = normalisiert(werte.BBER);
   const soum = normalisiert(werte.SOUM);
   const ztum = normalisiert(werte.ZTUM);
   const zkum = normalisiert(werte.ZKUM);
-  const vwaz = normalisiert(werte.VWAZ);
   const frdv = normalisiert(werte.FRDV);
   const agrd = normalisiert(werte.AGRD);
 
   if (bknr === undefined) wirf('F7000', 'Die Beitragskontonummer (BKNR) darf nicht leer sein.');
 
   if (gebd !== undefined && !gueltigesGeburtsdatum(gebd)) {
-    wirf(
-      'F7030',
-      `Das Geburtsdatum (GEBD) '${gebd}' ist ungültig. Zulässig: TTMMJJJJ, 00MMJJJJ oder 0000JJJJ.`,
-    );
+    // Der Wert selbst steht bewusst nicht in der Meldung: Geburtsdatum und Versicherungsnummer
+    // sind Personendaten, Fehlermeldungen landen in Logs und Fehler-Trackern. Genannt wird,
+    // welches Feld beanstandet ist und was zulässig wäre — dieselbe Zurückhaltung, die
+    // `pruefeVorrat` und die Längenprüfung in `festsatz.ts` bereits üben.
+    wirf('F7030', 'Das Geburtsdatum (GEBD) ist ungültig. Zulässig: TTMMJJJJ, 00MMJJJJ oder 0000JJJJ.');
   }
 
-  const vsnrBelegt = vsnr !== undefined && vsnr !== '0000000000';
+  const vsnrBelegt = vsnr !== undefined;
   const gebdBelegt = gebd !== undefined;
   const refvBelegt = refv !== undefined;
 
@@ -310,7 +384,7 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
   }
   if (adat !== undefined) {
     if (ADAT_FORMAT_PRUEFUNG.has(satzart) && !gueltigesDatum(adat)) {
-      wirf('F7061', `Das Datum (ADAT) '${adat}' ist ungültig. Erwartet: TTMMJJJJ.`);
+      wirf('F7061', 'Das Datum (ADAT) ist ungültig. Erwartet: TTMMJJJJ.');
     }
     if (alsZahl(adat) < 20190101) wirf('F7062', 'Das Datum (ADAT) darf nicht vor dem 01.01.2019 liegen.');
   }
@@ -319,18 +393,18 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
     if (rdat === undefined) {
       wirf('F7065', 'Das richtige An-/Abmeldedatum (RDAT) darf bei einer Richtigstellung nicht leer sein.');
     }
-    if (!gueltigesDatum(rdat!)) wirf('F7066', `Das Datum (RDAT) '${rdat}' ist ungültig. Erwartet: TTMMJJJJ.`);
+    if (!gueltigesDatum(rdat!)) wirf('F7066', 'Das Datum (RDAT) ist ungültig. Erwartet: TTMMJJJJ.');
     if (alsZahl(rdat!) < 20190101) wirf('F7067', 'Das Datum (RDAT) darf nicht vor dem 01.01.2019 liegen.');
   }
 
   // F7104 (Prüfkatalog, reine Formatprüfung wie F7061/F7066): UMDA muss TTMMJJJJ sein.
   if (UMDA_FORMAT_PRUEFUNG.has(satzart) && umda !== undefined && !gueltigesDatum(umda)) {
-    wirf('F7104', `Das Ummeldedatum (UMDA) '${umda}' ist ungültig. Erwartet: TTMMJJJJ.`);
+    wirf('F7104', 'Das Ummeldedatum (UMDA) ist ungültig. Erwartet: TTMMJJJJ.');
   }
 
   // F7106 (Prüfkatalog, reine Formatprüfung wie F7061/F7066): RUMD muss TTMMJJJJ sein (nur M9).
   if (satzart === 'M9' && rumd !== undefined && !gueltigesDatum(rumd)) {
-    wirf('F7106', `Das richtige Ummeldedatum (RUMD) '${rumd}' ist ungültig. Erwartet: TTMMJJJJ.`);
+    wirf('F7106', 'Das richtige Ummeldedatum (RUMD) ist ungültig. Erwartet: TTMMJJJJ.');
   }
 
   if (satzart === 'M3' && bber !== undefined && !/^(0[1-9]|1[0-3])$/.test(bber)) {
@@ -340,6 +414,17 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
   // F7096 (Prüfkatalog): AGRD gegen die Codeliste aus Kapitel D.22 (siehe AGRD_CODES).
   if (AGRD_SATZARTEN.has(satzart) && agrd !== undefined && !AGRD_CODES.has(agrd)) {
     wirf('F7096', `Der Abmeldegrund (AGRD) '${agrd}' ist ungültig. Zulässige Codes siehe Kapitel D.22.`);
+  }
+
+  // F7111 (Prüfkatalog, Blatt VR Nr. 35): Bei den zwölf Abmeldegründen, die kein Ende des
+  // Beschäftigungsverhältnisses bedeuten, muss EBSV leer bleiben (siehe AGRD_OHNE_EBSV).
+  if (F7111_SATZARTEN.has(satzart) && agrd !== undefined && AGRD_OHNE_EBSV.has(agrd) && ebsv !== undefined) {
+    wirf(
+      'F7111',
+      `Beim Abmeldegrund (AGRD) '${agrd}' endet das Beschäftigungsverhältnis nicht; das Feld ` +
+        'Ende des Beschäftigungsverhältnisses (EBSV) muss deshalb in Grundstellung bleiben ' +
+        '(Kapitel D.22, Seite 96).',
+    );
   }
 
   if (UMMELDUNG_ZIEL_PRUEFUNG.has(satzart) && soum !== undefined && soum !== 'J') {

@@ -234,3 +234,66 @@ test('ein unbekanntes Feld übersteht den Builder, wird aber vor dem Schreiben a
     },
   );
 });
+
+// ---------------------------------------------------------------------------
+// Durchstich der neuen Regeln bis an die oeffentliche Schnittstelle
+// ---------------------------------------------------------------------------
+
+test('I3: eine Abmeldung mit Zivildienst und Ende des Beschaeftigungsverhaeltnisses baut nicht mehr', () => {
+  // Baute frueher still durch; ELDA weist sie mit Status N (F7111) zurueck.
+  assert.throws(
+    () =>
+      abmeldung({
+        ...BASIS,
+        FANA: 'Maier',
+        VONA: 'Anna',
+        ADAT: '01022026',
+        GERF: 'N',
+        AGRD: '09',
+        EBSV: '31012026',
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaError);
+      assert.match((err as Error).message, /F7111/);
+      return true;
+    },
+  );
+});
+
+test('C1: ein unvollstaendig formatiertes BVAB faellt spaetestens beim Bau des Bestands auf', () => {
+  // Der Builder selbst hat zu BVAB keine Regel — der Pruefkatalog fuehrt fuer dieses Feld
+  // keine Zeile. Frueher entstand daraus stillschweigend der 01.03.2026 statt des
+  // 10.03.2026; jetzt weist die Serialisierung den Wert zurueck, bevor ein Byte entsteht.
+  const satz = anmeldung({
+    ...BASIS,
+    FANA: 'Maier',
+    VONA: 'Anna',
+    ADAT: '01022026',
+    BBER: '05',
+    GERF: 'N',
+    FRDV: 'N',
+    BVAB: '1032026',
+  });
+  assert.throws(
+    () => erstelleBestand([satz], OPT),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaError);
+      assert.match((err as Error).message, /BVAB/);
+      return true;
+    },
+  );
+
+  // Gegenprobe: korrekt formatiert steht der 10.03.2026 unveraendert an Position 603.
+  const richtig = anmeldung({
+    ...BASIS,
+    FANA: 'Maier',
+    VONA: 'Anna',
+    ADAT: '01022026',
+    BBER: '05',
+    GERF: 'N',
+    FRDV: 'N',
+    BVAB: '10032026',
+  });
+  const bestand = erstelleBestand([richtig], OPT);
+  assert.equal(bestand.subarray(772 + 602, 772 + 610).toString('latin1'), '10032026');
+});

@@ -142,3 +142,72 @@ test('Schlusssatz: ELNR bleibt auf Grundstellung, da SV-intern befüllt', () => 
 test('leerer Bestand wirft, statt einen sinnlosen Umschlag zu liefern', () => {
   assert.throws(() => baueBestand([], OPT), EldaError);
 });
+
+// ---------------------------------------------------------------------------
+// I4 — ein Datenbestand hat genau eine Satzlaenge (Kapitel C.1.2, Seite 52)
+// ---------------------------------------------------------------------------
+
+/** Ein Satz mit eigener, kuerzerer Feldtabelle — ueber die oeffentliche RohSatz-Schnittstelle baubar. */
+const kurzerSatz: RohSatz = {
+  satzart: 'M3',
+  werte: { NUR: 'x' },
+  felder: [{ nr: 1, name: 'NUR', pos: 1, laenge: 30, typ: 'a/n' }],
+  satzlaenge: 30,
+};
+
+test('I4: Saetze unterschiedlicher Laenge werden abgewiesen, statt einen unteilbaren Strom zu ergeben', () => {
+  // Frueher war die Satzlaenge des Bestands das Maximum ueber die Eingabe: Vorlauf- und
+  // Schlusssatz wurden auf 772 aufgefuellt, der kurze Meldungssatz aber mit 30 gebaut. Das
+  // Ergebnis waren 2346 Bytes bei deklarierten 772 und SANZ = 4 — ELDA prueft Satzlaengen
+  // und Satzanzahl bei der Uebernahme (Kapitel C.1.2) und weist die ganze Sendung zurueck.
+  for (const saetze of [
+    [satz({ REFW: 'R1' }), kurzerSatz],
+    [kurzerSatz, satz({ REFW: 'R1' })],
+  ]) {
+    assert.throws(
+      () => baueBestand(saetze, OPT),
+      (err: unknown) => {
+        const text = (err as Error).message;
+        assert.ok(err instanceof EldaError);
+        assert.match(text, /Satzlänge/);
+        assert.match(text, /30/);
+        assert.match(text, /772/);
+        return true;
+      },
+    );
+  }
+});
+
+test('I4: ein Bestand aus lauter gleich langen Saetzen bleibt unberuehrt', () => {
+  // Eine von E.29 abweichende, aber in sich einheitliche Satzlaenge bleibt zulaessig —
+  // gefordert ist Gleichheit innerhalb des Bestands, nicht ein bestimmter Wert. 300 statt
+  // 30, weil der Vorlaufsatz aus Kapitel E.2 allein schon 246 Zeichen belegt.
+  const eigener: RohSatz = {
+    satzart: 'M3',
+    werte: { NUR: 'x' },
+    felder: [
+      { nr: 1, name: 'IDTEIL', pos: 1, laenge: 20, typ: 'a/n' },
+      { nr: 2, name: 'NUR', pos: 21, laenge: 280, typ: 'a/n' },
+    ],
+    satzlaenge: 300,
+  };
+  const bestand = baueBestand([eigener, eigener], OPT);
+  assert.equal(bestand.length, 300 * 4);
+  assert.equal(bestand.subarray(0, 2).toString('latin1'), '00');
+  assert.equal(bestand.subarray(900, 902).toString('latin1'), '99');
+});
+
+// ---------------------------------------------------------------------------
+// M9 — der Identifikationsteil durchlaeuft keinen Tabellenwechsel
+// ---------------------------------------------------------------------------
+
+test('M9: der Identifikationsteil wird nicht kodiert und sofort mit latin1 zurueckgelesen', () => {
+  // An acht Positionen weicht ISO-8859-15 von ISO-8859-1 ab. '€' ist eine davon: Es wurde
+  // zu 0xA4 kodiert und mit latin1 als '¤' zurueckgelesen — ein Zeichen, das es in
+  // ISO-8859-15 gerade nicht gibt. Der umschliessende Satz wies es dann als „nicht
+  // darstellbar" ab und nannte dabei ein Zeichen, das der Aufrufer nie geschrieben hat.
+  const opt = { ...OPT, versicherungstraeger: '€' };
+  assert.equal(baueIdentifikationsteil('M3', 2, opt).slice(18, 20), '€ ');
+  const bestand = baueBestand([satz({ REFW: 'R' })], opt);
+  assert.equal(bestand[18], 0xa4, 'VSNR-Position 19 traegt das Euro-Zeichen in ISO-8859-15');
+});

@@ -1,5 +1,5 @@
 import { EldaError } from './errors';
-import { baueSatz, type Feld } from './festsatz';
+import { baueSatz, baueSatzText, type Feld } from './festsatz';
 import { IDENTIFIKATIONSTEIL, LAENGE_IDENTIFIKATIONSTEIL } from './felder-e29';
 
 /** Angaben zum Hersteller der übermittelnden Software (Vorlaufsatz, Kapitel E.2). */
@@ -130,7 +130,11 @@ function wanduhrzeit(
  * Vorlaufsatz trägt die 1.
  */
 export function baueIdentifikationsteil(satzart: string, satznummer: number, opt: BestandOptionen): string {
-  return baueSatz(
+  // baueSatzText statt baueSatz: Der Identifikationsteil geht als Feldwert in
+  // den umschließenden Satz ein und wird erst dort nach ISO-8859-15 kodiert.
+  // Hier zu kodieren und sofort wieder mit latin1 zu dekodieren wäre nicht nur
+  // überflüssig, sondern ein Tabellenwechsel — siehe JSDoc von baueSatzText.
+  return baueSatzText(
     IDENTIFIKATIONSTEIL,
     {
       SART: satzart,
@@ -140,7 +144,7 @@ export function baueIdentifikationsteil(satzart: string, satznummer: number, opt
       VSTR: opt.versicherungstraeger,
     },
     LAENGE_IDENTIFIKATIONSTEIL,
-  ).toString('latin1');
+  );
 }
 
 /**
@@ -194,10 +198,28 @@ export function baueBestand(saetze: readonly RohSatz[], opt: BestandOptionen): B
   if (Number.isNaN(opt.erstellt.getTime())) {
     throw new EldaError('Erstellungszeitpunkt (opt.erstellt) ist kein gültiges Datum.');
   }
-  // Reduktion statt Math.max(...spread): Ein Spread-Aufruf über sehr viele
-  // Sätze würde die Argumentliste sprengen und einen undurchsichtigen
-  // RangeError werfen statt eines EldaError.
-  const satzlaenge = saetze.reduce((max, s) => (s.satzlaenge > max ? s.satzlaenge : max), 0);
+  // Ein Datenbestand hat GENAU EINE Satzlänge. Kapitel C.1.2 (Seite 52) nennt
+  // die Satzlängen als erste der vier Prüfungen, die das Datensammelsystem bei
+  // Übernahme eines Datenpaketes fährt (Satzlängen, Satzfolgen, Projektcodes,
+  // Satzanzahl); ein Fehler dort weist die gesamte Übertragungssendung zurück.
+  // Vorlauf- und Schlusssatz füllt diese Funktion auf die Satzlänge des
+  // Bestands auf. Fielen die Meldungssätze unterschiedlich lang aus, ergäbe
+  // sich ein Byte-Strom, dessen Sätze sich nicht mehr auf die im Vorlaufsatz
+  // deklarierte Länge aufteilen lassen — und dessen Satzanzahl im Schlusssatz
+  // damit ebenfalls nicht mehr aufgeht. Über `RohSatz` ist das aus der
+  // öffentlichen Schnittstelle heraus erreichbar, also wird es hier abgewiesen
+  // statt erst bei ELDA.
+  const satzlaenge = saetze[0]!.satzlaenge;
+  for (const [i, s] of saetze.entries()) {
+    if (s.satzlaenge !== satzlaenge) {
+      throw new EldaError(
+        `Alle Sätze eines Datenbestands müssen dieselbe Satzlänge haben: Satz ${i + 1} (Satzart ` +
+          `${s.satzart}) ist ${s.satzlaenge} Zeichen lang, der erste Satz ${satzlaenge}. ` +
+          'ELDA prüft die Satzlängen bei der Übernahme (Kapitel C.1.2) und weist die gesamte ' +
+          'Sendung zurück.',
+      );
+    }
+  }
 
   const { tag, monat, jahr, stunde, minute, sekunde } = wanduhrzeit(
     opt.erstellt,
