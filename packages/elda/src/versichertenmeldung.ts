@@ -136,11 +136,27 @@ export function stornoAbmeldung(felder: MeldungsFelder): RohSatz {
  * kaufmännischer Rundung auf zwei Nachkommastellen, als vier Ziffern ohne
  * Dezimaltrenner. Das Dokument nennt als Beispiel 15 Stunden und 40 Minuten,
  * die als `1567` zu übermitteln sind.
+ *
+ * `stunden` und `minuten` müssen ganze Zahlen sein — nur dann ist die
+ * kaufmännische Rundung frei von Fließkomma-Grenzfällen: Bei ganzzahligen
+ * Minuten (0–59) liegt der Bruchteil von Stunden·100 immer bei 0, 1/3 oder
+ * 2/3, nie exakt bei 1/2, ein Gleichstand beim Runden kann also rechnerisch
+ * nicht auftreten. Bei gebrochenen Stundenangaben (z. B. `1.005`) gilt das
+ * nicht mehr — dort landet die Rechnung in der Gleitkomma-Darstellung
+ * mitunter hauchdünn unter statt auf der `.5`-Grenze und rundet falsch. Wer
+ * Dezimalstunden hat, rechnet sie selbst in Stunden und Minuten um.
  */
 export function wochenarbeitszeit(stunden: number, minuten = 0): string {
-  if (!Number.isFinite(stunden) || !Number.isFinite(minuten) || stunden < 0 || minuten < 0 || minuten > 59) {
+  if (
+    !Number.isInteger(stunden) ||
+    !Number.isInteger(minuten) ||
+    stunden < 0 ||
+    minuten < 0 ||
+    minuten > 59
+  ) {
     throw new EldaError(
-      `Ungültige Arbeitszeit: ${stunden} Stunden, ${minuten} Minuten. Stunden ab 0, Minuten 0 bis 59.`,
+      `Ungültige Arbeitszeit: ${stunden} Stunden, ${minuten} Minuten. Stunden und Minuten müssen ` +
+        'ganze Zahlen sein, Stunden ab 0, Minuten 0 bis 59.',
     );
   }
   const hundertstel = Math.round((stunden + minuten / 60) * 100);

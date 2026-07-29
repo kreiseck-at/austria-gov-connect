@@ -9,10 +9,31 @@ import {
   stornoAnmeldung,
   stornoAbmeldung,
   wochenarbeitszeit,
+  erstelleBestand,
+  type MeldungsFelder,
 } from './versichertenmeldung';
 import { EldaError } from './errors';
+import { FELDER_E29 } from './felder-e29';
+import type { BestandOptionen } from './bestand';
 
 const BASIS = { REFW: 'REF-1', BKNR: '1234567', DGNA: 'Muster GmbH', VSNR: '1234010180' };
+
+/** Rahmenangaben für einen Bestand, wie in bestand.test.ts — nur hier lokal, um Durchstich-Tests unabhängig zu halten. */
+const OPT: BestandOptionen = {
+  seriennummer: '1234567',
+  versicherungstraeger: '11',
+  datentraegernummer: '000001',
+  erstellt: new Date('2026-02-03T09:30:15+01:00'),
+  testdaten: true,
+  hersteller: {
+    name: 'Kreiseck',
+    kfz: 'A',
+    plz: '1010',
+    ort: 'Wien',
+    strasse: 'Teststrasse 1',
+    mail: 'test@example.at',
+  },
+};
 
 test('jede Satzart trägt ihren Code', () => {
   assert.equal(
@@ -104,4 +125,112 @@ test('wochenarbeitszeit: unsinnige Eingaben werfen', () => {
   assert.throws(() => wochenarbeitszeit(-1), EldaError);
   assert.throws(() => wochenarbeitszeit(10, 60), EldaError);
   assert.throws(() => wochenarbeitszeit(100), EldaError);
+});
+
+test('wochenarbeitszeit: gebrochene Stunden- oder Minutenangaben werfen statt falsch zu runden', () => {
+  // 1,005 Stunden * 100 landet in Gleitkomma bei 100,49999999999999 statt 100,5 und würde ohne
+  // diese Prüfung auf '0100' statt korrekt '0101' abrunden — siehe JSDoc von wochenarbeitszeit.
+  assert.throws(() => wochenarbeitszeit(1.005), EldaError);
+  assert.throws(() => wochenarbeitszeit(1, 0.5), EldaError);
+});
+
+// A1 (Review): Nichts außer diesem Test hält die 38 Feldnamen von MeldungsFelder gegen die
+// Feldtabelle fest. Ein verschriebener oder fehlender Name (z. B. VWAZ -> VWZA) lässt den
+// zugehörigen Wert beim Spreizen in das Werteobjekt stillschweigend fallen, ohne dass eine der
+// bisherigen Satzart-Prüfungen das bemerkt, weil keiner der bisherigen Tests jedes Feld befüllt.
+// Required<MeldungsFelder> zwingt TypeScript bereits beim Kompilieren dazu, dass genau die
+// Schlüssel unten existieren; der Mengenvergleich zur Laufzeit sichert zusätzlich ab, dass sich
+// FELDER_E29 und MeldungsFelder nicht auseinanderentwickeln, ohne dass ein Test das anzeigt.
+test('MeldungsFelder deckt exakt die Feldnamen aus FELDER_E29 ohne IDTEIL ab', () => {
+  const alle: Required<MeldungsFelder> = {
+    REFW: 'x',
+    REFU: 'x',
+    BKNR: 'x',
+    DGNA: 'x',
+    DTEL: 'x',
+    MAIL: 'x',
+    INF1: 'x',
+    INF2: 'x',
+    VSNR: 'x',
+    GEBD: 'x',
+    REFV: 'x',
+    FANA: 'x',
+    VONA: 'x',
+    ADAT: 'x',
+    BDAT: 'x',
+    RDAT: 'x',
+    BBER: 'x',
+    GERF: 'x',
+    FRDV: 'x',
+    EBSV: 'x',
+    AGRD: 'x',
+    SAGR: 'x',
+    KEAB: 'x',
+    KEBI: 'x',
+    UEAB: 'x',
+    UEBI: 'x',
+    BVAB: 'x',
+    BVEN: 'x',
+    BVJN: 'x',
+    UMDA: 'x',
+    RUMD: 'x',
+    SOUM: 'x',
+    ZTUM: 'x',
+    ZKUM: 'x',
+    RWUM: 'x',
+    RUUM: 'x',
+    BKUM: 'x',
+    VWAZ: 'x',
+  };
+  const erwartet = new Set(FELDER_E29.map((f) => f.name).filter((name) => name !== 'IDTEIL'));
+  assert.deepEqual(new Set(Object.keys(alle)), erwartet);
+});
+
+// A2 (Review): erstelleBestand war bisher in keiner Testdatei erreicht. Baut eine vollständige
+// Anmeldung (inkl. VWAZ) und prüft den Durchstich bis auf Byteebene: Gesamtlänge von drei Sätzen
+// (Vorlauf-, Meldungs-, Schlusssatz) sowie VWAZ an seiner dokumentierten Position (Feldtabelle
+// E.29: pos 769, Länge 4) innerhalb des zweiten Satzes.
+test('erstelleBestand: Anmeldung landet vollständig und an der richtigen Byteposition im Bestand', () => {
+  const satz = anmeldung({
+    ...BASIS,
+    FANA: 'Maier',
+    VONA: 'Anna',
+    ADAT: '01022026',
+    BBER: '01',
+    GERF: 'N',
+    FRDV: 'N',
+    VWAZ: wochenarbeitszeit(40),
+  });
+  const bestand = erstelleBestand([satz], OPT);
+  assert.equal(bestand.length, 772 * 3);
+  const meldungssatzStart = 772;
+  const vwazStart = meldungssatzStart + (769 - 1);
+  assert.equal(bestand.subarray(vwazStart, vwazStart + 4).toString('latin1'), '4000');
+});
+
+// A4 (Review): Aus TypeScript heraus verhindert Required<MeldungsFelder>/MeldungsFelder selbst
+// keinen unbekannten Feldnamen bei einem Typbruch (hier über `as unknown as`, stellvertretend für
+// einen Aufruf aus JavaScript oder einen verschriebenen Feldnamen). Der Builder nimmt die
+// Abweisung bewusst nicht vorweg — sie geschieht erst in baueSatz, also erst beim tatsächlichen
+// Bau des Bestands, aber immer noch bevor auch nur ein Byte geschrieben wird.
+test('ein unbekanntes Feld übersteht den Builder, wird aber vor dem Schreiben abgewiesen', () => {
+  const felder = {
+    ...BASIS,
+    FANA: 'Maier',
+    VONA: 'Anna',
+    ADAT: '01022026',
+    BBER: '05',
+    GERF: 'N',
+    FRDV: 'N',
+    UNBEKANNTESFELD: 'x',
+  } as unknown as MeldungsFelder;
+  const satz = anmeldung(felder);
+  assert.throws(
+    () => erstelleBestand([satz], OPT),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaError);
+      assert.match((err as Error).message, /UNBEKANNTESFELD/);
+      return true;
+    },
+  );
 });
