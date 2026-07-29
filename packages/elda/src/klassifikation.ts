@@ -19,10 +19,21 @@ export const SENDEN_ZUSTAENDE = {
   '405': 'duplikat',
 } as const satisfies Readonly<Record<string, string>>;
 
-/** Ausgänge von `empfangen`. */
+/**
+ * Ausgänge von `empfangen`.
+ *
+ * `404` steht hier bewusst NICHT: Die Status-Tabelle der Schnittstellenbeschreibung
+ * (Abschnitt 6) führt den Code ausdrücklich als „nicht zutreffend" für
+ * `EmpfangenResult`, und Abschnitt 3.6 nennt für `empfangen` nur `000`, `406`,
+ * `407`, `408` und `500`. `404` heißt dort „Datei wird noch verarbeitet
+ * (Verarbeitung > 40 Sekunden)" — eine Aussage über eine SENDUNG, die zu einem
+ * Abholvorgang nicht passt. Ihn trotzdem als `'nochInArbeit'` durchzureichen
+ * hieße: Sollte ELDA den Code bei `empfangen` je mit anderer Bedeutung schicken,
+ * pollt der Aufrufer endlos weiter, statt laut zu scheitern. Werfen ist die
+ * sichere Vorgabe.
+ */
 export const EMPFANGEN_ZUSTAENDE = {
   '000': 'datei',
-  '404': 'nochInArbeit',
   '406': 'nichtVorhanden',
   '408': 'bereitsEmpfangen',
 } as const satisfies Readonly<Record<string, string>>;
