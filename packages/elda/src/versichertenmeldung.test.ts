@@ -260,22 +260,47 @@ test('I3: eine Abmeldung mit Zivildienst und Ende des Beschaeftigungsverhaeltnis
   );
 });
 
-test('C1: ein unvollstaendig formatiertes BVAB faellt spaetestens beim Bau des Bestands auf', () => {
-  // Der Builder selbst hat zu BVAB keine Regel — der Pruefkatalog fuehrt fuer dieses Feld
-  // keine Zeile. Frueher entstand daraus stillschweigend der 01.03.2026 statt des
-  // 10.03.2026; jetzt weist die Serialisierung den Wert zurueck, bevor ein Byte entsteht.
-  const satz = anmeldung({
-    ...BASIS,
-    FANA: 'Maier',
-    VONA: 'Anna',
-    ADAT: '01022026',
-    BBER: '05',
-    GERF: 'N',
-    FRDV: 'N',
-    BVAB: '1032026',
-  });
+test('C1: ein unvollstaendig formatiertes BVAB faellt jetzt schon im Builder auf', () => {
+  // Bewusste Aenderung gegenueber der frueheren Fassung dieses Tests: Damals hatte der
+  // Builder zu BVAB keine Regel (der Pruefkatalog fuehrt fuer dieses Feld keine Zeile) und
+  // erst die Serialisierung wies den Wert zurueck. Die aus der Feldtabelle abgeleitete
+  // Kalenderpruefung greift nun eine Stufe frueher — '1032026' ist kein TTMMJJJJ. Der
+  // Ausgang bleibt derselbe: Aus dem 10.03.2026 wird nie stillschweigend der 01.03.2026.
   assert.throws(
-    () => erstelleBestand([satz], OPT),
+    () =>
+      anmeldung({
+        ...BASIS,
+        FANA: 'Maier',
+        VONA: 'Anna',
+        ADAT: '01022026',
+        BBER: '05',
+        GERF: 'N',
+        FRDV: 'N',
+        BVAB: '1032026',
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaError);
+      assert.match((err as Error).message, /BVAB/);
+      return true;
+    },
+  );
+
+  // Die zweite Verteidigungslinie bleibt bestehen: Ein an der Inhaltspruefung vorbei
+  // zusammengesetzter RohSatz — so entsteht er ueber die oeffentliche `RohSatz`-Schnittstelle
+  // — wird von der Serialisierung immer noch abgewiesen, bevor ein Byte entsteht.
+  assert.throws(
+    () =>
+      erstelleBestand(
+        [
+          {
+            satzart: 'M3',
+            werte: { REFW: 'REF-1', BKNR: '1234567', DGNA: 'Muster GmbH', BVAB: '1032026' },
+            felder: FELDER_E29,
+            satzlaenge: 772,
+          },
+        ],
+        OPT,
+      ),
     (err: unknown) => {
       assert.ok(err instanceof EldaError);
       assert.match((err as Error).message, /BVAB/);

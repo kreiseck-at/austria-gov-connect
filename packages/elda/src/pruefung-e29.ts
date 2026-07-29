@@ -1,4 +1,5 @@
 import { EldaError } from './errors';
+import { FELDER_E29 } from './felder-e29';
 import { PFLICHT_E29, type Satzart } from './pflicht-e29';
 
 type Werte = Readonly<Record<string, string | undefined>>;
@@ -306,6 +307,38 @@ const AGRD_OHNE_EBSV: ReadonlySet<string> = new Set([
   '33',
 ]);
 
+/**
+ * Datumsfelder, deren Kalenderprüfung bereits eine eigene Katalog-Zeile mit eigener
+ * Satzart-Spalte abdeckt — GEBD (F7030, inklusive der Sonderformen `00MMJJJJ`/`0000JJJJ`),
+ * ADAT (F7061), RDAT (F7066), UMDA (F7104) und RUMD (F7106). Für sie gilt weiterhin genau
+ * die Satzart-Menge des Katalogs; die abgeleitete Prüfung unten fasst sie nicht an, damit
+ * die dort belegten Auslassungen erhalten bleiben (siehe {@link ADAT_FORMAT_PRUEFUNG}: Bei
+ * M8/M9 prüft der Katalog das Format von ADAT bewusst nicht erneut).
+ */
+const DATUM_MIT_KATALOGREGEL: ReadonlySet<string> = new Set(['GEBD', 'ADAT', 'RDAT', 'UMDA', 'RUMD']);
+
+/**
+ * Die übrigen Datumsfelder der Feldtabelle aus Kapitel E.29 (Seiten 299–301): BDAT, EBSV,
+ * KEAB, KEBI, UEAB, UEBI, BVAB und BVEN. Alle acht tragen dort unter dem Feldnamen die
+ * stellenscharfe Vorgabe `TTMMJJJJ` — abgeleitet aus {@link FELDER_E29} statt hier erneut
+ * aufgezählt, damit die beiden Listen nicht auseinanderlaufen können.
+ *
+ * Für keines dieser acht Felder führt der Prüfkatalog (Blatt `VR`) eine Formatzeile. Bis
+ * hierher prüfte nur `festsatz.ts` die STELLENZAHL (genau acht Ziffern, kein Auffüllen) —
+ * das fängt den Auffüll-Fehler ab, aber keinen Kalenderfehler: Ein `KEAB = '31112026'`
+ * (31. November) oder ein `EBSV = '99999999'` sind acht Ziffern und gingen unbeanstandet auf
+ * die Leitung. Am teuersten wäre ein Aufrufer, der versehentlich das US-Format `MMTTJJJJ`
+ * liefert — der erzeugt für jeden Tag ab dem 13. eines Monats einen Monat 13 bis 31, und
+ * genau das bliebe sonst auf beiden Seiten unbemerkt.
+ *
+ * Die Regel stammt nicht aus dem Prüfkatalog, sondern aus der Feldtabelle selbst: Wo dort
+ * `TTMMJJJJ` steht, ist der Inhalt ein Kalenderdatum, und ein nicht existierender Tag kann
+ * nie der gemeinte sein. Die Meldung trägt deshalb das Quellkapitel statt eines Fehlercodes.
+ */
+const DATUM_OHNE_KATALOGREGEL: readonly string[] = FELDER_E29.filter(
+  (f) => f.format === 'TTMMJJJJ' && !DATUM_MIT_KATALOGREGEL.has(f.name),
+).map((f) => f.name);
+
 /** Satzarten, bei denen der Prüfkatalog das Format von VWAZ prüft (F7116). */
 const VWAZ_FORMAT_PRUEFUNG: ReadonlySet<Satzart> = new Set<Satzart>(['M3', 'M8']);
 
@@ -518,6 +551,25 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
   // F7106 (Prüfkatalog, reine Formatprüfung wie F7061/F7066): RUMD muss TTMMJJJJ sein (nur M9).
   if (satzart === 'M9' && rumd !== undefined && !gueltigesDatum(rumd)) {
     wirf('F7106', 'Das richtige Ummeldedatum (RUMD) ist ungültig. Erwartet: TTMMJJJJ.');
+  }
+
+  // Abgeleitete Kalenderprüfung der acht Datumsfelder ohne eigene Katalog-Zeile (siehe
+  // DATUM_OHNE_KATALOGREGEL). Sie läuft NACH den Katalog-Regeln, damit deren Fehlercodes
+  // dort, wo sie gelten, unverändert zuerst greifen. Die Grundstellung (leer oder lauter
+  // Nullen) bleibt in jeder Satzart zulässig — normalisiertNumerisch liefert dafür
+  // `undefined`, das Feld gilt also als unbelegt und wird nicht geprüft.
+  for (const name of DATUM_OHNE_KATALOGREGEL) {
+    const datum = normalisiertNumerisch(werte[name]);
+    if (datum !== undefined && !gueltigesDatum(datum)) {
+      // Der Wert selbst bleibt aus der Meldung: Unter den acht Feldern stehen Daten, die
+      // Rückschlüsse auf die Person zulassen — dieselbe Zurückhaltung wie bei GEBD und VSNR.
+      wirf(
+        'E.29',
+        `Das Feld ${name} ist kein gültiges Kalenderdatum. Erwartet: TTMMJJJJ (Feldtabelle ` +
+          'Kapitel E.29). Der Prüfkatalog führt zu diesem Feld keine Formatregel — die Prüfung ' +
+          'ist aus der Feldtabelle abgeleitet.',
+      );
+    }
   }
 
   // F7069 (Prüfkatalog): Beschäftigungsbereich gegen die Codeliste aus Kapitel D.39,

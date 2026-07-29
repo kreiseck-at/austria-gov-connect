@@ -512,6 +512,87 @@ test('F7116: VWAZ vierstellig', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Kalenderprüfung der Datumsfelder ohne eigene Katalog-Zeile
+// ---------------------------------------------------------------------------
+
+/**
+ * Die acht Datumsfelder der Feldtabelle E.29, für die der Prüfkatalog keine Formatzeile
+ * führt, samt einer Satzart, in der die Pflichtmatrix sie belegen lässt, und den übrigen
+ * Feldern, die diese Satzart zwingend braucht.
+ */
+const DATUMSFELDER_OHNE_KATALOG: readonly (readonly [
+  string,
+  Parameters<typeof pruefeInhalt>[0],
+  Record<string, string>,
+])[] = [
+  ['BDAT', 'M6', {}],
+  ['EBSV', 'M4', { AGRD: '01' }],
+  ['KEAB', 'M4', { AGRD: '01', EBSV: '31012026' }],
+  ['KEBI', 'M4', { AGRD: '01', EBSV: '31012026' }],
+  ['UEAB', 'M4', { AGRD: '01', EBSV: '31012026' }],
+  ['UEBI', 'M4', { AGRD: '01', EBSV: '31012026' }],
+  ['BVAB', 'M3', { BBER: '05' }],
+  ['BVEN', 'M4', { AGRD: '01', EBSV: '31012026' }],
+];
+
+test('E.29: die acht Datumsfelder ohne Katalog-Zeile werden gegen den Kalender geprüft', () => {
+  // '31112026' (31. November) und '99999999' haben beide acht Ziffern und kamen deshalb an
+  // der Stellenzahlprüfung in festsatz.ts vorbei.
+  for (const [feld, satzart, rest] of DATUMSFELDER_OHNE_KATALOG) {
+    for (const ungueltig of ['31112026', '99999999', '00000001', '32012026', '29022026']) {
+      wirft(satzart, { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', ...rest, [feld]: ungueltig }, 'E.29');
+    }
+  }
+});
+
+test('E.29: gültige Kalenderdaten und die Grundstellung passieren in allen acht Feldern', () => {
+  for (const [feld, satzart, rest] of DATUMSFELDER_OHNE_KATALOG) {
+    for (const gueltig of ['01022026', '29022024', '31122025', '', '00000000', '0']) {
+      assert.doesNotThrow(
+        () =>
+          pruefeInhalt(satzart, {
+            BKNR: '1',
+            VSNR: '1234010180',
+            ADAT: '01022026',
+            ...rest,
+            [feld]: gueltig,
+          }),
+        `${feld} = '${gueltig}'`,
+      );
+    }
+  }
+});
+
+test('E.29: ein vertauschtes MMTTJJJJ fällt jetzt auf, solange der Tag über 12 liegt', () => {
+  // Der teuerste Fall aus dem Befund: Ein Aufrufer im US-Format liefert für den 25.03.2026
+  // '03252026' — Monat 03, Tag 25 wären gültig, in TTMMJJJJ gelesen ist es aber Tag 03,
+  // Monat 25. Genau dieser Monat 13..31 ist der Hebel.
+  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '01', EBSV: '03252026' }, 'E.29');
+});
+
+test('E.29: die abgeleitete Kalenderprüfung fasst die Felder mit Katalog-Zeile nicht an', () => {
+  // ADAT bei M8 bleibt ungeprüft — der Katalog nennt für F7061 ausdrücklich nur
+  // M3/M4/M6/S3/S4, weil ADAT dort das ursprüngliche Datum unverändert fortführt. Diese
+  // belegte Auslassung darf die neue Prüfung nicht überschreiben.
+  assert.doesNotThrow(() =>
+    pruefeInhalt('M8', { BKNR: '1', VSNR: '1234010180', ADAT: '99992026', RDAT: '01022026' }),
+  );
+  // Umgekehrt wirft dieselbe Eingabe bei M3 weiterhin unter F7061, nicht unter 'E.29'.
+  wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '99992026', BBER: '05' }, 'F7061');
+});
+
+test('E.29: GEBD behält seine Sonderformen 00MMJJJJ und 0000JJJJ', () => {
+  // Die abgeleitete Prüfung darf GEBD nicht erfassen — dort sind Tag und Monat 00 laut
+  // Kapitel D.7 ausdrücklich zulässig.
+  for (const gebd of ['00051980', '00001980', '01011980']) {
+    assert.doesNotThrow(
+      () => pruefeInhalt('M3', { BKNR: '1', GEBD: gebd, REFV: 'X', ADAT: '01022026', BBER: '05' }),
+      gebd,
+    );
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Wertebereiche der Kennzeichenfelder (GERF/FRDV/BVJN) und der Versicherungsnummer
 // ---------------------------------------------------------------------------
 
