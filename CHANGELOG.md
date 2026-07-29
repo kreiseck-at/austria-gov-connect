@@ -35,6 +35,29 @@ brechen).
 
 ## @kreiseck/rksv
 
+### 0.8.0 — 2026-07-29
+
+- **Neu:** Begründungscodes für Ausfall und Außerbetriebnahme als Katalog —
+  `BEGRUENDUNGEN`, `begruendungCodes(vorgang)`, `begruendungText(vorgang, code)`
+  und `istBegruendungZulaessig(vorgang, code)`. Codes und Wortlaute wörtlich aus
+  Abschnitt 4 der BMF-Beschreibung „Registrierkassen-Webservice", getrennt nach
+  `ausfall_see` (1/2/99), `ausfall_kasse` (1/5/99) und `ausserbetriebnahme`
+  (6/7). Dieselbe Zahl bedeutet je nach Vorgang etwas anderes; wer den Text
+  vorher selbst hinschrieb, riskierte eine falsche Begründung in einer
+  Behördenmeldung. Die Vorgangsvalidierung prüft jetzt gegen diesen Katalog
+  statt gegen eine zweite, hartkodierte Liste.
+- **Neu:** `istWiederholbar(rc)` beantwortet, ob derselbe Aufruf unverändert
+  später gelingen kann — bewusst getrennt von `rcInfo(rc).kind`, das nur
+  entscheidet, ob der Client wirft oder ein Ergebnis liefert. Interne FON-Fehler
+  (`1336`, `1337`, `B4`, `C1`, `V1`–`V16`) und die vorübergehend gestörte
+  VDA-Abfrage (`14`) sind wiederholbar; fachliche Ablehnungen wie `B5` oder
+  `B18` nicht. `B38` ist bewusst ausgenommen: der Beleg wird ohnehin bis zu 24 h
+  nicht neuerlich geprüft.
+- **Neu:** `rcIsOk` und `rcIsTechnical` werden jetzt exportiert — sie gab es
+  bereits, waren von außen aber nicht erreichbar.
+- **Ergänzt:** Returncode `B38` (Beleg wurde mehrfach fehlerhaft geprüft und
+  wird bis zu 24 Stunden nicht neuerlich geprüft) in `RKDB_RC`.
+
 ### 0.7.0 — 2026-07-25
 
 - **Neu:** `parseErgebnisprotokoll` erfasst zusätzlich `artUebermittlung`

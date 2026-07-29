@@ -41,6 +41,33 @@ Fachliche Returncodes werfen nicht — sie kommen als `Ergebnis` (`ok`/`rc`/`msg
 Technische Fehler werfen. Genau **eine** Vorgangsart pro Paket; mehr als ein
 Vorgang wird asynchron verarbeitet (Ergebnis in der DataBox).
 
+## Returncodes und Begründungen
+
+`rcInfo(rc)` liefert Art und Klartext zu jedem BMF-Returncode. Ob sich ein
+erneuter Versuch lohnt, beantwortet `istWiederholbar(rc)` — das ist bewusst
+etwas anderes als `rcInfo(rc).kind`: `kind` entscheidet, ob der Client wirft
+oder ein Ergebnis liefert, `istWiederholbar` dagegen, ob derselbe Aufruf später
+gelingen kann. Ein interner FON-Fehler (`V1`, `C1`, `1336`, …) kommt als
+fachliches Ergebnis zurück, ist aber wiederholbar; eine Ablehnung wie `B5` oder
+`B18` ändert sich durch Wiederholen nie.
+
+```ts
+import { rcInfo, istWiederholbar, begruendungText, begruendungCodes } from '@kreiseck/rksv';
+
+rcInfo('B6').text; // 'Außerbetriebnahme bereits erfolgt — keine Änderung mehr möglich'
+istWiederholbar('V1'); // true — interner FON-Fehler
+istWiederholbar('B5'); // false — fachliche Ablehnung
+
+begruendungCodes('ausserbetriebnahme'); // [6, 7]
+begruendungText('ausserbetriebnahme', 7); // 'Außerbetriebnahme aufgrund eines irreparablen Ausfalls'
+begruendungText('ausfall_kasse', 2); // null — Code 2 gibt es nur beim SEE-Ausfall
+```
+
+Die Begründungscodes stammen wörtlich aus Abschnitt 4 der BMF-Beschreibung und
+sind nach Vorgang getrennt (`ausfall_see`, `ausfall_kasse`,
+`ausserbetriebnahme`) — dieselben Zahlen bedeuten je nach Vorgang etwas
+anderes. Die Vorgangsvalidierung prüft gegen genau diesen Katalog.
+
 ## Belegcode offline prüfen
 
 Netzfrei, nur `node:crypto`, über den Subpath-Export:

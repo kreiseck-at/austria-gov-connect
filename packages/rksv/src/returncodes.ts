@@ -5,6 +5,12 @@ export interface RcInfo {
   text: string;
 }
 
+// Achtung: `kind` steuert, ob der Client wirft oder ein Ergebnis liefert
+// ('technisch' -> FonSessionError, siehe throwIfTechnical in client.ts).
+// Interne FON-Fehler kommen als Satz-Ergebnis in der Antwort und duerfen
+// deshalb NICHT 'technisch' sein -- sonst verschluckt ein Wurf satznr und msg.
+// Ob sich ein erneuter Versuch lohnt, beantwortet stattdessen
+// `istWiederholbar` weiter unten.
 const INTERN = (code: string): RcInfo => ({
   kind: 'fachlich',
   text: `Interner Fehler (${code}) — später erneut versuchen oder Hotline kontaktieren`,
@@ -89,6 +95,10 @@ export const RKDB_RC: Record<string, RcInfo> = {
   B33: { kind: 'fachlich', text: 'Seriennummer nicht registriert oder bereits außer Betrieb' },
   B34: { kind: 'fachlich', text: 'Ordnungsbegriff nicht registriert oder bereits außer Betrieb' },
   B35: { kind: 'fachlich', text: 'Der Begründungscode ist nicht vorhanden' },
+  B38: {
+    kind: 'fachlich',
+    text: 'Beleg wurde schon mehrfach fehlerhaft geprüft — bis zu 24 Stunden keine neuerliche Prüfung',
+  },
   C1: INTERN('C1'),
   V1: INTERN('V1'),
   V2: INTERN('V2'),
@@ -118,4 +128,50 @@ export function rcIsOk(rc: string): boolean {
 
 export function rcIsTechnical(rc: string): boolean {
   return rcInfo(rc).kind === 'technisch';
+}
+
+/**
+ * Fachliche Codes, bei denen derselbe Aufruf unveraendert spaeter gelingen
+ * kann: interne FON-Fehler und die voruebergehend gestoerte VDA-Abfrage. Die
+ * Spec sagt dazu ausdruecklich „Bitte versuchen Sie es zu einem spaeteren
+ * Zeitpunkt nochmal".
+ *
+ * Bewusst NICHT enthalten ist B38 (Beleg wird bis zu 24 h nicht neuerlich
+ * geprueft): der Aufruf gelaenge zwar irgendwann, ein zeitnaher Wiederholungs-
+ * versuch ist aber zwecklos und wuerde nur die Sperre verlaengern.
+ */
+const WIEDERHOLBAR_FACHLICH: ReadonlySet<string> = new Set([
+  '14',
+  '1336',
+  '1337',
+  'B4',
+  'C1',
+  'V1',
+  'V2',
+  'V3',
+  'V4',
+  'V5',
+  'V6',
+  'V7',
+  'V8',
+  'V9',
+  'V10',
+  'V11',
+  'V12',
+  'V13',
+  'V14',
+  'V15',
+  'V16',
+]);
+
+/**
+ * Ob ein erneuter Versuch mit unveraenderten Daten Aussicht auf Erfolg hat.
+ *
+ * Getrennt von {@link rcInfo}.kind, weil `kind` etwas anderes entscheidet:
+ * naemlich ob der Client wirft (technisch) oder ein Ergebnis liefert
+ * (fachlich). Eine fachliche Ablehnung wie B5 oder B18 aendert sich durch
+ * Wiederholen nie -- ein interner FON-Fehler schon.
+ */
+export function istWiederholbar(rc: string): boolean {
+  return rcIsTechnical(rc) || WIEDERHOLBAR_FACHLICH.has(rc);
 }

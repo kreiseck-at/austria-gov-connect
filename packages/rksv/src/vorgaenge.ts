@@ -1,4 +1,5 @@
 import { escapeXmlText, FonError } from '@kreiseck/finanzonline-core';
+import { begruendungCodes, istBegruendungZulaessig } from './begruendungen';
 
 export class RksvError extends FonError {
   constructor(message: string) {
@@ -94,24 +95,27 @@ export function vorgangArt(v: Vorgang): string {
   return v.art;
 }
 
+// Die zulaessigen Codes kommen aus dem Begruendungs-Katalog, nicht aus einer
+// zweiten Liste hier -- sonst driftet die Pruefung irgendwann von den Texten ab,
+// die der Aufrufer anzeigt.
 function ausfallBlock(
   a: { ausfall?: { begruendung: number; beginn: Date }; ausserbetriebnahme?: { begruendung: number } },
-  ausfallCodes: readonly number[],
+  ausfallVorgang: 'ausfall_see' | 'ausfall_kasse',
 ): string {
   const hatAusfall = a.ausfall !== undefined;
   const hatAbn = a.ausserbetriebnahme !== undefined;
   req(hatAusfall !== hatAbn, 'Genau eines von ausfall/ausserbetriebnahme ist erforderlich');
   if (a.ausfall) {
     req(
-      ausfallCodes.includes(a.ausfall.begruendung),
-      `Ungültiger Begründungscode ${a.ausfall.begruendung} für Ausfall`,
+      istBegruendungZulaessig(ausfallVorgang, a.ausfall.begruendung),
+      `Ungültiger Begründungscode ${a.ausfall.begruendung} für Ausfall — zulässig: ${begruendungCodes(ausfallVorgang).join(', ')}`,
     );
     return `<ausfall>${el('begruendung', String(a.ausfall.begruendung))}${el('beginn_ausfall', isoDateTime(a.ausfall.beginn))}</ausfall>`;
   }
   const abn = a.ausserbetriebnahme!;
   req(
-    abn.begruendung === 6 || abn.begruendung === 7,
-    `Ungültiger Begründungscode ${abn.begruendung} für Außerbetriebnahme`,
+    istBegruendungZulaessig('ausserbetriebnahme', abn.begruendung),
+    `Ungültiger Begründungscode ${abn.begruendung} für Außerbetriebnahme — zulässig: ${begruendungCodes('ausserbetriebnahme').join(', ')}`,
   );
   return `<ausserbetriebnahme>${el('begruendung', String(abn.begruendung))}</ausserbetriebnahme>`;
 }
@@ -140,12 +144,12 @@ export function vorgangXml(v: Vorgang, satznr: number): string {
       return `<registrierung_se>${satz}${kundeninfo}${el('art_se', v.artSe)}${el('vda_id', v.vdaId)}${zertEl}</registrierung_se>`;
     }
     case 'ausfall_kasse': {
-      const block = ausfallBlock(v, [1, 5, 99]);
+      const block = ausfallBlock(v, 'ausfall_kasse');
       return `<ausfall_kasse>${satz}${kundeninfo}${el('kassenidentifikationsnummer', v.kassenidentifikationsnummer)}${block}</ausfall_kasse>`;
     }
     case 'ausfall_se': {
       req(ZERT_SN.test(v.zertifikatsseriennummer), 'zertifikatsseriennummer muss hex (max 50) sein');
-      const block = ausfallBlock(v, [1, 2, 99]);
+      const block = ausfallBlock(v, 'ausfall_see');
       return `<ausfall_se>${satz}${kundeninfo}${zertSnEl(v.zertifikatsseriennummer)}${block}</ausfall_se>`;
     }
     case 'wiederinbetriebnahme_kasse':
