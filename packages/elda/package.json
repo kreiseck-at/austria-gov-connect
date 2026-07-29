@@ -25,6 +25,6 @@
     "test": "tsc -p tsconfig.test.json && node --test $(find test-dist -name '*.test.js')",
     "prepublishOnly": "npm run build"
   },
-  "dependencies": { "@kreiseck/finanzonline-core": "^0.1.5" },
+  "dependencies": { "@kreiseck/finanzonline-core": "^0.1.6" },
   "devDependencies": { "typescript": "^5.4.0", "@types/node": "^22.0.0" }
 }
