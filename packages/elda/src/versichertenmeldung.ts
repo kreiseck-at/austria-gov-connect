@@ -89,11 +89,29 @@ export interface MeldungsFelder {
   VWAZ?: string;
 }
 
+/**
+ * Baut einen geprüften Rohsatz. Das Ergebnis ist eingefroren — mitsamt seiner Werte.
+ *
+ * `RohSatz.werte` ist im Typ zwar als `Readonly<...>` deklariert, das gilt aber nur beim
+ * Übersetzen. Ein `satz.werte.AGRD = '99'` aus JavaScript heraus (oder nach einem `as`-Bruch)
+ * ging bisher durch und veränderte den Satz NACH beiden Prüfungen: Pflichtmatrix und
+ * Prüfkatalog hatten den Wert nie gesehen, `erstelleBestand` schreibt ihn trotzdem. Das
+ * Einfrieren macht die Zusage des Typs zur Laufzeitzusage — ein solcher Schreibzugriff wirft
+ * im Strict-Modus und bleibt sonst wirkungslos.
+ *
+ * `baueBestand` arbeitet weiterhin, weil es die Werte nicht verändert, sondern für den
+ * Identifikationsteil eine Kopie bildet (`{ ...s.werte, IDTEIL }`).
+ */
 function baue(satzart: Satzart, felder: MeldungsFelder): RohSatz {
   const werte: Record<string, string | undefined> = { ...felder };
   pruefePflicht(satzart, werte);
   pruefeInhalt(satzart, werte);
-  return { satzart, werte, felder: FELDER_E29, satzlaenge: SATZLAENGE_E29 };
+  return Object.freeze({
+    satzart,
+    werte: Object.freeze(werte),
+    felder: FELDER_E29,
+    satzlaenge: SATZLAENGE_E29,
+  });
 }
 
 /** Anmeldung (Satzart M3). Vor Arbeitsantritt zu übermitteln. */

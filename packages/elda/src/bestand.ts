@@ -221,6 +221,44 @@ export function baueBestand(saetze: readonly RohSatz[], opt: BestandOptionen): B
     }
   }
 
+  // Kapitel D.43 (REFW – Referenzwert, Seite 123): „Der Referenzwert wird grundsätzlich vom
+  // meldenden System ermittelt/belegt und dient der eindeutigen Identifikation einer Meldung
+  // an einen SV-Träger. Daher muss dieser Wert für alle Meldungen zu einer
+  // Beitragskontonummer eindeutig sein. Die Wiederverwendung eines bereits für eine Meldung
+  // oder ein mBGM-Paket vergebenen Werts ist nicht zulässig."
+  //
+  // Ein doppelter Referenzwert ist der teuerste Fehler dieser Art: Der Wert stellt den Bezug
+  // zwischen abhängigen Meldungen her (REFU, Kapitel D.44) und trägt die Rückmeldung aus dem
+  // Clearing-System. Wird er zweimal vergeben, zeigt eine spätere Richtigstellung oder ein
+  // Storno auf zwei Meldungen zugleich — strukturell einwandfrei, fachlich unauflösbar.
+  // Typischer Auslöser ist eine Schleife, die den Referenzwert aus einem Feld ableitet, das
+  // sich in zwei Sätzen desselben Bestands nicht unterscheidet.
+  //
+  // Geprüft wird genau die Aussage der Quelle: Eindeutigkeit JE BEITRAGSKONTONUMMER. Derselbe
+  // Referenzwert an zwei verschiedenen Beitragskonten wird nicht abgewiesen — der Satz auf
+  // Seite 123 grenzt die Eindeutigkeit ausdrücklich auf eine Beitragskontonummer ein. Über
+  // Bestandsgrenzen hinweg kann diese Prüfung ohnehin nichts sagen; dafür ist das meldende
+  // System zuständig.
+  const gesehen = new Map<string, number>();
+  for (const [i, s] of saetze.entries()) {
+    const refw = s.werte.REFW?.trim();
+    if (refw === undefined || refw === '') continue;
+    // ' ' als Trennzeichen: Es gehört zu keinem der beiden Felder und kann deshalb
+    // keine Kollision zweier verschiedener Paare erzeugen.
+    const schluessel = `${s.werte.BKNR?.trim() ?? ''} ${refw}`;
+    const zuerst = gesehen.get(schluessel);
+    if (zuerst !== undefined) {
+      throw new EldaError(
+        `Der Referenzwert (REFW) '${refw}' kommt im Bestand zweimal vor: in Satz ${zuerst} ` +
+          `(Satzart ${saetze[zuerst - 1]!.satzart}) und in Satz ${i + 1} (Satzart ${s.satzart}), ` +
+          'beide zur selben Beitragskontonummer. Laut Kapitel D.43 muss der Referenzwert für ' +
+          'alle Meldungen zu einer Beitragskontonummer eindeutig sein; er stellt den Bezug für ' +
+          'Richtigstellung, Storno und Clearing her.',
+      );
+    }
+    gesehen.set(schluessel, i + 1);
+  }
+
   const { tag, monat, jahr, stunde, minute, sekunde } = wanduhrzeit(
     opt.erstellt,
     opt.zeitzone ?? ZEITZONE_STANDARD,

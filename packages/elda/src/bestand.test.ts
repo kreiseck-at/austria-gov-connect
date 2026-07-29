@@ -211,3 +211,53 @@ test('M9: der Identifikationsteil wird nicht kodiert und sofort mit latin1 zurue
   const bestand = baueBestand([satz({ REFW: 'R' })], opt);
   assert.equal(bestand[18], 0xa4, 'VSNR-Position 19 traegt das Euro-Zeichen in ISO-8859-15');
 });
+
+// ---------------------------------------------------------------------------
+// D.43 — Eindeutigkeit des Referenzwerts je Beitragskontonummer
+// ---------------------------------------------------------------------------
+
+test('D.43: derselbe Referenzwert zweimal am selben Beitragskonto wird abgewiesen', () => {
+  // Kapitel D.43, Seite 123: „Daher muss dieser Wert fuer alle Meldungen zu einer
+  // Beitragskontonummer eindeutig sein." Ein doppelter REFW laesst eine spaetere
+  // Richtigstellung oder ein Storno auf zwei Meldungen zugleich zeigen.
+  const a = satz({ REFW: 'MELDE-NR-001', BKNR: '1234567', DGNA: 'Muster GmbH' });
+  const b = satz({ REFW: 'MELDE-NR-001', BKNR: '1234567', DGNA: 'Muster GmbH' });
+  assert.throws(
+    () => baueBestand([a, b], OPT),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaError);
+      assert.match((err as Error).message, /MELDE-NR-001/);
+      assert.match((err as Error).message, /D\.43/);
+      return true;
+    },
+  );
+});
+
+test('D.43: Fuellzeichen aus einem zurueckgelesenen Satz aendern daran nichts', () => {
+  const a = satz({ REFW: 'MELDE-NR-001', BKNR: '1234567', DGNA: 'Muster GmbH' });
+  const b = satz({ REFW: 'MELDE-NR-001   ', BKNR: '1234567 ', DGNA: 'Muster GmbH' });
+  assert.throws(() => baueBestand([a, b], OPT), EldaError);
+});
+
+test('D.43: verschiedene Referenzwerte am selben Konto und gleiche an verschiedenen Konten bauen', () => {
+  assert.doesNotThrow(() =>
+    baueBestand(
+      [
+        satz({ REFW: 'MELDE-NR-001', BKNR: '1234567', DGNA: 'Muster GmbH' }),
+        satz({ REFW: 'MELDE-NR-002', BKNR: '1234567', DGNA: 'Muster GmbH' }),
+      ],
+      OPT,
+    ),
+  );
+  // Die Quelle grenzt die Eindeutigkeit ausdruecklich auf eine Beitragskontonummer ein —
+  // derselbe Wert an zwei verschiedenen Konten wird deshalb nicht abgewiesen.
+  assert.doesNotThrow(() =>
+    baueBestand(
+      [
+        satz({ REFW: 'MELDE-NR-001', BKNR: '1234567', DGNA: 'Muster GmbH' }),
+        satz({ REFW: 'MELDE-NR-001', BKNR: '7654321', DGNA: 'Muster GmbH' }),
+      ],
+      OPT,
+    ),
+  );
+});

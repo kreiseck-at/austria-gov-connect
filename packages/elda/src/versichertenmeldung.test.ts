@@ -488,3 +488,38 @@ test("VWAZ '0000': Bedeutungsaenderung — Grundstellung statt null Stunden", ()
   assert.doesNotThrow(() => abmeldung({ ...abmeldeFelder, VWAZ: '0000' }));
   assert.throws(() => abmeldung({ ...abmeldeFelder, VWAZ: '4000' }), EldaError);
 });
+
+// ---------------------------------------------------------------------------
+// RohSatz ist nach dem Builder unveraenderlich
+// ---------------------------------------------------------------------------
+
+test('der gebaute Satz ist eingefroren — nachtraegliche Aenderungen umgehen sonst beide Pruefungen', () => {
+  // `RohSatz.werte` ist im Typ `Readonly<...>`, das gilt aber nur beim Uebersetzen. Aus
+  // JavaScript heraus oder nach einem `as`-Bruch ging ein Schreibzugriff bisher durch und
+  // veraenderte den Satz NACH Pflichtmatrix und Pruefkatalog — erstelleBestand schreibt ihn
+  // trotzdem.
+  const satz = abmeldung({
+    ...BASIS,
+    FANA: 'Maier',
+    VONA: 'Anna',
+    ADAT: '01022026',
+    GERF: 'N',
+    AGRD: '01',
+    EBSV: '31012026',
+  });
+  assert.ok(Object.isFrozen(satz), 'der RohSatz selbst');
+  assert.ok(Object.isFrozen(satz.werte), 'die Werte');
+
+  const veraenderbar = satz.werte as Record<string, string | undefined>;
+  assert.throws(() => {
+    veraenderbar.AGRD = '99';
+  }, TypeError);
+  assert.throws(() => {
+    veraenderbar.VWAZ = '4000';
+  }, TypeError);
+  assert.equal(satz.werte.AGRD, '01');
+  assert.equal(satz.werte.VWAZ, undefined);
+
+  // Der eingefrorene Satz laeuft unveraendert durch erstelleBestand.
+  assert.doesNotThrow(() => erstelleBestand([satz], OPT));
+});
