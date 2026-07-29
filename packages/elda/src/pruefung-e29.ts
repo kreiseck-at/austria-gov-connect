@@ -339,6 +339,109 @@ const DATUM_OHNE_KATALOGREGEL: readonly string[] = FELDER_E29.filter(
   (f) => f.format === 'TTMMJJJJ' && !DATUM_MIT_KATALOGREGEL.has(f.name),
 ).map((f) => f.name);
 
+/**
+ * Satzarten, für die die Abhängigkeitstabelle aus Kapitel D.22, Seite 96 („Der Zusammenhang
+ * zwischen dem Abmeldegrundcode und den abhängigen Feldern") gilt:
+ *
+ * - M4 laut der Einleitung auf Seite 95: „Bei Satzart (SART) M4 – Abmeldung – ist der Grund
+ *   der Abmeldung zwingend anzugeben. In Abhängigkeit vom Abmeldegrund sind weitere Angaben
+ *   erforderlich."
+ * - M9 laut dem Absatz unter der Legende auf Seite 97: „Bei Satzart (SART) M9 –
+ *   Richtigstellung Abmeldung – gelten ebenfalls die für die Satzart Abmeldung beschriebenen
+ *   Abhängigkeiten zwischen den Feldern Abmeldegrundcode (AGRD), Ende des
+ *   Beschäftigungsverhältnisses (EBSV), Betriebliche Vorsorge – ENDE (BVEN),
+ *   Kündigungsentschädigung (KEAB und KEBI) und Urlaubsersatzleistung (UEAB und UEBI)."
+ *
+ * Deckt sich mit den Satzarten, in denen die Pflichtmatrix AGRD überhaupt führt.
+ */
+const D22_SATZARTEN: ReadonlySet<Satzart> = new Set<Satzart>(['M4', 'M9']);
+
+/**
+ * Abmeldegründe, bei denen die Tabelle auf Seite 96 in der Spalte EBSV ein `Z` trägt —
+ * laut Legende auf Seite 97 „Angabe zwingend". Bei diesen Gründen endet das
+ * arbeitsrechtliche Beschäftigungsverhältnis, das Ende-Datum ist der Kern der Abmeldung.
+ *
+ * Dies ist die Gegenrichtung zu F7111 ({@link AGRD_OHNE_EBSV}, die `-`-Zellen derselben
+ * Spalte). Der Prüfkatalog kennt dafür keine Zeile: Eine Abmeldung wegen Kündigung ging
+ * bisher ohne arbeitsrechtliches Ende hinaus, formal einwandfrei und fachlich falsch.
+ *
+ * NICHT enthalten sind zwei der insgesamt 21 Codes mit einer Nicht-`-`-Zelle:
+ *
+ * - `00` trägt zwar `Z`, aber mit Fußnote 32: „Für Meldungen zur Sozialhilfe
+ *   (bedarfsorientierten Mindestsicherung) ist keine Angabe im Feld EBSV erforderlich." Ob
+ *   eine Meldung eine solche ist, ist aus den Feldwerten allein nicht entscheidbar (Seite 95
+ *   nennt dafür den Text „KV-ENDE" im Feld SAGR, aber nicht als verpflichtende Kennung) —
+ *   die Zelle bleibt deshalb unerzwungen.
+ * - `13` (Tod des Dienstnehmers) trägt `Z1`, „zwingend wenn zutreffend". Eine Bedingung
+ *   dieser Art kennt dieses Paket grundsätzlich nicht und erzwingt sie nirgends.
+ */
+const AGRD_MIT_EBSV_PFLICHT: ReadonlySet<string> = new Set([
+  '01',
+  '02',
+  '03',
+  '04',
+  '05',
+  '06',
+  '10',
+  '14',
+  '16',
+  '17',
+  '18',
+  '20',
+  '21',
+  '22',
+  '24',
+  '25',
+  '27',
+  '30',
+  '34',
+]);
+
+/**
+ * Abmeldegründe, bei denen die Tabelle auf Seite 96 in der Spalte BVEN ein `-` trägt — laut
+ * Legende auf Seite 97 „keine Angabe zulässig, Feld Grundstellung": Präsenzdienstleistung im
+ * Bundesheer (08), Zivildienst (09), Truppenübung (15) und Entlassung aus der
+ * Bundesbetreuung (20).
+ *
+ * Die übrigen Codes tragen dort `Z1` („zwingend wenn zutreffend", 07 und 29 sogar nur `Z3`,
+ * „Angabe möglich") — beide Stufen hängen an einer fachlichen Bedingung und bleiben deshalb
+ * wie überall in diesem Paket unerzwungen.
+ */
+const AGRD_OHNE_BVEN: ReadonlySet<string> = new Set(['08', '09', '15', '20']);
+
+/**
+ * Abmeldegründe, bei denen die Tabelle auf Seite 96 in der Spalte KE/UE ein `-` trägt:
+ * keine Kündigungsentschädigung und keine Urlaubsersatzleistung zulässig. Seite 95 benennt
+ * die vier dahinterstehenden Felder ausdrücklich — „Kündigungsentschädigung (KE; Felder KEAB
+ * und KEBI)" und „Urlaubsersatzleistung (UE; Felder UEAB und UEBI)".
+ *
+ * Es sind die fünfzehn Gründe, bei denen entweder das Beschäftigungsverhältnis fortdauert
+ * (Karenz, Präsenz-/Zivildienst, unbezahlter Urlaub, Ummeldung, Truppenübung, Unterbrechung
+ * der Gerichtspraxis, Bildungs-, Pflege- und Familienhospizkarenz, SV-Ende bei aufrechter
+ * Beschäftigung) oder eine Entschädigung fachlich ausgeschlossen ist (Pragmatisierung, Tod,
+ * Entlassung aus der Bundesbetreuung).
+ */
+const AGRD_OHNE_KE_UE: ReadonlySet<string> = new Set([
+  '07',
+  '08',
+  '09',
+  '10',
+  '11',
+  '12',
+  '13',
+  '15',
+  '19',
+  '20',
+  '23',
+  '29',
+  '31',
+  '32',
+  '33',
+]);
+
+/** Die vier Felder der Spalte KE/UE, benannt in Kapitel D.22, Seite 95. */
+const KE_UE_FELDER: readonly string[] = ['KEAB', 'KEBI', 'UEAB', 'UEBI'];
+
 /** Satzarten, bei denen der Prüfkatalog das Format von VWAZ prüft (F7116). */
 const VWAZ_FORMAT_PRUEFUNG: ReadonlySet<Satzart> = new Set<Satzart>(['M3', 'M8']);
 
@@ -454,6 +557,8 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
   const umda = normalisiertNumerisch(werte.UMDA);
   const rumd = normalisiertNumerisch(werte.RUMD);
   const vwaz = normalisiertNumerisch(werte.VWAZ);
+  const kebi = normalisiertNumerisch(werte.KEBI);
+  const uebi = normalisiertNumerisch(werte.UEBI);
   // Alphanumerische Felder (Typ `a/n`): dort ist die Grundstellung blank, eine Ziffernfolge
   // aus Nullen also ein echter Inhalt und keine Grundstellung.
   const refv = normalisiert(werte.REFV);
@@ -465,6 +570,7 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
   const frdv = normalisiert(werte.FRDV);
   const bvjn = normalisiert(werte.BVJN);
   const agrd = normalisiert(werte.AGRD);
+  const sagr = normalisiert(werte.SAGR);
 
   if (bknr === undefined) wirf('F7000', 'Die Beitragskontonummer (BKNR) darf nicht leer sein.');
 
@@ -627,6 +733,101 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
         'Ende des Beschäftigungsverhältnisses (EBSV) muss deshalb in Grundstellung bleiben ' +
         '(Kapitel D.22, Seite 96).',
     );
+  }
+
+  // Kapitel D.22, Seite 96, Spalte EBSV, Zellen mit `Z` („Angabe zwingend") — die
+  // Gegenrichtung zu F7111. Ohne Katalog-Code, deshalb mit Quellkapitel im Meldungstext.
+  if (
+    D22_SATZARTEN.has(satzart) &&
+    agrd !== undefined &&
+    AGRD_MIT_EBSV_PFLICHT.has(agrd) &&
+    ebsv === undefined
+  ) {
+    wirf(
+      'D.22',
+      `Beim Abmeldegrund (AGRD) '${agrd}' endet das Beschäftigungsverhältnis; das Feld Ende des ` +
+        'Beschäftigungsverhältnisses (EBSV) ist deshalb zwingend anzugeben (Kapitel D.22, ' +
+        'Seite 96, Spalte EBSV: „Z – Angabe zwingend").',
+    );
+  }
+
+  // Kapitel D.22, Seite 95: „Bei Code 00 – sonstiger Grund mit Ende des
+  // Beschäftigungsverhältnisses – ist im Feld SAGR „Abmeldegrund, Text" der nicht
+  // verschlüsselbare Abmeldegrund anzugeben." Der Code selbst sagt nichts aus; ohne den Text
+  // enthält die Abmeldung überhaupt keinen Grund mehr.
+  if (D22_SATZARTEN.has(satzart) && agrd === '00' && sagr === undefined) {
+    wirf(
+      'D.22',
+      "Beim Abmeldegrund (AGRD) '00' — sonstiger Grund mit Ende des Beschäftigungs" +
+        'verhältnisses — ist der nicht verschlüsselbare Grund im Feld Abmeldegrund, Text ' +
+        '(SAGR) anzugeben (Kapitel D.22, Seite 95).',
+    );
+  }
+
+  // Kapitel D.22, Seite 96, Spalte BVEN, Zellen mit `-` („keine Angabe zulässig, Feld
+  // Grundstellung").
+  if (
+    D22_SATZARTEN.has(satzart) &&
+    agrd !== undefined &&
+    AGRD_OHNE_BVEN.has(agrd) &&
+    normalisiertNumerisch(werte.BVEN) !== undefined
+  ) {
+    wirf(
+      'D.22',
+      `Beim Abmeldegrund (AGRD) '${agrd}' ist im Feld Betriebliche Vorsorge – ENDE (BVEN) keine ` +
+        'Angabe zulässig; das Feld muss in Grundstellung bleiben (Kapitel D.22, Seite 96, ' +
+        'Spalte BVEN).',
+    );
+  }
+
+  // Kapitel D.22, Seite 96, Spalte KE/UE, Zellen mit `-`. Die vier dahinterstehenden Felder
+  // benennt Seite 95 ausdrücklich (KEAB/KEBI für die Kündigungsentschädigung, UEAB/UEBI für
+  // die Urlaubsersatzleistung).
+  if (D22_SATZARTEN.has(satzart) && agrd !== undefined && AGRD_OHNE_KE_UE.has(agrd)) {
+    for (const feld of KE_UE_FELDER) {
+      if (normalisiertNumerisch(werte[feld]) !== undefined) {
+        wirf(
+          'D.22',
+          `Beim Abmeldegrund (AGRD) '${agrd}' sind Kündigungsentschädigung und ` +
+            `Urlaubsersatzleistung nicht zulässig; das Feld ${feld} muss in Grundstellung ` +
+            'bleiben (Kapitel D.22, Seite 96, Spalte KE/UE).',
+        );
+      }
+    }
+  }
+
+  // Kapitel E.29.2, Seite 307 (Abschnitt „Satzart M4 – Abmeldung"): „Die Felder
+  // ‚Kündigungsentschädigung bis' (KEBI) bzw. ‚Urlaubsersatzleistung bis' (UEBI) müssen ident
+  // mit dem Feld ‚Ende Entgelt' (ADAT) sein" — mit Fußnote 60 auf derselben Seite: „Wenn
+  // sowohl eine Kündigungsentschädigung (KE) als auch Urlaubsersatzleistung (UE) anfallen,
+  // ist die Zeit der KE vor der Zeit der UE anzugeben und nur das UEBI muss mit ADAT
+  // übereinstimmen."
+  //
+  // Daraus folgt genau zweierlei, beides allein aus Feldwerten entscheidbar: UEBI muss immer
+  // gleich ADAT sein, wenn es belegt ist; KEBI muss gleich ADAT sein, solange KEBI die
+  // einzige der beiden Zeiten ist. Liegen beide vor, endet KEBI vor der UE-Zeit und darf
+  // deshalb nicht mit ADAT übereinstimmen müssen.
+  //
+  // Nur für M4: Der Satz steht im M4-Abschnitt des Kapitels E.29.2 (die nächste Überschrift
+  // ist „Satzart M6 – Änderungsmeldung"). Kapitel D.22, Seite 97 dehnt ausdrücklich nur die
+  // ABHÄNGIGKEITEN VOM ABMELDEGRUND auf M9 aus, nicht diese Identitätsregel.
+  if (satzart === 'M4' && adat !== undefined) {
+    if (uebi !== undefined && uebi !== adat) {
+      wirf(
+        'E.29.2',
+        'Das Feld Urlaubsersatzleistung bis (UEBI) muss mit dem Ende des Entgeltanspruchs ' +
+          '(ADAT) übereinstimmen (Kapitel E.29.2, Seite 307).',
+      );
+    }
+    if (kebi !== undefined && uebi === undefined && kebi !== adat) {
+      wirf(
+        'E.29.2',
+        'Das Feld Kündigungsentschädigung bis (KEBI) muss mit dem Ende des Entgeltanspruchs ' +
+          '(ADAT) übereinstimmen (Kapitel E.29.2, Seite 307). Nur wenn zusätzlich eine ' +
+          'Urlaubsersatzleistung anfällt, liegt die Zeit der Kündigungsentschädigung davor und ' +
+          'ausschließlich UEBI muss mit ADAT übereinstimmen (Fußnote 60 ebenda).',
+      );
+    }
   }
 
   if (UMMELDUNG_ZIEL_PRUEFUNG.has(satzart) && soum !== undefined && soum !== 'J') {

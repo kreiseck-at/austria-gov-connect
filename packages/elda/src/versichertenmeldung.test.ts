@@ -42,7 +42,15 @@ test('jede Satzart trägt ihren Code', () => {
     'M3',
   );
   assert.equal(
-    abmeldung({ ...BASIS, FANA: 'Maier', VONA: 'Anna', ADAT: '01022026', GERF: 'N', AGRD: '01' }).satzart,
+    abmeldung({
+      ...BASIS,
+      FANA: 'Maier',
+      VONA: 'Anna',
+      ADAT: '01022026',
+      GERF: 'N',
+      AGRD: '01',
+      EBSV: '31012026', // Kapitel D.22, Seite 96: beim Abmeldegrund 01 zwingend
+    }).satzart,
     'M4',
   );
   assert.equal(aenderungsmeldung({ ...BASIS, FANA: 'Maier', VONA: 'Anna', ADAT: '01022026' }).satzart, 'M6');
@@ -58,6 +66,7 @@ test('jede Satzart trägt ihren Code', () => {
       RDAT: '02022026',
       GERF: 'N',
       AGRD: '01',
+      EBSV: '31012026', // Kapitel D.22, Seite 96/97: beim Abmeldegrund 01 auch bei M9 zwingend
     }).satzart,
     'M9',
   );
@@ -474,6 +483,7 @@ test("VWAZ '0000': Bedeutungsaenderung — Grundstellung statt null Stunden", ()
     ADAT: '01022026',
     GERF: 'N',
     AGRD: '01',
+    EBSV: '31012026', // Kapitel D.22, Seite 96: beim Abmeldegrund 01 zwingend
   };
   assert.doesNotThrow(() => abmeldung({ ...abmeldeFelder, VWAZ: '0000' }));
   assert.throws(() => abmeldung({ ...abmeldeFelder, VWAZ: '4000' }), EldaError);

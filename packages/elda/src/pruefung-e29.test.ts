@@ -339,12 +339,27 @@ test('F7096: Abmeldegrund gegen die Codeliste aus Kapitel D.22', () => {
   assert.doesNotThrow(() =>
     pruefeInhalt('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '12' }),
   );
-  // Rand der Liste: kleinster ('00') und größter ('34') Code.
+  // Rand der Liste: kleinster ('00') und größter ('34') Code. SAGR bzw. EBSV sind ergänzt,
+  // damit ausschließlich die Codeliste geprüft wird und nicht die Abhängigkeiten aus der
+  // Tabelle auf Seite 96 (Code 00 verlangt den Text in SAGR, Code 34 ein EBSV) zuschlagen.
   assert.doesNotThrow(() =>
-    pruefeInhalt('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '00' }),
+    pruefeInhalt('M4', {
+      BKNR: '1',
+      VSNR: '1234010180',
+      ADAT: '01022026',
+      AGRD: '00',
+      SAGR: 'AUFLOESUNG',
+      EBSV: '31012026',
+    }),
   );
   assert.doesNotThrow(() =>
-    pruefeInhalt('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '34' }),
+    pruefeInhalt('M4', {
+      BKNR: '1',
+      VSNR: '1234010180',
+      ADAT: '01022026',
+      AGRD: '34',
+      EBSV: '31012026',
+    }),
   );
 });
 
@@ -425,6 +440,9 @@ test('F7105 bei M9 bewusst NICHT umgesetzt: Kapitel E.29.2, Seite 326/327 (Beisp
   // werden muss (Matrix Seite 320/321, "...auf Abmeldegrund ungleich 12 (Ummeldung) zum Storno
   // der Ummeldung"). Für M9 bleibt die Regel deshalb absichtlich ungeprüft, siehe
   // pruefeInhalt-Doku. Für M4 gilt das NICHT — siehe den folgenden Test.
+  // EBSV ist ergänzt: Kapitel D.22, Seite 96 führt es beim Abmeldegrund 02 als „Z" — ohne
+  // die Angabe verletzte die Fixture eine zweite, unabhängige Regel. Das entspricht dem
+  // dokumentierten Beispiel 6 (Seite 326/327), das EBSV ebenfalls belegt.
   assert.doesNotThrow(() =>
     pruefeInhalt('M9', {
       BKNR: '1',
@@ -432,6 +450,7 @@ test('F7105 bei M9 bewusst NICHT umgesetzt: Kapitel E.29.2, Seite 326/327 (Beisp
       ADAT: '01022026',
       RDAT: '02022026',
       AGRD: '02',
+      EBSV: '01022026',
       UMDA: '01032026',
       ZTUM: '17',
       ZKUM: '7788991',
@@ -445,6 +464,8 @@ test('F7105 bei M4 umgesetzt (A1-Nachtrag): Ummeldedatum belegt verlangt Abmelde
   // UMDA als "Z" (Seite 319), die Ausnahmematrix "Ummeldung ohne Zielangaben" mit UMDA als "-"
   // (Seite 321). Ein dokumentierter M4-Satz mit belegtem UMDA und einem Abmeldegrund ungleich
   // 12 kommt nirgends vor — F7105 wird für M4 deshalb wörtlich umgesetzt.
+  // EBSV ist auch hier ergänzt (Kapitel D.22, Seite 96: „Z" beim Abmeldegrund 02), damit
+  // ausschließlich F7105 verletzt ist.
   wirft(
     'M4',
     {
@@ -452,6 +473,7 @@ test('F7105 bei M4 umgesetzt (A1-Nachtrag): Ummeldedatum belegt verlangt Abmelde
       VSNR: '1234010180',
       ADAT: '01022026',
       AGRD: '02',
+      EBSV: '01022026',
       UMDA: '01032026',
       ZTUM: '17',
       ZKUM: '7788991',
@@ -526,13 +548,19 @@ const DATUMSFELDER_OHNE_KATALOG: readonly (readonly [
   Record<string, string>,
 ])[] = [
   ['BDAT', 'M6', {}],
-  ['EBSV', 'M4', { AGRD: '01' }],
+  // AGRD 13 (Tod des Dienstnehmers) trägt in der Tabelle auf Seite 96 für EBSV ein `Z1` —
+  // weder zwingend noch verboten. Damit prüft die Fixture ausschließlich den Kalender, in
+  // beide Richtungen (belegt wie Grundstellung).
+  ['EBSV', 'M4', { AGRD: '13' }],
   ['KEAB', 'M4', { AGRD: '01', EBSV: '31012026' }],
-  ['KEBI', 'M4', { AGRD: '01', EBSV: '31012026' }],
   ['UEAB', 'M4', { AGRD: '01', EBSV: '31012026' }],
-  ['UEBI', 'M4', { AGRD: '01', EBSV: '31012026' }],
   ['BVAB', 'M3', { BBER: '05' }],
   ['BVEN', 'M4', { AGRD: '01', EBSV: '31012026' }],
+  // KEBI und UEBI stehen hier unter M9: Bei M4 verlangt Kapitel E.29.2, Seite 307 zusätzlich
+  // Gleichheit mit ADAT — die Fixture unten variiert das Datum aber frei und prüft
+  // ausschließlich den Kalender.
+  ['KEBI', 'M9', { RDAT: '02022026', AGRD: '01', EBSV: '31012026' }],
+  ['UEBI', 'M9', { RDAT: '02022026', AGRD: '01', EBSV: '31012026' }],
 ];
 
 test('E.29: die acht Datumsfelder ohne Katalog-Zeile werden gegen den Kalender geprüft', () => {
@@ -810,10 +838,203 @@ test('F7111: alle uebrigen Abmeldegruende duerfen EBSV belegen', () => {
           ADAT: '01022026',
           AGRD: agrd,
           EBSV: '31012026',
+          // SAGR ist ergaenzt: Beim Code 00 verlangt Kapitel D.22, Seite 95 den Text; bei den
+          // uebrigen Codes ist das Feld laut Matrix Z1 und damit unschaedlich.
+          SAGR: 'AUFLOESUNG',
         }),
       agrd,
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// Kapitel D.22, Seite 96 — die Abhaengigkeitstabelle in ihren uebrigen Richtungen
+// ---------------------------------------------------------------------------
+
+/**
+ * Die Tabelle „Zusammenhang zwischen dem Abmeldegrundcode und den abhaengigen Feldern"
+ * (Kapitel D.22, Seite 96), Zeile fuer Zeile ausgeschrieben. Reines Datenabbild — die Legende
+ * auf Seite 97 lautet: `Z` Angabe zwingend, `Z1` zwingend wenn zutreffend, `Z3` Angabe
+ * moeglich, `-` keine Angabe zulaessig, Feld Grundstellung.
+ *
+ * Erzwungen werden davon nur die objektiv entscheidbaren Stufen `Z` und `-`, und beim Code 00
+ * auch das `Z` nicht (Fussnote 32: fuer Meldungen zur Sozialhilfe ist keine Angabe im Feld
+ * EBSV erforderlich — ob eine Meldung eine solche ist, sagen die Feldwerte nicht).
+ */
+const D22_TABELLE: readonly (readonly [string, string, string, string])[] = [
+  ['00', 'Z32', 'Z1', 'Z1'],
+  ['01', 'Z', 'Z1', 'Z1'],
+  ['02', 'Z', 'Z1', 'Z1'],
+  ['03', 'Z', 'Z1', 'Z1'],
+  ['04', 'Z', 'Z1', 'Z1'],
+  ['05', 'Z', 'Z1', 'Z1'],
+  ['06', 'Z', 'Z1', 'Z1'],
+  ['07', '-', 'Z3', '-'],
+  ['08', '-', '-', '-'],
+  ['09', '-', '-', '-'],
+  ['10', 'Z', 'Z1', '-'],
+  ['11', '-', 'Z1', '-'],
+  ['12', '-', 'Z1', '-'],
+  ['13', 'Z1', 'Z1', '-'],
+  ['14', 'Z', 'Z1', 'Z1'],
+  ['15', '-', '-', '-'],
+  ['16', 'Z', 'Z1', 'Z1'],
+  ['17', 'Z', 'Z1', 'Z1'],
+  ['18', 'Z', 'Z1', 'Z1'],
+  ['19', '-', 'Z1', '-'],
+  ['20', 'Z', '-', '-'],
+  ['21', 'Z', 'Z1', 'Z1'],
+  ['22', 'Z', 'Z1', 'Z1'],
+  ['23', '-', 'Z1', '-'],
+  ['24', 'Z', 'Z1', 'Z1'],
+  ['25', 'Z', 'Z1', 'Z1'],
+  ['27', 'Z', 'Z1', 'Z1'],
+  ['29', '-', 'Z3', '-'],
+  ['30', 'Z', 'Z1', 'Z1'],
+  ['31', '-', 'Z1', '-'],
+  ['32', '-', 'Z1', '-'],
+  ['33', '-', 'Z1', '-'],
+  ['34', 'Z', 'Z1', 'Z1'],
+];
+
+/** Rahmenwerte einer M4-Fixture, in die der jeweils geprüfte Fall eingesetzt wird. */
+const M4_RAHMEN = { BKNR: '1', VSNR: '1234010180', ADAT: '01022026' };
+
+/** Dasselbe für M9 — dort kommt das richtige Abmeldedatum hinzu. */
+const M9_RAHMEN = { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '02022026' };
+
+test('D.22: bei jedem Abmeldegrund mit `Z` in der Spalte EBSV wird das Ende zwingend verlangt', () => {
+  // Die Gegenrichtung zu F7111. Eine Abmeldung wegen Kuendigung ohne arbeitsrechtliches Ende
+  // baute frueher durch und war formal einwandfrei — genau die Art Fehler, die erst Monate
+  // spaeter in der Versicherungshistorie auffaellt.
+  for (const [agrd, ebsv] of D22_TABELLE) {
+    if (ebsv !== 'Z') continue;
+    wirft('M4', { ...M4_RAHMEN, AGRD: agrd }, 'D.22');
+    wirft('M9', { ...M9_RAHMEN, AGRD: agrd }, 'D.22');
+    // Mit EBSV baut derselbe Satz.
+    assert.doesNotThrow(
+      () => pruefeInhalt('M4', { ...M4_RAHMEN, AGRD: agrd, EBSV: '31012026' }),
+      `M4/${agrd}`,
+    );
+  }
+});
+
+test('D.22: die Grundstellung von EBSV zaehlt dabei als fehlende Angabe', () => {
+  for (const ebsv of ['', '00000000', '0']) {
+    wirft('M4', { ...M4_RAHMEN, AGRD: '01', EBSV: ebsv }, 'D.22');
+  }
+});
+
+test('D.22: beim Code 00 bleibt das `Z` wegen der Sozialhilfe-Fussnote unerzwungen', () => {
+  // Fussnote 32 zur Seite 96: „Fuer Meldungen zur Sozialhilfe (bedarfsorientierten
+  // Mindestsicherung) ist keine Angabe im Feld EBSV erforderlich." Ob eine Meldung eine
+  // solche ist, ist aus den Feldwerten nicht entscheidbar — die Zelle bleibt offen. Der Text
+  // in SAGR ist dagegen unbedingt verlangt (Seite 95).
+  assert.doesNotThrow(() => pruefeInhalt('M4', { ...M4_RAHMEN, AGRD: '00', SAGR: 'KV-ENDE' }));
+});
+
+test('D.22: beim Code 13 bleibt das `Z1` unerzwungen', () => {
+  // „zwingend wenn zutreffend" haengt an einer fachlichen Bedingung, die dieses Paket
+  // nirgends erzwingt — beide Richtungen muessen offen bleiben.
+  assert.doesNotThrow(() => pruefeInhalt('M4', { ...M4_RAHMEN, AGRD: '13' }));
+  assert.doesNotThrow(() => pruefeInhalt('M4', { ...M4_RAHMEN, AGRD: '13', EBSV: '31012026' }));
+});
+
+test('D.22: Code 00 verlangt den Abmeldegrund im Klartext (Feld SAGR)', () => {
+  // Kapitel D.22, Seite 95: „Bei Code 00 [...] ist im Feld SAGR ‚Abmeldegrund, Text' der
+  // nicht verschluesselbare Abmeldegrund anzugeben." Ohne ihn enthaelt die Abmeldung
+  // ueberhaupt keinen Grund.
+  wirft('M4', { ...M4_RAHMEN, AGRD: '00', EBSV: '31012026' }, 'D.22');
+  wirft('M9', { ...M9_RAHMEN, AGRD: '00', EBSV: '31012026' }, 'D.22');
+  assert.doesNotThrow(() =>
+    pruefeInhalt('M4', { ...M4_RAHMEN, AGRD: '00', EBSV: '31012026', SAGR: 'AUFLOESUNG' }),
+  );
+});
+
+test('D.22: bei jedem Abmeldegrund mit `-` in der Spalte BVEN bleibt BVEN in Grundstellung', () => {
+  for (const [agrd, , bven] of D22_TABELLE) {
+    const rahmen = { ...M4_RAHMEN, AGRD: agrd, ...(agrd === '20' ? { EBSV: '31012026' } : {}) };
+    if (bven === '-') {
+      wirft('M4', { ...rahmen, BVEN: '31012026' }, 'D.22');
+      wirft('M9', { ...M9_RAHMEN, ...rahmen, BVEN: '31012026' }, 'D.22');
+    }
+  }
+  // Die Gegenprobe: Bei den Codes mit Z1/Z3 ist BVEN zulaessig und wird nicht erzwungen.
+  assert.doesNotThrow(() => pruefeInhalt('M4', { ...M4_RAHMEN, AGRD: '07', BVEN: '31012026' }));
+  assert.doesNotThrow(() => pruefeInhalt('M4', { ...M4_RAHMEN, AGRD: '07' }));
+});
+
+test('D.22: bei jedem Abmeldegrund mit `-` in der Spalte KE/UE bleiben alle vier Felder leer', () => {
+  for (const [agrd, ebsv, , keue] of D22_TABELLE) {
+    if (keue !== '-') continue;
+    const rahmen = { ...M4_RAHMEN, AGRD: agrd, ...(ebsv === 'Z' ? { EBSV: '31012026' } : {}) };
+    for (const feld of ['KEAB', 'KEBI', 'UEAB', 'UEBI']) {
+      wirft('M4', { ...rahmen, [feld]: '01022026' }, 'D.22');
+    }
+  }
+  // Gegenprobe: Bei einem Code mit Z1 in der Spalte KE/UE sind alle vier zulaessig.
+  assert.doesNotThrow(() =>
+    pruefeInhalt('M4', {
+      ...M4_RAHMEN,
+      AGRD: '01',
+      EBSV: '31012026',
+      KEAB: '01022026',
+      KEBI: '01022026',
+      UEAB: '01022026',
+      UEBI: '01022026',
+    }),
+  );
+});
+
+test('D.22: die Abhaengigkeiten gelten nur bei M4 und M9', () => {
+  // Seite 95 nennt M4, Seite 97 dehnt sie ausdruecklich auf M9 aus — mehr nicht. In den
+  // uebrigen Satzarten fuehrt die Pflichtmatrix AGRD ohnehin auf `-`.
+  assert.doesNotThrow(() => pruefeInhalt('M3', { ...M4_RAHMEN, BBER: '05', AGRD: '01', BVEN: '31012026' }));
+});
+
+test('E.29.2: UEBI muss mit ADAT uebereinstimmen, KEBI nur ohne Urlaubsersatzleistung', () => {
+  // Seite 307: „Die Felder ‚Kuendigungsentschaedigung bis' (KEBI) bzw.
+  // ‚Urlaubsersatzleistung bis' (UEBI) muessen ident mit dem Feld ‚Ende Entgelt' (ADAT) sein"
+  // — mit Fussnote 60: „Wenn sowohl eine Kuendigungsentschaedigung (KE) als auch
+  // Urlaubsersatzleistung (UE) anfallen, ist die Zeit der KE vor der Zeit der UE anzugeben
+  // und nur das UEBI muss mit ADAT uebereinstimmen."
+  const rahmen = { ...M4_RAHMEN, AGRD: '01', EBSV: '31012026' };
+  wirft('M4', { ...rahmen, UEAB: '01022026', UEBI: '02022026' }, 'E.29.2');
+  wirft('M4', { ...rahmen, KEAB: '01022026', KEBI: '02022026' }, 'E.29.2');
+  assert.doesNotThrow(() => pruefeInhalt('M4', { ...rahmen, UEAB: '01022026', UEBI: '01022026' }));
+  assert.doesNotThrow(() => pruefeInhalt('M4', { ...rahmen, KEAB: '01022026', KEBI: '01022026' }));
+
+  // Der Fall der Fussnote: KE vor UE. KEBI darf (und muss) dann von ADAT abweichen.
+  assert.doesNotThrow(() =>
+    pruefeInhalt('M4', {
+      ...rahmen,
+      KEAB: '01012026',
+      KEBI: '15012026',
+      UEAB: '16012026',
+      UEBI: '01022026',
+    }),
+  );
+  // Auch im Fussnoten-Fall bleibt UEBI an ADAT gebunden.
+  wirft(
+    'M4',
+    { ...rahmen, KEAB: '01012026', KEBI: '15012026', UEAB: '16012026', UEBI: '15022026' },
+    'E.29.2',
+  );
+});
+
+test('E.29.2: die Identitaet mit ADAT steht im M4-Abschnitt und wird bei M9 nicht erzwungen', () => {
+  // Die Stelle auf Seite 307 gehoert zum Abschnitt „Satzart M4 – Abmeldung"; die naechste
+  // Ueberschrift ist „Satzart M6 – Aenderungsmeldung". Kapitel D.22, Seite 97 dehnt
+  // ausdruecklich nur die Abhaengigkeiten vom Abmeldegrund auf M9 aus, nicht diese Regel.
+  assert.doesNotThrow(() =>
+    pruefeInhalt('M9', {
+      ...M9_RAHMEN,
+      AGRD: '01',
+      EBSV: '31012026',
+      UEAB: '01022026',
+      UEBI: '05022026',
+    }),
+  );
 });
 
 test('F7111: greift nur bei M4 und M9 — der Katalog nennt keine weitere Satzart', () => {
@@ -866,6 +1087,9 @@ test('M8: ein zurueckgelesenes UMDA in Grundstellung ist leer, kein Formatfehler
       VSNR: '1234010180',
       ADAT: '01022026',
       AGRD: '01',
+      // EBSV ergaenzt (Kapitel D.22, Seite 96: „Z" beim Abmeldegrund 01), damit die Fixture
+      // ausschliesslich die Grundstellung von UMDA prueft.
+      EBSV: '31012026',
       UMDA: '00000000',
     }),
   );
