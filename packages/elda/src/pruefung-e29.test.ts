@@ -167,12 +167,26 @@ test('F7069: Beschäftigungsbereich 01 bis 13', () => {
   );
 });
 
-test('F7069 gilt laut Prüfkatalog nur für M3, nicht für M6', () => {
-  // Im Blatt VR ist die Satzart-Zelle zu F7069 mit der von F7068 (Nr. 26, „leer“) verbunden
-  // und trägt „M3“; die BBER-Regel zu M6 (F7101, GERF/FRDV-Konsistenz) ist eine eigene,
-  // unverbundene Zelle und eine Warnung — hier bewusst nicht umgesetzt.
+test('F7069: der Wertebereich aus D.39 gilt auch bei M6, wo die Matrix BBER zulässt', () => {
+  // Bewusste Änderung gegenüber der früheren Fassung dieses Tests, die hier ausdrücklich
+  // `doesNotThrow` erwartete: Der Prüfkatalog führt F7069 nur unter M3 (die Satzart-Zelle ist
+  // mit der von F7068 verbunden und trägt „M3"), die Codeliste steht aber in Kapitel D.39 und
+  // gehört zum FELD, nicht zur Satzart. Die Pflichtmatrix lässt BBER bei M6 mit der Stufe `V`
+  // zu — ein '99' ging dort stillschweigend durch und stand danach als Beschäftigungsbereich
+  // im Satz.
+  wirft('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '99' }, 'F7069');
+  wirft('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '1' }, 'F7069');
   assert.doesNotThrow(() =>
-    pruefeInhalt('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '99' }),
+    pruefeInhalt('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '13' }),
+  );
+});
+
+test('F7069: Satzarten, in denen die Matrix BBER auf `-` führt, prüft pruefeInhalt nicht', () => {
+  // Bei M4/M8/M9/S3/S4 trägt BBER in der Matrix ein `-`; eine Angabe weist bereits
+  // `pruefePflicht` ab, hier ist deshalb nichts zu prüfen. Die Aufteilung ist Absicht:
+  // pruefeInhalt entscheidet über Wertebereiche, nicht über Zulässigkeit je Satzart.
+  assert.doesNotThrow(() =>
+    pruefeInhalt('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '12', BBER: '99' }),
   );
 });
 
@@ -494,6 +508,111 @@ test('F7116: VWAZ vierstellig', () => {
       FRDV: 'N',
       VWAZ: '1567',
     }),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Wertebereiche der Kennzeichenfelder (GERF/FRDV/BVJN) und der Versicherungsnummer
+// ---------------------------------------------------------------------------
+
+test('GERF/FRDV/BVJN: nur J und N sind zulässig, in genau dieser Schreibweise', () => {
+  // Keines der drei Felder hat eine Zeile im Prüfkatalog; die Werte stehen in der
+  // Feldtabelle E.29 (GERF, Feld Nr. 19) bzw. in D.41 (FRDV) und D.47 (BVJN).
+  for (const wert of ['n', 'j', 'X', '1', 'Ja']) {
+    wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '05', GERF: wert }, 'E.29');
+    wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '05', FRDV: wert }, 'D.41');
+    wirft('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BVJN: wert }, 'D.47');
+  }
+  for (const wert of ['J', 'N']) {
+    assert.doesNotThrow(() =>
+      pruefeInhalt('M3', {
+        BKNR: '1',
+        VSNR: '1234010180',
+        ADAT: '01022026',
+        BBER: '05',
+        GERF: wert,
+        FRDV: wert,
+        VWAZ: '1567',
+      }),
+    );
+    assert.doesNotThrow(() =>
+      pruefeInhalt('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BVJN: wert }),
+    );
+  }
+});
+
+test('GERF/FRDV/BVJN werden in jeder Satzart geprüft, in der die Matrix sie belegen lässt', () => {
+  // GERF: Z bei M3/M4/M9, V bei M6 — also vier Satzarten, nicht nur die Anmeldung.
+  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '12', GERF: 'n' }, 'E.29');
+  wirft('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', GERF: 'n' }, 'E.29');
+  wirft(
+    'M9',
+    { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '02022026', AGRD: '12', GERF: 'n' },
+    'E.29',
+  );
+  // FRDV: Z bei M3, V bei M6.
+  wirft('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', FRDV: 'n' }, 'D.41');
+});
+
+test('FRDV: ein kleingeschriebenes n hebelt F7115 nicht mehr aus, sondern wird abgewiesen', () => {
+  // Der Kern des Befundes: Die F7115-Bedingung vergleicht zeichengenau gegen 'N', so wie es
+  // der Prüfkatalog formuliert. Ein 'n' war früher belegt, aber ungleich — die Meldung ging
+  // ohne VWAZ hinaus UND trug ein Kleinbuchstaben-Byte auf Position 540.
+  wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01012026', BBER: '01', FRDV: 'n' }, 'D.41');
+  // Mit dem korrekten 'N' greift F7115 unverändert.
+  wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01012026', BBER: '01', FRDV: 'N' }, 'F7115');
+});
+
+test('F7115: am Stichtag selbst (ADAT = 31.12.2025) greift die VWAZ-Pflicht noch nicht', () => {
+  // Die nicht feuernde Seite der Bedingung „ADAT>31.12.2025" aus Blatt VR Nr. 36 — der
+  // 31.12.2025 ist NICHT größer als der 31.12.2025.
+  assert.doesNotThrow(() =>
+    pruefeInhalt('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '31122025', BBER: '01', FRDV: 'N' }),
+  );
+  // Einen Tag später greift sie.
+  wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01012026', BBER: '01', FRDV: 'N' }, 'F7115');
+});
+
+test('F7020: die Versicherungsnummer wird gegen die Stellenfolge aus D.6 geprüft', () => {
+  // LLLPTTMMJJ: Tag 01–31, Monat 01–12 bzw. 13–15 beim fingierten Datum (Kapitel D.6,
+  // Seite 72). '1234999999' baute früher stillschweigend durch.
+  for (const vsnr of ['1234999999', '1234000180', '1234321180', '1234011680', '123401018']) {
+    wirft('M3', { BKNR: '1', VSNR: vsnr, ADAT: '01022026', BBER: '05' }, 'F7020');
+  }
+  // Gültig: echtes Geburtsdatum, Randtage und die drei fingierten Monate 13–15.
+  for (const vsnr of ['1234010180', '1234311280', '1234011380', '1234011480', '1234311580']) {
+    assert.doesNotThrow(
+      () => pruefeInhalt('M3', { BKNR: '1', VSNR: vsnr, ADAT: '01022026', BBER: '05' }),
+      vsnr,
+    );
+  }
+});
+
+test('F7020: die Grundstellung der VSNR bleibt eine Grundstellung, kein Formatfehler', () => {
+  // '0000000000' ist laut D.6 die ausdrücklich vorgesehene Meldung „VSNR unbekannt" — sie
+  // darf nicht in die Strukturprüfung laufen. Stattdessen greift die GEBD/REFV-Alternative.
+  assert.doesNotThrow(() =>
+    pruefeInhalt('M3', {
+      BKNR: '1',
+      VSNR: '0000000000',
+      GEBD: '01011980',
+      REFV: 'REF-VSNR-1',
+      ADAT: '01022026',
+      BBER: '05',
+    }),
+  );
+});
+
+test('F7020: die Meldung nennt das Feld, nicht die Versicherungsnummer selbst', () => {
+  assert.throws(
+    () => pruefeInhalt('M3', { BKNR: '1', VSNR: '1234999999', ADAT: '01022026', BBER: '05' }),
+    (err: unknown) => {
+      const text = (err as Error).message;
+      assert.ok(err instanceof EldaError);
+      assert.match(text, /F7020/);
+      assert.ok(!text.includes('1234999999'), `der Wert steht in der Meldung — ${text}`);
+      return true;
+    },
   );
 });
 

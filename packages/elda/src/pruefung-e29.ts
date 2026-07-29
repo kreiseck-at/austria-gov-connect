@@ -1,5 +1,5 @@
 import { EldaError } from './errors';
-import type { Satzart } from './pflicht-e29';
+import { PFLICHT_E29, type Satzart } from './pflicht-e29';
 
 type Werte = Readonly<Record<string, string | undefined>>;
 
@@ -92,6 +92,103 @@ function gueltigesDatum(wert: string): boolean {
   if (mm < 1 || mm > 12) return false;
   return tt >= 1 && tt <= tageImMonat(mm, jjjj);
 }
+
+/**
+ * Prüft die Struktur der Versicherungsnummer gegen Kapitel D.6, Seite 72. Das Dokument
+ * druckt dort die Stellenfolge `LLLPTTMMJJ` ab und schlüsselt sie auf:
+ *
+ * ```
+ * LLL     Laufnummer
+ * P       Prüfziffer
+ * TTMMJJ  Geburtsdatum bzw. fingiertes Datum bestehend aus
+ *         TT = 01 - 31
+ *         MM = 13 - 15
+ *         JJ = Geburtsjahr
+ * ```
+ *
+ * Der Tag liegt also stets zwischen 01 und 31. Für den Monat nennt das Dokument den Bereich
+ * 13–15 ausdrücklich als den des FINGIERTEN Datums; beim echten Geburtsdatum sind es die
+ * gewöhnlichen 01–12. Zulässig ist damit 01–15, und genau das wird hier geprüft.
+ *
+ * Bewusst NICHT geprüft wird der Tag gegen die tatsächliche Monatslänge: Das Dokument nennt
+ * für TT einen glatten Bereich 01–31 und keine Abhängigkeit vom Monat — bei den fingierten
+ * Monaten 13–15 gäbe es eine solche Länge auch gar nicht.
+ *
+ * Die Prüfziffer bleibt ebenfalls ungeprüft: Ihr Verfahren steht in keiner der verfügbaren
+ * Quellen (weder in Kapitel D.6 noch sonst irgendwo in der Organisationsbeschreibung oder im
+ * Prüfkatalog). Sie zu raten wäre schlimmer als sie wegzulassen — eine falsch berechnete
+ * Prüfziffer würde gültige Versicherungsnummern abweisen. ELDA prüft sie serverseitig
+ * (Prüfkatalog F7020).
+ */
+function gueltigeVsnrStruktur(vsnr: string): boolean {
+  if (!/^\d{10}$/.test(vsnr)) return false;
+  const tt = Number(vsnr.slice(4, 6));
+  const mm = Number(vsnr.slice(6, 8));
+  return tt >= 1 && tt <= 31 && mm >= 1 && mm <= 15;
+}
+
+/**
+ * Entscheidet anhand der Pflichtmatrix aus Kapitel E.29.1, ob ein Feld bei dieser Satzart
+ * überhaupt belegt sein darf. Alle Stufen außer `-` erlauben eine Angabe; `-` bedeutet laut
+ * Legende „keine Angabe, Feld in Grundstellung“ und wird bereits von `pruefePflicht`
+ * abgewiesen.
+ *
+ * Die Wertebereichsprüfungen unten hängen sich an diese Frage, statt ihre Satzarten erneut
+ * aufzuzählen: Ein Code- oder Kennzeichenfeld hat genau einen Wertevorrat — der steht in
+ * seinem Feldkapitel und nicht in der Satzart-Spalte des Prüfkatalogs. Wo die Matrix das Feld
+ * belegen lässt, muss der Wert also aus diesem Vorrat stammen, und wo sie es nicht tut,
+ * erübrigt sich die Frage. Damit können Matrix und Wertebereichsprüfung nicht auseinander-
+ * laufen, wenn eine spätere Ergänzung eine Satzart-Spalte verschiebt.
+ */
+function darfBelegtSein(satzart: Satzart, feld: string): boolean {
+  return PFLICHT_E29[satzart][feld] !== '-';
+}
+
+/**
+ * Zulässige Werte der Kennzeichenfelder GERF, FRDV und BVJN. Alle drei sind einstellige
+ * Codefelder mit demselben, in ihrer jeweiligen Quelle wörtlich abgedruckten Vorrat:
+ *
+ * - `GERF` (Geringfügigkeit): Feldtabelle Kapitel E.29, Feld Nr. 19, Position 539
+ *   (Seite 300). Die Spalte INHALT/BEZEICHNUNG druckt unter dem Feldnamen „J = Ja“ und
+ *   „N = Nein“ ab; ein eigenes D-Kapitel hat das Feld nicht (Spalte SIEHE KAPITEL trägt `-`).
+ * - `FRDV` (Freier Dienstvertrag): Kapitel D.41, Seite 121 — „1 Stellen, Code / J Ja /
+ *   N Nein“. Ebenso in der Feldtabelle, Feld Nr. 20, Position 540.
+ * - `BVJN` (Betriebliche Vorsorge): Kapitel D.47, Seite 127 — „1 Stelle, Code / J - Ja /
+ *   N - Nein“.
+ *
+ * Der Prüfkatalog führt für keines der drei Felder eine Formatzeile (Blatt `VR` kennt zu
+ * GERF und FRDV nur die Warnungen F7102/F7103 zur Teilbelegung bei M6, zu BVJN gar nichts).
+ * Ein `'n'`, `'X'` oder `'Ja'` geht deshalb auch bei ELDA durch die formale Prüfung und
+ * landet als stiller Falschwert in der Versicherungshistorie — die Prüfung hier ist aus den
+ * Felddefinitionen abgeleitet und trägt mangels Katalog-Codes das Quellkapitel im
+ * Meldungstext, wie es schon die aus Kapitel E.30.2 abgeleitete REFV-Regel tut.
+ *
+ * Klein- und Großschreibung werden NICHT stillschweigend angeglichen: Der Satz überträgt das
+ * Byte unverändert, und ein `'n'` an Position 540 ist nicht dasselbe wie ein `'N'`. Welche
+ * Schreibweise gemeint war, entscheidet der Aufrufer — hier wird abgewiesen statt geraten.
+ */
+const KENNZEICHEN_JN: ReadonlySet<string> = new Set(['J', 'N']);
+
+/**
+ * Zulässige Beschäftigungsbereiche laut Kapitel D.39, Seite 119: die dort abgedruckte
+ * Codeliste `01` (Arbeiter) bis `13` (Umschüler, Rehabilitanden – Ang. kein SE), lückenlos.
+ * Deckt sich mit der Formatzeile F7069 des Prüfkatalogs („ungültig (gültig: 01-13)“).
+ */
+const BBER_CODES: ReadonlySet<string> = new Set([
+  '01',
+  '02',
+  '03',
+  '04',
+  '05',
+  '06',
+  '07',
+  '08',
+  '09',
+  '10',
+  '11',
+  '12',
+  '13',
+]);
 
 /** Beschäftigungsbereiche, für die VWAZ ab 01.01.2026 zwingend ist (Prüfkatalog F7115). */
 const VWAZ_PFLICHT_BBER: ReadonlySet<string> = new Set(['01', '02', '03', '04', '11']);
@@ -331,7 +428,9 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
   const soum = normalisiert(werte.SOUM);
   const ztum = normalisiert(werte.ZTUM);
   const zkum = normalisiert(werte.ZKUM);
+  const gerf = normalisiert(werte.GERF);
   const frdv = normalisiert(werte.FRDV);
+  const bvjn = normalisiert(werte.BVJN);
   const agrd = normalisiert(werte.AGRD);
 
   if (bknr === undefined) wirf('F7000', 'Die Beitragskontonummer (BKNR) darf nicht leer sein.');
@@ -342,6 +441,20 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
     // welches Feld beanstandet ist und was zulässig wäre — dieselbe Zurückhaltung, die
     // `pruefeVorrat` und die Längenprüfung in `festsatz.ts` bereits üben.
     wirf('F7030', 'Das Geburtsdatum (GEBD) ist ungültig. Zulässig: TTMMJJJJ, 00MMJJJJ oder 0000JJJJ.');
+  }
+
+  // F7020 (Prüfkatalog, Blatt VR Nr. 16 „VSNR ungültig", alle sieben Satzarten): Die
+  // Versicherungsnummer ist stellenkodiert (Kapitel D.6, Seite 72) — siehe
+  // gueltigeVsnrStruktur für die geprüften und die bewusst ungeprüften Stellen. Der Wert
+  // selbst steht wie bei GEBD nicht in der Meldung: Er ist ein Personendatum.
+  if (vsnr !== undefined && !gueltigeVsnrStruktur(vsnr)) {
+    wirf(
+      'F7020',
+      'Die Versicherungsnummer (VSNR) ist ungültig. Erwartet: zehn Ziffern in der Form ' +
+        'LLLPTTMMJJ mit Tag 01 bis 31 und Monat 01 bis 12 (bzw. 13 bis 15 bei fingiertem ' +
+        'Datum), siehe Kapitel D.6. Die Prüfziffer wird hier nicht nachgerechnet — das ' +
+        'Verfahren steht in keiner der Quellen; ELDA prüft sie serverseitig.',
+    );
   }
 
   const vsnrBelegt = vsnr !== undefined;
@@ -407,8 +520,45 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
     wirf('F7106', 'Das richtige Ummeldedatum (RUMD) ist ungültig. Erwartet: TTMMJJJJ.');
   }
 
-  if (satzart === 'M3' && bber !== undefined && !/^(0[1-9]|1[0-3])$/.test(bber)) {
+  // F7069 (Prüfkatalog): Beschäftigungsbereich gegen die Codeliste aus Kapitel D.39,
+  // Seite 119. Der Katalog führt die Zeile nur unter M3 — dort ist BBER laut Matrix
+  // zwingend. Die Matrix lässt das Feld aber auch bei M6 zu (Pflichtstufe `V`, gemeinsame
+  // Zelle mit GERF/FRDV), und die Codeliste in D.39 gilt für das Feld, nicht für eine
+  // Satzart: Ein `'1 '` oder `'99'` in einer Änderungsmeldung ist derselbe Falschwert wie in
+  // einer Anmeldung, nur dass ihn dort niemand abfängt. Geprüft wird deshalb überall, wo die
+  // Matrix das Feld belegen lässt; für M6 ist das eine aus D.39 abgeleitete Erweiterung der
+  // Katalog-Zeile, kein eigener Katalog-Code.
+  if (darfBelegtSein(satzart, 'BBER') && bber !== undefined && !BBER_CODES.has(bber)) {
     wirf('F7069', `Der Beschäftigungsbereich (BBER) '${bber}' ist ungültig. Zulässig sind 01 bis 13.`);
+  }
+
+  // Kennzeichenfelder J/N — abgeleitet aus den Felddefinitionen, ohne Katalog-Code (siehe
+  // KENNZEICHEN_JN). Der Meldungstext trägt deshalb das Quellkapitel statt eines Fehlercodes.
+  // Diese drei Prüfungen stehen bewusst VOR der F7115-Prüfung am Ende der Funktion: Jene
+  // vergleicht FRDV zeichengenau gegen `'N'`, so wie es der Prüfkatalog formuliert
+  // („Feld FRDV ist mit N belegt"). Ohne die Prüfung hier käme ein `'n'` als belegter, aber
+  // ungleicher Wert durch — die Meldung wäre dann doppelt falsch: das Kleinbuchstaben-Byte
+  // auf Position 540 UND ein stillschweigend übergangenes Pflichtfeld VWAZ.
+  if (darfBelegtSein(satzart, 'GERF') && gerf !== undefined && !KENNZEICHEN_JN.has(gerf)) {
+    wirf(
+      'E.29',
+      `Die Geringfügigkeit (GERF) '${gerf}' ist ungültig. Zulässig sind ausschließlich 'J' und ` +
+        "'N' (Feldtabelle Kapitel E.29, Feld Nr. 19); der Prüfkatalog führt dazu keine Regel.",
+    );
+  }
+  if (darfBelegtSein(satzart, 'FRDV') && frdv !== undefined && !KENNZEICHEN_JN.has(frdv)) {
+    wirf(
+      'D.41',
+      `Der freie Dienstvertrag (FRDV) '${frdv}' ist ungültig. Zulässig sind ausschließlich 'J' ` +
+        "und 'N' (Kapitel D.41, Seite 121); der Prüfkatalog führt dazu keine Regel.",
+    );
+  }
+  if (darfBelegtSein(satzart, 'BVJN') && bvjn !== undefined && !KENNZEICHEN_JN.has(bvjn)) {
+    wirf(
+      'D.47',
+      `Die betriebliche Vorsorge (BVJN) '${bvjn}' ist ungültig. Zulässig sind ausschließlich ` +
+        "'J' und 'N' (Kapitel D.47, Seite 127); der Prüfkatalog führt dazu keine Regel.",
+    );
   }
 
   // F7096 (Prüfkatalog): AGRD gegen die Codeliste aus Kapitel D.22 (siehe AGRD_CODES).
