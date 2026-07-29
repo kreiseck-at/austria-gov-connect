@@ -180,13 +180,15 @@ test('F7104: Ummeldedatum muss TTMMJJJJ sein (reine Formatprüfung wie F7061/F70
   wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', UMDA: '99992026' }, 'F7104');
   // Februar 2026 ist kein Schaltjahr und hat nur 28 Tage.
   wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', UMDA: '30022026' }, 'F7104');
-  // ZTUM/ZKUM sind hier ergänzt, damit ausschließlich das Format von UMDA geprüft wird und
-  // nicht F7108/F7109 (A1: UMDA belegt verlangt ZTUM/ZKUM) zuschlägt.
+  // AGRD/ZTUM/ZKUM sind hier ergänzt, damit ausschließlich das Format von UMDA geprüft wird und
+  // nicht F7105 (A1: UMDA belegt verlangt Abmeldegrund 12) oder F7108/F7109 (A1: UMDA belegt
+  // verlangt ZTUM/ZKUM) zuschlägt.
   assert.doesNotThrow(() =>
     pruefeInhalt('M4', {
       BKNR: '1',
       VSNR: '1234010180',
       ADAT: '01022026',
+      AGRD: '12',
       UMDA: '01022026',
       ZTUM: '17',
       ZKUM: '7788991',
@@ -198,6 +200,7 @@ test('F7104: Ummeldedatum muss TTMMJJJJ sein (reine Formatprüfung wie F7061/F70
       BKNR: '1',
       VSNR: '1234010180',
       ADAT: '01022026',
+      AGRD: '12',
       UMDA: '29022024',
       ZTUM: '17',
       ZKUM: '7788991',
@@ -212,13 +215,24 @@ test('F7104 gilt nicht bei M6: Blatt VR führt UMDA nur für M4, M9, S4', () => 
 });
 
 test('F7106: richtiges Ummeldedatum muss TTMMJJJJ sein, nur bei M9', () => {
+  // UMDA/ZTUM/ZKUM sind in beiden Fällen ergänzt, damit die Fixture ausschließlich das Format
+  // von RUMD verletzt bzw. erfüllt und nicht zusätzlich F7113 (A1: ohne UMDA muss auch RUMD
+  // leer bleiben) — das gilt unabhängig davon, in welcher Reihenfolge die Prüfungen in
+  // pruefeInhalt laufen, nicht nur, weil F7106 dort zufällig vor F7113 steht.
   wirft(
     'M9',
-    { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '02022026', RUMD: '99992026' },
+    {
+      BKNR: '1',
+      VSNR: '1234010180',
+      ADAT: '01022026',
+      RDAT: '02022026',
+      RUMD: '99992026',
+      UMDA: '01022026',
+      ZTUM: '17',
+      ZKUM: '7788991',
+    },
     'F7106',
   );
-  // UMDA/ZTUM/ZKUM sind hier ergänzt, damit ausschließlich das Format von RUMD geprüft wird und
-  // nicht F7113 (A1: ohne UMDA muss auch RUMD leer bleiben) zuschlägt.
   assert.doesNotThrow(() =>
     pruefeInhalt('M9', {
       BKNR: '1',
@@ -240,7 +254,22 @@ test('F7106 gilt nicht bei M4: Blatt VR führt RUMD nur für M9', () => {
 });
 
 test('F7107: Sonderfall Ummeldung nur J oder leer', () => {
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', SOUM: 'N' }, 'F7107');
+  // UMDA/ZTUM/ZKUM sind ergänzt, damit die Fixture ausschließlich SOUM verletzt und nicht
+  // zusätzlich F7112 (A1: ohne UMDA muss auch SOUM leer bleiben) — unabhängig von der
+  // Prüfreihenfolge in pruefeInhalt.
+  wirft(
+    'M4',
+    {
+      BKNR: '1',
+      VSNR: '1234010180',
+      ADAT: '01022026',
+      SOUM: 'N',
+      UMDA: '01022026',
+      ZTUM: '17',
+      ZKUM: '7788991',
+    },
+    'F7107',
+  );
 });
 
 test('F7114: Zielversicherungsträger 11 bis 19', () => {
@@ -284,12 +313,14 @@ test('F7108/F7109 (A1): Ummeldedatum belegt verlangt Zielversicherungsträger un
     { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '02022026', UMDA: '01032026', ZTUM: '17' },
     'F7109',
   );
-  // vollständig belegt: kein Fehler (Fall "muss NICHT werfen" aus dem Bericht).
+  // vollständig belegt: kein Fehler (Fall "muss NICHT werfen" aus dem Bericht). AGRD: '12' ist
+  // ergänzt, weil UMDA belegt sonst F7105 (A1-Nachtrag) verletzen würde.
   assert.doesNotThrow(() =>
     pruefeInhalt('M4', {
       BKNR: '1',
       VSNR: '1234010180',
       ADAT: '01022026',
+      AGRD: '12',
       UMDA: '01032026',
       ZTUM: '17',
       ZKUM: '7788991',
@@ -325,12 +356,13 @@ test('F7112/F7113 (A1): Ummeldedatum leer verlangt, dass auch SOUM/ZTUM/ZKUM (be
   );
 });
 
-test('F7105 bewusst NICHT umgesetzt: Kapitel E.29.2, Seite 326/327 (Beispiel 6) widerspricht der wörtlichen Katalog-Bedingung', () => {
+test('F7105 bei M9 bewusst NICHT umgesetzt: Kapitel E.29.2, Seite 326/327 (Beispiel 6) widerspricht der wörtlichen Katalog-Bedingung', () => {
   // "Feld UMDA befüllt und Feld AGRD ist nicht 12" (F7105) wörtlich genommen würde diese
   // dokumentierte, gültige Richtigstellung ablehnen: AGRD wird von 12 auf 02 zurückgestellt,
   // UMDA/ZTUM/ZKUM bleiben aber belegt, weil die ursprüngliche Ummeldung am Zielkonto storniert
   // werden muss (Matrix Seite 320/321, "...auf Abmeldegrund ungleich 12 (Ummeldung) zum Storno
-  // der Ummeldung"). Diese Regel wird deshalb absichtlich nicht geprüft, siehe pruefeInhalt-Doku.
+  // der Ummeldung"). Für M9 bleibt die Regel deshalb absichtlich ungeprüft, siehe
+  // pruefeInhalt-Doku. Für M4 gilt das NICHT — siehe den folgenden Test.
   assert.doesNotThrow(() =>
     pruefeInhalt('M9', {
       BKNR: '1',
@@ -338,6 +370,39 @@ test('F7105 bewusst NICHT umgesetzt: Kapitel E.29.2, Seite 326/327 (Beispiel 6) 
       ADAT: '01022026',
       RDAT: '02022026',
       AGRD: '02',
+      UMDA: '01032026',
+      ZTUM: '17',
+      ZKUM: '7788991',
+    }),
+  );
+});
+
+test('F7105 bei M4 umgesetzt (A1-Nachtrag): Ummeldedatum belegt verlangt Abmeldegrund 12', () => {
+  // Anders als bei M9 (siehe Test oben) gibt es für M4 auf den Seiten 319–321 kein
+  // Gegenbeispiel: Dort existieren nur zwei M4-Matrizen — die erste mit Abmeldegrund 12 und
+  // UMDA als "Z" (Seite 319), die Ausnahmematrix "Ummeldung ohne Zielangaben" mit UMDA als "-"
+  // (Seite 321). Ein dokumentierter M4-Satz mit belegtem UMDA und einem Abmeldegrund ungleich
+  // 12 kommt nirgends vor — F7105 wird für M4 deshalb wörtlich umgesetzt.
+  wirft(
+    'M4',
+    {
+      BKNR: '1',
+      VSNR: '1234010180',
+      ADAT: '01022026',
+      AGRD: '02',
+      UMDA: '01032026',
+      ZTUM: '17',
+      ZKUM: '7788991',
+    },
+    'F7105',
+  );
+  // Regelfall (Matrix Seite 319): Abmeldegrund 12 mit belegtem UMDA wirft nicht.
+  assert.doesNotThrow(() =>
+    pruefeInhalt('M4', {
+      BKNR: '1',
+      VSNR: '1234010180',
+      ADAT: '01022026',
+      AGRD: '12',
       UMDA: '01032026',
       ZTUM: '17',
       ZKUM: '7788991',
@@ -392,13 +457,14 @@ test('A3: Feldwerte werden vor dem Vergleich getrimmt (Füllzeichen aus einem Fe
   wirft('M3', { BKNR: '1', VSNR: '0000000000 ', ADAT: '01022026', BBER: '05' }, 'F7051');
 
   // SOUM mit Füllzeichen ('J ') ist weiterhin ein gültiges 'J' und darf nicht F7107 werfen.
-  // UMDA/ZTUM/ZKUM sind ergänzt, damit nicht stattdessen F7112 (A1: ohne UMDA muss auch SOUM
-  // leer bleiben) zuschlägt.
+  // AGRD/UMDA/ZTUM/ZKUM sind ergänzt, damit nicht stattdessen F7105 (A1-Nachtrag: UMDA belegt
+  // verlangt Abmeldegrund 12) oder F7112 (A1: ohne UMDA muss auch SOUM leer bleiben) zuschlägt.
   assert.doesNotThrow(() =>
     pruefeInhalt('M4', {
       BKNR: '1',
       VSNR: '1234010180',
       ADAT: '01022026',
+      AGRD: '12',
       SOUM: 'J ',
       UMDA: '01022026',
       ZTUM: '17',

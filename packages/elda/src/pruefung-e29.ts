@@ -210,18 +210,24 @@ const VSNR_FEHLT_REFV_PFLICHT: ReadonlySet<Satzart> = new Set<Satzart>(['M4', 'M
  *   bekannt sein müsste: Keiner der vier Codes stellt auf AGRD ab, sie sind allein über UMDA
  *   entscheidbar.
  *
- * Bewusst NICHT umgesetzt ist F7105 („Feld UMDA befüllt und Feld AGRD ist nicht 12"), obwohl
- * es in derselben thematischen Nähe liegt: Kapitel E.29.2, Seite 326/327 („Beispiel 6,
- * Aufhebung einer Ummeldung") zeigt eine Richtigstellung (M9) mit AGRD = 02 bei zugleich
- * belegtem UMDA/ZTUM/ZKUM — dieses dokumentierte, mit einem Zahlenbeispiel belegte Verhalten
- * widerspricht F7105 wörtlich genommen. Es ist kein Extraktionsfehler: Die Matrix „Bei
- * Richtigstellung einer Abmeldung mit Abmeldegrund 12 (Ummeldung) auf Abmeldegrund ungleich
- * 12 (Ummeldung) zum Storno der Ummeldung" (Seite 320/321) führt UMDA/ZTUM/ZKUM ausdrücklich
- * als `Z`, obwohl der (neue) Abmeldegrund dort nicht 12 ist — die Meldung braucht diese
- * Felder, um die ursprüngliche Ummeldung am Zielkonto zu stornieren. F7105 wörtlich
- * umzusetzen würde dieses belegte Verhalten als Fehler ablehnen; ob ELDA dort serverseitig
- * eine engere, aus der Katalog-Zeile allein nicht ersichtliche Bedingung anwendet, bleibt
- * offen. Bis das geklärt ist, bleibt F7105 hier unimplementiert.
+ * F7105 („Feld UMDA befüllt und Feld AGRD ist nicht 12") ist NUR für M4 umgesetzt, bewusst
+ * NICHT für M9: Kapitel E.29.2, Seite 326/327 („Beispiel 6, Aufhebung einer Ummeldung") zeigt
+ * eine Richtigstellung (M9) mit AGRD = 02 bei zugleich belegtem UMDA/ZTUM/ZKUM — dieses
+ * dokumentierte, mit einem Zahlenbeispiel belegte Verhalten widerspricht F7105 wörtlich
+ * genommen. Es ist kein Extraktionsfehler: Die Matrix „Bei Richtigstellung einer Abmeldung mit
+ * Abmeldegrund 12 (Ummeldung) auf Abmeldegrund ungleich 12 (Ummeldung) zum Storno der
+ * Ummeldung" (Seite 320/321) führt UMDA/ZTUM/ZKUM ausdrücklich als `Z`, obwohl der (neue)
+ * Abmeldegrund dort nicht 12 ist — die Meldung braucht diese Felder, um die ursprüngliche
+ * Ummeldung am Zielkonto zu stornieren. F7105 dort wörtlich umzusetzen würde dieses belegte
+ * Verhalten als Fehler ablehnen; ob ELDA serverseitig eine engere, aus der Katalog-Zeile
+ * allein nicht ersichtliche Bedingung anwendet, bleibt offen. Bis das geklärt ist, bleibt
+ * F7105 für M9 unimplementiert.
+ *
+ * Für M4 gibt es dagegen kein solches Gegenbeispiel: Auf den Seiten 319–321 existieren nur
+ * zwei M4-Matrizen — die erste mit Abmeldegrund 12 und UMDA als `Z` (Seite 319), die
+ * Ausnahmematrix „Ummeldung ohne Zielangaben" mit UMDA als `-` (Seite 321). Ein dokumentierter
+ * M4-Satz mit belegtem UMDA und einem Abmeldegrund ungleich 12 kommt nirgends vor — F7105
+ * wird für M4 deshalb wörtlich umgesetzt.
  *
  * Nicht geprüft werden außerdem unter anderem die Prüfziffer der Versicherungsnummer (das
  * Verfahren ist in den Quellen nicht beschrieben), die trägerabhängige Länge der
@@ -355,6 +361,20 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
       'F7109',
       `Die Beitragskontonummer Ummeldung (ZKUM) darf bei Satzart ${satzart} nicht leer sein, ` +
         'wenn das Ummeldedatum (UMDA) belegt ist.',
+    );
+  }
+
+  // F7105 (Prüfkatalog, A1-Nachtrag, NUR M4): Ist das Ummeldedatum (UMDA) belegt, muss der
+  // Abmeldegrund (AGRD) 12 sein. Für M9 wird dieselbe Katalog-Zeile bewusst NICHT geprüft —
+  // Kapitel E.29.2, Seite 326/327 (Beispiel 6, "Aufhebung einer Ummeldung") zeigt eine
+  // Richtigstellung mit belegtem UMDA und AGRD = 02, siehe die ausführliche Begründung im
+  // JSDoc oben. Für M4 existiert auf den Seiten 319–321 kein solches Gegenbeispiel: Nur die
+  // Matrix mit Abmeldegrund 12 (UMDA = Z) und ihre Ausnahme "Ummeldung ohne Zielangaben"
+  // (UMDA = -) kommen dort vor.
+  if (satzart === 'M4' && umda !== undefined && agrd !== '12') {
+    wirf(
+      'F7105',
+      `Ist das Ummeldedatum (UMDA) belegt, muss der Abmeldegrund (AGRD) '12' sein, nicht '${agrd}'.`,
     );
   }
 

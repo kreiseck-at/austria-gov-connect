@@ -332,6 +332,10 @@ test('E.29.2 / M6, Beispiel für eine „Richtigstellung" der Änderungsmeldung,
   assert.equal(satz.werte.ADAT, '01042019');
   assert.equal(satz.werte.BDAT, undefined);
   assert.equal(satz.werte.BVJN, 'J');
+  // Wie beim BUAK-Beispiel (Seite 311): reine BV-Änderung ohne jedes SV-Feld.
+  assert.equal(satz.werte.BBER, undefined);
+  assert.equal(satz.werte.GERF, undefined);
+  assert.equal(satz.werte.FRDV, undefined);
 });
 
 test('E.29.2 / M6, Beispiel für eine „Richtigstellung" der Änderungsmeldung, zeitlich begrenzte Nachmeldung 01.03.–31.03.2019 (Seite 313)', () => {
@@ -345,6 +349,10 @@ test('E.29.2 / M6, Beispiel für eine „Richtigstellung" der Änderungsmeldung,
   assert.equal(satz.werte.ADAT, '01032019');
   assert.equal(satz.werte.BDAT, '31032019');
   assert.equal(satz.werte.BVJN, 'J');
+  // Wie beim BUAK-Beispiel (Seite 311): reine BV-Änderung ohne jedes SV-Feld.
+  assert.equal(satz.werte.BBER, undefined);
+  assert.equal(satz.werte.GERF, undefined);
+  assert.equal(satz.werte.FRDV, undefined);
 });
 
 // ---------------------------------------------------------------------------------------
