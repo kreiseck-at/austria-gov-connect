@@ -4,6 +4,7 @@ export {
   FonError,
   FonTransportError,
   FonProtocolError,
+  type FonProtocolErrorOptions,
   FonRcError,
   FonSoapFaultError,
   FonSessionError,

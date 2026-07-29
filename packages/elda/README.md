@@ -26,8 +26,25 @@ Ungeklärt, bis ein ELDA-Kundentest-Zugang vorliegt: ob der Payload inline als
 Base64 übertragen wird oder per MTOM/XOP; wie eine leere Rücksendungsliste auf
 dem Draht aussieht; ob `senden` bei Status `000` stets eine Protokollnummer
 mitliefert; ob bei Status `405` die Protokollnummer der Originalsendung in einem
-Feld oder nur im Meldungstext steht; ob Status `404` auch bei `empfangen`
-auftreten kann; ob `<messages>` mehrfach vorkommen kann.
+Feld oder nur im Meldungstext steht; ob `<messages>` mehrfach vorkommen kann; ob
+`datei.dateiTyp` numerisch kommt (so die Tabelle in Abschnitt 4.2) oder als Text
+wie `XML` (so die Beispiel-Ausgabe in Abschnitt 7.4.3.3 desselben Dokuments —
+das Dokument widerspricht sich hier selbst, deshalb reicht dieses Paket den Wert
+unverändert als `string` durch); worüber die in Abschnitt 4.2 gelieferte `md5`
+tatsächlich gebildet wird, sagt die Schnittstellenbeschreibung nicht — dieses
+Paket prüft sie gegen die dekodierten Bytes. Meint ELDA etwas anderes (z. B.
+den Base64-Text), scheitert eine eigentlich intakte Rücksendung mit
+`EldaProtocolError: MD5-Abweichung`; der Inhalt bleibt dabei über `err.ergebnis`
+erreichbar.
+
+Status `404` bei `empfangen` ist **keine** offene Frage mehr: Die Status-Tabelle
+in Abschnitt 6 führt den Code für `EmpfangenResult` ausdrücklich als nicht
+zutreffend, und Abschnitt 3.6 listet ihn dort ebenfalls nicht. Er wird deshalb
+geworfen, nicht als `nochInArbeit` durchgereicht. Sollte der Kundentest zeigen,
+dass ELDA ihn bei `empfangen` doch schickt, gehört er mitsamt seiner dann
+belegten Bedeutung wieder in die Karte — bis dahin wäre ein stilles
+`nochInArbeit` genau die Falle, vor der der Rest dieses Abschnitts warnt: Der
+Aufrufer pollte endlos, statt laut zu scheitern.
 
 An all diesen Stellen schlägt der Client bewusst laut fehl, statt stillschweigend
 leere oder halb geparste Daten zu liefern — eine falsche Annahme fällt damit beim
@@ -175,7 +192,7 @@ zeigt, wo ein Code bei `senden`/`empfangen`/`ruecksendungenAuflisten` als
 | `401` | dateiName zu lang (max 255)                                          | wirft (nur bei `senden` relevant) |
 | `402` | dateiName nicht gesetzt                                              | wirft (nur bei `senden` relevant) |
 | `403` | Datei nicht verarbeitet (auslösender Fehlercode in der Meldung)      | wirft (nur bei `senden` relevant) |
-| `404` | Datei wird noch verarbeitet (Verarbeitung > 40 Sekunden)              | `senden`/`empfangen`: `nochInArbeit` |
+| `404` | Datei wird noch verarbeitet (Verarbeitung > 40 Sekunden)              | `senden`: `nochInArbeit`; bei `empfangen` laut Spec nicht vorgesehen → wirft |
 | `405` | Datei ist Duplikat (Protokollnummer des Originals in der Meldung)     | `senden`: `duplikat` |
 | `406` | Datei mit Protokollnummer nicht vorhanden                             | `empfangen`: `nichtVorhanden` |
 | `407` | Keine Berechtigung, Datei zu empfangen (Seriennummer stimmt nicht überein) | wirft (nur bei `empfangen` relevant) |
@@ -222,7 +239,14 @@ abgeholt und ist über ihre Protokollnummer nicht mehr abrufbar. Der Inhalt muss
 deshalb gesichert sein, bevor mit ihm weitergearbeitet wird (z. B. bevor er
 geparst wird und das Parsen scheitern könnte).
 
-Zwei Fehlerfälle rund um `empfangen` sind absichtlich **kein** stilles
+Daraus folgen zwei Dinge, die in diesem Paket bewusst anders sind als bei den
+übrigen Methoden: `transport.retries` gilt hier nicht (siehe „`retries` gilt für
+`empfangen` nicht"), und eine leere oder fehlende Protokollnummer wirft einen
+`EldaError`, statt einen sinnlosen Request abzusetzen — ELDA beantwortete den mit
+`406` („nicht vorhanden"), was von einer echten Fehladressierung nicht zu
+unterscheiden wäre.
+
+Drei Fehlerfälle rund um `empfangen` sind absichtlich **kein** stilles
 Wegwerfen von Inhalt:
 
 - Meldet die Antwort `zustand: 'datei'` (Status `000`), aber ohne `<datei>`,
@@ -239,8 +263,12 @@ Wegwerfen von Inhalt:
   Berechtigung"), wirft bereits die Zustandsprüfung zuerst einen
   `EldaStatusError` — auch der trägt die widersprüchliche `<datei>` über
   `ergebnis.datei` weiter.
+- Ist das `<serviceResult>` unbrauchbar (fehlender oder leerer `<statusCode>`),
+  wird die `<datei>` trotzdem **zuerst** gelesen und hängt am Fehler. Ohne
+  Status-Code lässt sich Erfolg nicht von Fehlschlag unterscheiden — die
+  Zustellung ist aber verbraucht, und die Bytes liegen bereits in der Antwort.
 
-In **beiden** Fällen hängt das bereits von ELDA ausgelieferte rohe
+In **allen** Fällen hängt das bereits von ELDA ausgelieferte rohe
 Ergebnisobjekt am Fehler (`err.ergebnis`, ggf. mit `ergebnis.datei`) — der
 Inhalt ist damit aus dem Fehler selbst wiederherstellbar. Ein erneuter Aufruf
 von `empfangen` ist dagegen **kein** verlässlicher Weg, den Inhalt zu holen:
@@ -258,14 +286,20 @@ geworfen (siehe „Fehler oder Zustand?" oben). Geworfen wird in folgenden Fäll
   nicht durch (Netzfehler, Zeitüberschreitung). Siehe „Wiederholungen" unten.
 - **`FonProtocolError`** (aus `@kreiseck/finanzonline-core`) — die Antwort ist
   kein gültiges XML (u. a. bei einer echten MTOM-Antwort, siehe unten) oder trägt
-  einen HTTP-Fehlerstatus ohne SOAP-Fault.
+  einen HTTP-Fehlerstatus ohne SOAP-Fault. Trägt `err.httpStatus` und
+  `err.rohantwort` (den ungeparsten Body, siehe „Hinweis zu MTOM/XOP").
 - **`EldaProtocolError`** (aus diesem Paket, Basis `EldaError`) — die Antwort ist
   XML, aber inhaltlich nicht auswertbar: kein `<return>`-Element, kein
   `<serviceResult><statusCode>`, eine `<ruecksendungen>` ohne Protokollnummer,
   ein `<payload>`, der XOP-referenziert (`<xop:Include>`) bzw. trotz Status `000`
-  leer ist, oder den ersten der beiden Fälle aus „`empfangen` ist unwiderruflich"
-  oben (der zweite Fall wirft je nach Status-Code stattdessen einen
-  `EldaStatusError`, siehe dort). Trägt optional das rohe Ergebnis als `err.ergebnis`.
+  leer ist, ein Payload, der kein wohlgeformtes Base64 ist oder nicht zur
+  mitgelieferten `md5` passt, oder einer der Fälle aus „`empfangen` ist
+  unwiderruflich" oben (bei einer widersprüchlichen `<datei>` wirft je nach
+  Status-Code stattdessen ein `EldaStatusError`, siehe dort). Trägt optional das
+  rohe Ergebnis als `err.ergebnis`.
+- **`EldaError`** selbst — die Argumente eines Aufrufs sind unbrauchbar, bevor
+  überhaupt ein Request abgeht: unvollständige Zugangsdaten, unbekannte
+  `umgebung`, leere Protokollnummer bei `empfangen` bzw. `findeRuecksendung`.
 - **`EldaStatusError`** (aus diesem Paket, Basis `EldaError`) — ein Status-Code,
   der keinen behandelbaren Zustand beschreibt (siehe Tabelle oben). Trägt
   `statusCode`, `meldung` und das vollständige rohe `ergebnis`.
@@ -308,6 +342,60 @@ wiederholtes `senden` kann daher fachlich als `zustand: 'duplikat'` (Status `405
 mit der Protokollnummer des Originals in der Meldung) beantwortet werden — das
 ist der gewollte, auswertbare Ausgang, kein Datenverlust.
 
+### `retries` gilt für `empfangen` nicht
+
+`empfangen` wird **nie** automatisch wiederholt, unabhängig vom eingestellten
+Wert. Der Grund ist die Einmaligkeit der Zustellung (FAQ 8.2): ELDA verbucht die
+Rücksendung als abgeholt, sobald sie ausgeliefert wird, und liefert sie danach
+kein zweites Mal.
+
+Ein Transportfehler beweist nicht, dass die Anfrage den Server nie erreicht hat.
+`timeoutMs` (Standard 30 000 ms) umfasst nicht nur den Verbindungsaufbau, sondern
+den **gesamten Body-Download**; bricht das Herunterladen eines großen Protokolls
+ab, sieht das exakt aus wie ein gewöhnlicher Netzfehler. Ein automatischer
+zweiter Versuch bekäme dann `408` („bereits empfangen") — und weil FAQ 8.2 genau
+diesen Code als typische Folge *gleichzeitiger Aufrufe mehrerer Clients*
+beschreibt, läse der Aufrufer den selbst verursachten Verlust als fremden Abruf.
+Ein normaler, behandelter `zustand: 'bereitsEmpfangen'`, hinter dem ein
+unwiederbringlich verlorenes Verarbeitungsprotokoll steckt. Deshalb: keine
+automatische Wiederholung.
+
+**Was das für Aufrufer heißt:** Ein `FonTransportError` aus `empfangen` heißt
+nicht „nichts passiert". Die Rücksendung kann bereits als abgeholt gelten. Vor
+einem eigenen zweiten Versuch prüfen, ob die Protokollnummer überhaupt noch in
+`ruecksendungenAuflisten` steht — und wenn `empfangen` unmittelbar danach `408`
+meldet, ist der wahrscheinlichere Grund der eigene abgebrochene Aufruf, nicht ein
+fremder Client. Bei einem Abbruch mitten im Body ist die letzte Kopie der Daten
+der rohe Antwort-Body; siehe „Hinweis zu MTOM/XOP" unten zu `err.rohantwort`.
+
+Für `senden` und `ruecksendungenAuflisten` ist die Wiederholung dagegen
+unbedenklich: `ruecksendungenAuflisten` verändert nichts, und eine doppelt
+angekommene Sendung beantwortet ELDA mit `405` (siehe oben).
+
+## Der Inhalt wird geprüft, nicht blind dekodiert
+
+`Buffer.from(x, 'base64')` überspringt ungültige Zeichen stillschweigend und
+akzeptiert abgeschnittene Eingaben ohne Fehler. Bei einer einmaligen Zustellung
+wäre das fatal: Ein unterwegs verstümmeltes Protokoll käme als geglückte Abholung
+mit falschen Bytes an, und einen zweiten Blick darauf gibt es nicht. `empfangen`
+prüft deshalb, bevor es ein Ergebnis liefert:
+
+- Der `<payload>` muss **wohlgeformtes Base64** sein (Zeilenumbrüche sind
+  erlaubt). Die Schnittstellenbeschreibung liefert selbst den Anschauungsfall:
+  In Abschnitt 7.4.1.2 stellt SoapUI eine Attachment-Referenz als
+  `<payload>cid:1526066113758</payload>` dar — `c`, `i` und `d` sind gültige
+  Base64-Zeichen, der Doppelpunkt würde übersprungen und das Ergebnis als Erfolg
+  gemeldet.
+- Liefert ELDA eine `md5` (Abschnitt 4.2), wird sie gegen den dekodierten Inhalt
+  geprüft — das ist die Lesart dieses Clients, siehe Vorbehalt oben, wonach die
+  Schnittstellenbeschreibung offenlässt, worüber die Prüfsumme tatsächlich
+  gebildet wird.
+
+Schlägt eine der beiden Prüfungen fehl, wirft `empfangen` einen
+`EldaProtocolError`. Der Inhalt geht dabei **nicht** verloren: `err.ergebnis`
+trägt die Metadaten, `err.ergebnis.rohPayload` den Payload im Rohzustand und —
+bei einer MD5-Abweichung — `err.ergebnis.datei.inhalt` die dekodierten Bytes.
+
 ## Hinweis zu MTOM/XOP
 
 Dieser Client sendet und erwartet den Datei-Payload **inline als Base64**
@@ -318,7 +406,26 @@ verschiedenen Fehlern — je nachdem, wie die Antwort auf der Leitung aussieht:
 - **Echte MTOM-Antwort** (`multipart/related` mit MIME-Teilen): Der Body ist kein
   XML. Das Parsing scheitert bereits im Transport von
   `@kreiseck/finanzonline-core`, der Aufrufer bekommt einen **`FonProtocolError`**
-  („Antwort ist kein gültiges XML").
+  („Antwort ist kein gültiges XML"). Weil `empfangen` einmalig ist, ist der
+  ungeparste Body an dieser Stelle die **letzte existierende Kopie** der
+  Rücksendung — die Protokoll-Bytes stecken darin als MIME-Teil. Er hängt deshalb
+  am Fehler: `err.rohantwort` (dazu `err.httpStatus`). Bewusst nicht in der
+  Fehlermeldung und weder über `console.error(err)` noch über
+  `JSON.stringify(err)` sichtbar, denn er kann personenbezogene Daten enthalten;
+  wer ihn braucht, greift ihn gezielt ab und schreibt ihn selbst weg:
+
+  ```ts
+  import { FonProtocolError } from '@kreiseck/finanzonline-core';
+
+  try {
+    await elda.empfangen(protokollnummer);
+  } catch (err) {
+    if (err instanceof FonProtocolError && err.rohantwort) {
+      await fs.writeFile(`rohantwort-${protokollnummer}.bin`, err.rohantwort);
+    }
+    throw err;
+  }
+  ```
 - **Reguläre XML-Antwort mit XOP-Referenz** (`<payload><xop:Include href="cid:…"/></payload>`,
   z. B. wenn das Attachment fehlt oder von einer Zwischenstelle abgetrennt wurde):
   Das erkennt `empfangen` und wirft einen **`EldaProtocolError`** — statt still
@@ -397,6 +504,13 @@ const bestand = erstelleBestand([meldung], {
 await elda.senden({ dateiName: 'meldung.dat', inhalt: bestand });
 ```
 
+**Immer den `Buffer` übergeben, nie einen String.** `senden` kodiert einen
+`string` als **UTF-8**; ein E.29-Bestand ist dagegen ISO-8859-15. Bei einem von
+Hand zusammengesetzten String mit Umlauten (ä, ö, ü, ß) oder dem Euro-Zeichen
+ginge jedes betroffene Zeichen still als Mehrbyte-Sequenz auf die Leitung und
+verschöbe alle Fixlängenfelder dahinter. `erstelleBestand` liefert genau deshalb
+einen fertig kodierten `Buffer`.
+
 ### Die sieben Satzarten
 
 | Code | Satzart (`SATZART_TEXT`)  | Anmerkung                                                        |
@@ -447,7 +561,8 @@ ELDA erwartet Fixlängen-Dateien in ISO-8859-15. Dieses Paket kodiert selbst
 1. **Darstellbarkeit.** Jedes Zeichen muss überhaupt einen Codepunkt in
    ISO-8859-15 haben. Acht Positionen weichen dabei von ISO-8859-1 ab (u. a.
    `€` statt `¤`); alle anderen Positionen sind identisch.
-2. **Zeichenvorrat je Feldklasse**, laut dem separaten Zeichensatz-Dokument:
+2. **Zeichenvorrat je Feldklasse**, laut dem Abschnitt `ISO8859-15` des
+   separaten Zeichensatz-Dokuments (nicht dem `CP850`-Abschnitt darüber):
    - **Personennamen** (`FANA`, `VONA`): nur Leerzeichen, Apostroph,
      Bindestrich, Punkt, Ziffern, Groß- und Kleinbuchstaben sowie
      `Ä Ö Ü ß ä ö ü` — sonst nichts. Ein `é`, `ñ` oder `č` im Namen ist damit
@@ -467,7 +582,7 @@ zulässige Schreibweise festlegen, bevor der Wert an einen Builder geht.
 
 ### Was geprüft wird — und was nicht
 
-Jeder Builder prüft zweistufig, bevor er einen `RohSatz` liefert:
+Jeder Builder prüft mehrstufig, bevor er einen `RohSatz` liefert:
 
 **1. Pflichtmatrix (Kapitel E.29.1, `PFLICHT_E29`).** Jedes Feld trägt je
 Satzart eine von fünf Pflichtstufen (`Z` zwingend, `Z1` zwingend wenn
@@ -486,6 +601,7 @@ entscheidbar.** Umgesetzt sind:
 | Code | Prüft | Satzarten |
 | ---- | ----- | --------- |
 | `F7000` | `BKNR` darf nicht leer sein | alle |
+| `F7020` | Struktur `VSNR` (`LLLPTTMMJJ`, Tag `01`–`31`, Monat `01`–`12` bzw. `13`–`15` beim fingierten Datum, Kapitel D.6) | alle, wenn belegt |
 | `F7030` | Format `GEBD` (`TTMMJJJJ`, `00MMJJJJ` oder `0000JJJJ`, echte Monatslänge inkl. Schaltjahr) | alle, wenn belegt |
 | `F7050` | Ist `REFV` belegt, muss `GEBD` belegt sein | `M3`, `M4`, `M6` |
 | `F7051` | `VSNR` oder `GEBD` muss belegt sein; zusätzlich (eigene, aus Kapitel E.30.2 abgeleitete Ergänzung ohne eigenen Katalog-Code): fehlt die `VSNR`, muss neben `GEBD` auch `REFV` belegt sein | alle bzw. `M4`/`M6`/`M8` |
@@ -495,7 +611,7 @@ entscheidbar.** Umgesetzt sind:
 | `F7065` | `RDAT` darf nicht leer sein | `M8`, `M9` |
 | `F7066` | Format `RDAT` | `M8`, `M9` |
 | `F7067` | `RDAT` nicht vor 01.01.2019 | `M8`, `M9` |
-| `F7069` | `BBER` zwischen `01` und `13` | `M3` |
+| `F7069` | `BBER` gegen die Codeliste aus Kapitel D.39 (`01` bis `13`) | `M3`, `M6` (siehe unten) |
 | `F7096` | `AGRD` gegen die Codeliste aus Kapitel D.22 | `M4`, `M9` |
 | `F7104` | Format `UMDA` | `M4`, `M9`, `S4` |
 | `F7105` | Ist `UMDA` belegt, muss `AGRD` `12` sein | nur `M4` (Begründung für `M9` siehe unten) |
@@ -510,9 +626,51 @@ entscheidbar.** Umgesetzt sind:
 | `F7115` | `VWAZ` zwingend (siehe oben) | `M3` |
 | `F7116` | Format `VWAZ` (vierstellig) | `M3`, `M8` |
 
+**Zusätzlich: Regeln aus der Organisationsbeschreibung, für die der
+Prüfkatalog keinen Code führt.** Sie sind alle allein aus Feldwerten
+entscheidbar, und ihre Verletzung erzeugt jeweils einen strukturell
+einwandfreien, fachlich falschen Satz — ELDAs formale Prüfung nimmt ihn an.
+Weil es dafür keinen Fehlercode gibt, tragen diese Meldungen das
+**Quellkapitel** statt eines `F`-Codes:
+
+| Marker | Prüft | Satzarten |
+| ------ | ----- | --------- |
+| `E.29` | `GERF` nur `'J'` oder `'N'` (Feldtabelle E.29, Feld Nr. 19) | `M3`, `M4`, `M6`, `M9` |
+| `D.41` | `FRDV` nur `'J'` oder `'N'` (Kapitel D.41) | `M3`, `M6` |
+| `D.47` | `BVJN` nur `'J'` oder `'N'` (Kapitel D.47) | `M6` |
+| `E.29` | `BDAT`, `EBSV`, `KEAB`, `KEBI`, `UEAB`, `UEBI`, `BVAB`, `BVEN` sind gültige Kalenderdaten (`TTMMJJJJ`, echte Monatslänge inkl. Schaltjahr) | alle, wenn belegt |
+| `D.22` | Bei 19 Abmeldegründen mit `Z` in der Spalte EBSV (Seite 96) ist `EBSV` zwingend | `M4`, `M9` |
+| `D.22` | Bei `AGRD` `00` ist der Grund im Klartext in `SAGR` anzugeben (Seite 95) | `M4`, `M9` |
+| `D.22` | Bei `AGRD` `08`, `09`, `15`, `20` muss `BVEN` in Grundstellung bleiben | `M4`, `M9` |
+| `D.22` | Bei fünfzehn Abmeldegründen mit `-` in der Spalte KE/UE müssen `KEAB`/`KEBI`/`UEAB`/`UEBI` in Grundstellung bleiben | `M4`, `M9` |
+| `E.29.2` | `UEBI` muss mit `ADAT` übereinstimmen; `KEBI` ebenso, solange keine Urlaubsersatzleistung anfällt (Seite 307, Fußnote 60) | `M4` |
+| `D.43` | Der Referenzwert `REFW` kommt je Beitragskontonummer nur einmal im Bestand vor (geprüft in `erstelleBestand`) | alle |
+
+Die drei Kennzeichenfelder werden **nicht** stillschweigend groß­geschrieben:
+Ein `'n'` statt `'N'` geht als Byte unverändert auf die Leitung, und welche
+Schreibweise gemeint war, entscheidet der Aufrufer. Bei `FRDV` hing daran
+zusätzlich `F7115` — die Bedingung vergleicht zeichengenau gegen `'N'`, wie
+der Katalog sie formuliert; ein `'n'` hätte also zugleich die VWAZ-Pflicht
+ausgehebelt. Die Wertebereichsprüfungen laufen deshalb **vor** `F7115`.
+
+`F7069` prüft `BBER` überall, wo die Pflichtmatrix das Feld belegen lässt —
+also auch bei `M6`, wo der Katalog die Zeile nicht führt. Ein Code gehört
+zum Feld (Kapitel D.39), nicht zur Satzart.
+
+Nicht erzwungen bleiben aus der Abhängigkeitstabelle in Kapitel D.22 alle
+**bedingten** Zellen: `Z1` („zwingend wenn zutreffend", u. a. `EBSV` beim
+Abmeldegrund `13`), `Z3` („Angabe möglich", `BVEN` bei `07` und `29`) und
+das `Z` beim Abmeldegrund `00` — dessen Fußnote 32 nimmt Meldungen zur
+Sozialhilfe aus, und ob eine Meldung eine solche ist, sagen die Feldwerte
+nicht. Die Identität von `KEBI`/`UEBI` mit `ADAT` gilt nur für `M4`: Der
+Satz steht im `M4`-Abschnitt des Kapitels E.29.2, und Seite 97 dehnt
+ausdrücklich nur die Abhängigkeiten vom Abmeldegrund auf `M9` aus.
+
 Verletzt ein Satz mehrere dieser Regeln gleichzeitig, wirft die Prüfung beim
-**ersten** verletzten Code in der oben stehenden Reihenfolge — das ist eine
-Umsetzungsentscheidung dieses Pakets, keine Vorgabe des Katalogs. ELDA kann
+**ersten** verletzten Code — in der Reihenfolge, in der die Prüfungen in
+`pruefung-e29.ts` stehen (die Tabellen oben ordnen nach Fehlercode, nicht
+nach Auswertungsreihenfolge). Das ist eine Umsetzungsentscheidung dieses
+Pakets, keine Vorgabe des Katalogs. ELDA kann
 serverseitig deshalb bei einem mehrfach fehlerhaften Satz einen anderen Code
 melden als den, der hier zuerst geworfen wird.
 
@@ -531,7 +689,10 @@ machte aus `'1032026'` (10.03.2026, Monat ohne führende Null) klammheimlich
 `'01032026'` — den 01.03.2026. Für acht dieser Felder führt der Prüfkatalog
 überhaupt keine Formatzeile; der Fehler fiele also auch bei ELDA nicht auf.
 Deshalb gilt: ein belegter Wert muss dort die volle Stellenzahl haben, sonst
-**wirft** `erstelleBestand`.
+**wirft** `erstelleBestand`. Genau diese acht Felder (`BDAT`, `EBSV`,
+`KEAB`, `KEBI`, `UEAB`, `UEBI`, `BVAB`, `BVEN`) prüft der Builder
+zusätzlich gegen den Kalender — acht Ziffern allein machen aus `'31112026'`
+noch keinen 31. November.
 
 Umgekehrt ist ein numerischer Wert aus lauter Nullen — `''`, `'0'`, `'00000000'`
 — immer die **Grundstellung** des Feldes, also „leer". Ein `String(row.vsnr ?? 0)`
@@ -550,15 +711,27 @@ echter Abmeldegrund („sonstiger Grund").
 > diesen Wert. Wo `F7115` das Feld verlangt, wirft der Builder deshalb, statt
 > eine vereinbarte Arbeitszeit von 0,00 Stunden zu melden.
 
+**Danach ist der Satz unveränderlich.** Die Builder liefern ihren `RohSatz`
+eingefroren (`Object.freeze`, samt `werte`): Was nach den Prüfungen im Satz
+steht, steht dort auch beim Schreiben. Ein nachträgliches
+`satz.werte.AGRD = '99'` — aus JavaScript heraus oder nach einem `as`-Bruch —
+wirft, statt beide Prüfstufen zu umgehen.
+
 **Und beim Klammern:** `erstelleBestand` verlangt, dass alle übergebenen Sätze
-dieselbe Satzlänge haben — ein Bestand hat genau eine. Kapitel C.1.2 nennt
+dieselbe Satzlänge haben — ein Bestand hat genau eine — und dass kein
+Referenzwert (`REFW`) zu derselben Beitragskontonummer zweimal vorkommt
+(Kapitel D.43). Ein doppelter Referenzwert ließe eine spätere Richtigstellung
+oder ein Storno auf zwei Meldungen zugleich zeigen. Kapitel C.1.2 nennt
 Satzlängen und Satzanzahl als die ersten Prüfungen, die ELDA bei der Übernahme
 fährt; ein Fehler dort weist die gesamte Sendung zurück.
 
 **Ausdrücklich nicht umgesetzt** — ELDA prüft diese serverseitig:
 
 - Die **Prüfziffer der Versicherungsnummer** — das Verfahren steht in keiner
-  der verfügbaren Quellen.
+  der verfügbaren Quellen. Geprüft wird nur die Stellenfolge `LLLPTTMMJJ`
+  aus Kapitel D.6 (siehe `F7020` oben); die vierte Stelle bleibt
+  ungerechnet. Sie zu raten wäre schlimmer als sie wegzulassen: Eine falsch
+  berechnete Prüfziffer wiese gültige Versicherungsnummern ab.
 - Die **trägerabhängige Länge der Beitragskontonummer** — im Prüfkatalog nur
   als Warnung geführt, nicht als harter Fehler.
 - Die inhaltliche **Schreibweise von Namen** (`F7036`/`F7038`) — sie verlangt
@@ -601,7 +774,10 @@ gedacht.
   Version 42.7.0 (07/2026), Kapitel E.1 (Identifikationsteil), E.2
   (Vorlaufsatz), E.3 (Schlusssatz), E.29 (Versichertenmeldung reduziert:
   Feldtabelle, Pflichtmatrix, Erstellvorschriften mit Beispielen), D.22
-  (Abmeldegrund-Codeliste), D.39 (Beschäftigungsbereich-Codeliste).
+  (Abmeldegrund-Codeliste samt Abhängigkeitstabelle auf Seite 96), D.6
+  (Aufbau der Versicherungsnummer), D.39 (Beschäftigungsbereich-Codeliste),
+  D.41 (freier Dienstvertrag), D.43 (Referenzwert), D.47 (betriebliche
+  Vorsorge), E.30.2 (VSNR-Anforderung).
 - Prüfkatalog zur 42. Ergänzung, Blatt `VR`.
 - Das separate Zeichensatz-Dokument (Zeichenvorrat Personennamen bzw.
   Unternehmensnamen/Adressen in ISO-8859-15).

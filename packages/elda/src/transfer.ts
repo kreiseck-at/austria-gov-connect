@@ -57,12 +57,18 @@ export type Empfangen =
       zustand: 'nichtVorhanden';
     })
   | (EmpfangenBasis & {
-      /** Die Rücksendung wurde bereits abgeholt und ist damit nicht mehr abrufbar (Status 408). */
+      /**
+       * Die Rücksendung wurde bereits abgeholt und ist damit nicht mehr abrufbar
+       * (Status 408).
+       *
+       * Laut FAQ 8.2 der Schnittstellenbeschreibung ist das typischerweise die
+       * Folge gleichzeitiger Aufrufe mehrerer Clients derselben Seriennummer.
+       * Trat unmittelbar davor ein `FonTransportError` auf, ist die zweite
+       * Lesart genauso möglich: Der eigene vorige Aufruf hat die Zustellung
+       * verbraucht und die Bytes gingen beim Transport verloren. Dieses Paket
+       * wiederholt `empfangen` deshalb nie von sich aus.
+       */
       zustand: 'bereitsEmpfangen';
-    })
-  | (EmpfangenBasis & {
-      /** Die Verarbeitung bei ELDA ist noch nicht abgeschlossen (Status 404). */
-      zustand: 'nochInArbeit';
     });
 
 /**
@@ -90,6 +96,10 @@ export interface EldaTransfer {
    * Holt EINE Rücksendung per Protokollnummer. **Einmalig und unwiderruflich** —
    * danach ist sie bei ELDA nicht mehr abrufbar. Den Inhalt dauerhaft sichern,
    * bevor weitergearbeitet wird.
+   *
+   * `transport.retries` gilt für diese Methode **nicht**; ein `FonTransportError`
+   * von hier heißt nicht „nichts passiert". Begründung und Umgang: siehe
+   * `EldaTransferRoh.empfangen`.
    */
   empfangen(protokollnummer: string | number): Promise<Empfangen>;
   /**

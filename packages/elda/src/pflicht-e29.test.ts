@@ -15,6 +15,90 @@ test('jede Satzart deckt jedes Feld ab (außer dem Identifikationsteil)', () => 
   }
 });
 
+/**
+ * Die Matrix aus Kapitel E.29.1 (Seiten 303/304), Zeile fuer Zeile ausgeschrieben — 38 Felder
+ * mal sieben Satzarten, also alle 266 Zellen. Die Spaltenfolge ist die des Dokuments:
+ * M3, M4, M6, M8, M9, S3, S4.
+ *
+ * Bewusst als Literale und nicht aus MATRIX abgeleitet: Genau wie die Byte-Offsets in
+ * `felder-e29.test.ts` ist das eine zweite, unabhaengige Abschrift derselben Quelle. Nur so
+ * faellt eine einzelne verschobene Zelle auf — vorher waren rund zwanzig Zellen mit
+ * Stichproben belegt, die uebrigen konnten unbemerkt kippen.
+ *
+ * Zwei Stellen weichen von den GEDRUCKTEN Zeichen ab; beide sind im Quelltext von
+ * `pflicht-e29.ts` bei ALTERNATIVGRUPPEN begruendet und stehen hier so, wie die Matrix sie
+ * fuehren MUSS:
+ *
+ * - VSNR und GEBD stehen im Dokument nie einzeln, sondern in einer ueber beide (bei M3/M4/M6
+ *   ueber alle drei mit REFV) verbundenen Zelle mit einem einzelnen `Z`. Da die Zelle eine
+ *   Alternativbedingung traegt, fuehrt die Matrix hier `Z1` statt `Z`.
+ * - BBER, GERF und FRDV teilen sich bei M6 eine verbundene Zelle mit einem einzelnen `V`;
+ *   gedruckt steht es nur in der GERF-Zeile, es gilt aber fuer alle drei.
+ */
+const MATRIX_E29_1: readonly (readonly [string, string])[] = [
+  ['REFW', 'Z  Z  Z  Z  Z  Z  Z '],
+  ['REFU', '-  -  -  Z  Z  Z  Z '],
+  ['BKNR', 'Z  Z  Z  Z  Z  Z  Z '],
+  ['DGNA', 'Z  Z  Z  Z  Z  Z  Z '],
+  ['DTEL', 'Z3 Z3 Z3 Z3 Z3 Z3 Z3'],
+  ['MAIL', 'Z3 Z3 Z3 Z3 Z3 Z3 Z3'],
+  ['INF1', 'Z3 Z3 Z3 Z3 Z3 Z3 Z3'],
+  ['INF2', 'Z3 Z3 Z3 Z3 Z3 Z3 Z3'],
+  ['VSNR', 'Z1 Z1 Z1 Z1 Z1 Z1 Z1'],
+  ['GEBD', 'Z1 Z1 Z1 Z1 Z1 Z1 Z1'],
+  ['REFV', 'Z1 Z1 Z1 Z1 -  -  - '],
+  ['FANA', 'Z  Z  Z  -  -  -  - '],
+  ['VONA', 'Z  Z  Z  -  -  -  - '],
+  ['ADAT', 'Z1 Z  Z  Z  Z  Z  Z '],
+  ['BDAT', '-  -  Z1 -  -  -  - '],
+  ['RDAT', '-  -  -  Z  Z  -  - '],
+  ['BBER', 'Z  -  V  -  -  -  - '],
+  ['GERF', 'Z  Z  V  -  Z  -  - '],
+  ['FRDV', 'Z  -  V  -  -  -  - '],
+  ['EBSV', '-  Z1 -  -  Z1 -  - '],
+  ['AGRD', '-  Z  -  -  Z  -  - '],
+  ['SAGR', '-  Z1 -  -  Z1 -  - '],
+  ['KEAB', '-  Z1 -  -  Z1 -  - '],
+  ['KEBI', '-  Z1 -  -  Z1 -  - '],
+  ['UEAB', '-  Z1 -  -  Z1 -  - '],
+  ['UEBI', '-  Z1 -  -  Z1 -  - '],
+  ['BVAB', 'Z1 -  -  Z1 -  -  - '],
+  ['BVEN', '-  Z1 -  -  Z1 -  - '],
+  ['BVJN', '-  -  V  -  -  -  - '],
+  ['UMDA', '-  Z1 -  -  Z1 -  Z1'],
+  ['RUMD', '-  -  -  -  Z1 -  - '],
+  ['SOUM', '-  Z1 -  -  Z1 -  - '],
+  ['ZTUM', '-  Z1 -  -  Z1 -  - '],
+  ['ZKUM', '-  Z1 -  -  Z1 -  - '],
+  ['RWUM', '-  Z1 -  -  Z1 -  Z1'],
+  ['RUUM', '-  -  -  -  Z1 -  Z1'],
+  ['BKUM', '-  -  -  -  Z1 -  - '],
+  ['VWAZ', 'Z1 -  -  Z1 -  -  - '],
+];
+
+test('alle 266 Zellen der Matrix stehen einzeln gegen das Dokument', () => {
+  assert.equal(MATRIX_E29_1.length, 38, '38 Felder ohne den Identifikationsteil');
+  let zellen = 0;
+  for (const [feld, zeile] of MATRIX_E29_1) {
+    const stufen = zeile.trim().split(/\s+/);
+    assert.equal(stufen.length, SATZARTEN.length, `${feld}: sieben Spalten`);
+    for (const [i, sa] of SATZARTEN.entries()) {
+      assert.equal(PFLICHT_E29[sa][feld], stufen[i], `${feld} bei ${sa}`);
+      zellen++;
+    }
+  }
+  assert.equal(zellen, 266);
+});
+
+test('die Matrix fuehrt genau die Feldnamen der Feldtabelle, in deren Reihenfolge', () => {
+  // Faengt eine zusaetzliche oder fehlende Zeile ab — die Zellenzaehlung oben allein wuerde
+  // ein Feld, das in beiden Abschriften fehlt, nicht bemerken.
+  assert.deepEqual(
+    MATRIX_E29_1.map(([feld]) => feld),
+    FELDER_E29.filter((f) => f.name !== 'IDTEIL').map((f) => f.name),
+  );
+});
+
 test('Stichproben gegen das Dokument', () => {
   assert.equal(PFLICHT_E29.M3.REFW, 'Z');
   assert.equal(PFLICHT_E29.M3.REFU, '-');

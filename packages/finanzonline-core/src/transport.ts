@@ -59,7 +59,15 @@ export async function callSoap(spec: SoapCallSpec, opts: TransportOptions = {}):
   try {
     root = parseXml(responseText);
   } catch (err) {
-    throw new FonProtocolError(`Antwort ist kein gültiges XML (HTTP ${status}): ${(err as Error).message}`);
+    // Der ungeparste Body hängt am Fehler (nicht an der `message`, siehe
+    // `FonProtocolError.rohantwort`): Bei Diensten mit einmaliger Zustellung —
+    // ELDA `empfangen` — ist er die letzte Stelle, an der die Nutzdaten noch
+    // existieren. Ihn hier zu verwerfen hieße, sie endgültig zu verlieren.
+    throw new FonProtocolError(`Antwort ist kein gültiges XML (HTTP ${status}): ${(err as Error).message}`, {
+      cause: err,
+      httpStatus: status,
+      rohantwort: responseText,
+    });
   }
 
   const fault = detectFault(root);
@@ -67,7 +75,10 @@ export async function callSoap(spec: SoapCallSpec, opts: TransportOptions = {}):
     throw new FonSoapFaultError(fault.faultstring || 'SOAP-Fault', fault.faultcode, fault.detail);
   }
   if (status < 200 || status >= 300) {
-    throw new FonProtocolError(`Unerwarteter HTTP-Status ${status} ohne SOAP-Fault`);
+    throw new FonProtocolError(`Unerwarteter HTTP-Status ${status} ohne SOAP-Fault`, {
+      httpStatus: status,
+      rohantwort: responseText,
+    });
   }
   return root;
 }

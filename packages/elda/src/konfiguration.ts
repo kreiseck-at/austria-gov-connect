@@ -15,6 +15,20 @@ interface EldaBasisConfig extends SecurityQuelle {
    * lehnt einen wiederholten `nonce` mit `552` ab und ein `created` älter als
    * 60 Sekunden mit `551`. Wiederholt wird ausschließlich bei Transportfehlern.
    * Ein ungültiger Wert (`NaN`, negativ, gebrochen, `Infinity`) gilt als `0`.
+   *
+   * **`retries` gilt für `empfangen` NICHT** — dort wird nie automatisch
+   * wiederholt, unabhängig vom eingestellten Wert. `empfangen` ist einmalig und
+   * unwiderruflich (FAQ 8.2), und ein Transportfehler beweist nicht, dass die
+   * Anfrage den Server nie erreicht hat: `timeoutMs` (Standard 30 000 ms) deckt
+   * auch den Body-Download ab, ein Abbruch beim Herunterladen eines großen
+   * Protokolls sieht also aus wie ein gewöhnlicher Netzfehler. Ein zweiter
+   * Versuch bekäme dann `408` („bereits empfangen") und der selbst verursachte
+   * Verlust käme als ganz gewöhnlicher `zustand: 'bereitsEmpfangen'` zurück.
+   *
+   * Für `senden` und `ruecksendungenAuflisten` ist eine Wiederholung dagegen
+   * unbedenklich: `ruecksendungenAuflisten` verändert nichts, und eine doppelt
+   * angekommene Sendung beantwortet ELDA mit `405` („Duplikat", Protokollnummer
+   * des Originals in der Meldung) — ein auswertbarer Zustand, kein Verlust.
    */
   transport?: TransportOptions;
 }

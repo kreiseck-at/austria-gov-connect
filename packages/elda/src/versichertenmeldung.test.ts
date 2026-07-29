@@ -42,7 +42,15 @@ test('jede Satzart trägt ihren Code', () => {
     'M3',
   );
   assert.equal(
-    abmeldung({ ...BASIS, FANA: 'Maier', VONA: 'Anna', ADAT: '01022026', GERF: 'N', AGRD: '01' }).satzart,
+    abmeldung({
+      ...BASIS,
+      FANA: 'Maier',
+      VONA: 'Anna',
+      ADAT: '01022026',
+      GERF: 'N',
+      AGRD: '01',
+      EBSV: '31012026', // Kapitel D.22, Seite 96: beim Abmeldegrund 01 zwingend
+    }).satzart,
     'M4',
   );
   assert.equal(aenderungsmeldung({ ...BASIS, FANA: 'Maier', VONA: 'Anna', ADAT: '01022026' }).satzart, 'M6');
@@ -58,6 +66,7 @@ test('jede Satzart trägt ihren Code', () => {
       RDAT: '02022026',
       GERF: 'N',
       AGRD: '01',
+      EBSV: '31012026', // Kapitel D.22, Seite 96/97: beim Abmeldegrund 01 auch bei M9 zwingend
     }).satzart,
     'M9',
   );
@@ -260,22 +269,47 @@ test('I3: eine Abmeldung mit Zivildienst und Ende des Beschaeftigungsverhaeltnis
   );
 });
 
-test('C1: ein unvollstaendig formatiertes BVAB faellt spaetestens beim Bau des Bestands auf', () => {
-  // Der Builder selbst hat zu BVAB keine Regel — der Pruefkatalog fuehrt fuer dieses Feld
-  // keine Zeile. Frueher entstand daraus stillschweigend der 01.03.2026 statt des
-  // 10.03.2026; jetzt weist die Serialisierung den Wert zurueck, bevor ein Byte entsteht.
-  const satz = anmeldung({
-    ...BASIS,
-    FANA: 'Maier',
-    VONA: 'Anna',
-    ADAT: '01022026',
-    BBER: '05',
-    GERF: 'N',
-    FRDV: 'N',
-    BVAB: '1032026',
-  });
+test('C1: ein unvollstaendig formatiertes BVAB faellt jetzt schon im Builder auf', () => {
+  // Bewusste Aenderung gegenueber der frueheren Fassung dieses Tests: Damals hatte der
+  // Builder zu BVAB keine Regel (der Pruefkatalog fuehrt fuer dieses Feld keine Zeile) und
+  // erst die Serialisierung wies den Wert zurueck. Die aus der Feldtabelle abgeleitete
+  // Kalenderpruefung greift nun eine Stufe frueher — '1032026' ist kein TTMMJJJJ. Der
+  // Ausgang bleibt derselbe: Aus dem 10.03.2026 wird nie stillschweigend der 01.03.2026.
   assert.throws(
-    () => erstelleBestand([satz], OPT),
+    () =>
+      anmeldung({
+        ...BASIS,
+        FANA: 'Maier',
+        VONA: 'Anna',
+        ADAT: '01022026',
+        BBER: '05',
+        GERF: 'N',
+        FRDV: 'N',
+        BVAB: '1032026',
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaError);
+      assert.match((err as Error).message, /BVAB/);
+      return true;
+    },
+  );
+
+  // Die zweite Verteidigungslinie bleibt bestehen: Ein an der Inhaltspruefung vorbei
+  // zusammengesetzter RohSatz — so entsteht er ueber die oeffentliche `RohSatz`-Schnittstelle
+  // — wird von der Serialisierung immer noch abgewiesen, bevor ein Byte entsteht.
+  assert.throws(
+    () =>
+      erstelleBestand(
+        [
+          {
+            satzart: 'M3',
+            werte: { REFW: 'REF-1', BKNR: '1234567', DGNA: 'Muster GmbH', BVAB: '1032026' },
+            felder: FELDER_E29,
+            satzlaenge: 772,
+          },
+        ],
+        OPT,
+      ),
     (err: unknown) => {
       assert.ok(err instanceof EldaError);
       assert.match((err as Error).message, /BVAB/);
@@ -449,7 +483,43 @@ test("VWAZ '0000': Bedeutungsaenderung — Grundstellung statt null Stunden", ()
     ADAT: '01022026',
     GERF: 'N',
     AGRD: '01',
+    EBSV: '31012026', // Kapitel D.22, Seite 96: beim Abmeldegrund 01 zwingend
   };
   assert.doesNotThrow(() => abmeldung({ ...abmeldeFelder, VWAZ: '0000' }));
   assert.throws(() => abmeldung({ ...abmeldeFelder, VWAZ: '4000' }), EldaError);
+});
+
+// ---------------------------------------------------------------------------
+// RohSatz ist nach dem Builder unveraenderlich
+// ---------------------------------------------------------------------------
+
+test('der gebaute Satz ist eingefroren — nachtraegliche Aenderungen umgehen sonst beide Pruefungen', () => {
+  // `RohSatz.werte` ist im Typ `Readonly<...>`, das gilt aber nur beim Uebersetzen. Aus
+  // JavaScript heraus oder nach einem `as`-Bruch ging ein Schreibzugriff bisher durch und
+  // veraenderte den Satz NACH Pflichtmatrix und Pruefkatalog — erstelleBestand schreibt ihn
+  // trotzdem.
+  const satz = abmeldung({
+    ...BASIS,
+    FANA: 'Maier',
+    VONA: 'Anna',
+    ADAT: '01022026',
+    GERF: 'N',
+    AGRD: '01',
+    EBSV: '31012026',
+  });
+  assert.ok(Object.isFrozen(satz), 'der RohSatz selbst');
+  assert.ok(Object.isFrozen(satz.werte), 'die Werte');
+
+  const veraenderbar = satz.werte as Record<string, string | undefined>;
+  assert.throws(() => {
+    veraenderbar.AGRD = '99';
+  }, TypeError);
+  assert.throws(() => {
+    veraenderbar.VWAZ = '4000';
+  }, TypeError);
+  assert.equal(satz.werte.AGRD, '01');
+  assert.equal(satz.werte.VWAZ, undefined);
+
+  // Der eingefrorene Satz laeuft unveraendert durch erstelleBestand.
+  assert.doesNotThrow(() => erstelleBestand([satz], OPT));
 });

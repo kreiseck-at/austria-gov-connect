@@ -140,6 +140,17 @@ brechen).
 
 ## @kreiseck/finanzonline-core
 
+### 0.1.6 — 2026-07-29
+
+- **Neu:** `FonProtocolError` trägt jetzt optional `httpStatus` und einen
+  `rohantwort`-Getter mit dem rohen, ungeparsten Antwort-Body. Rein additiv
+  (`new FonProtocolError(msg)` bleibt gültig). Relevant für Dienste mit
+  einmaliger Zustellung: scheitert das Parsen einer Antwort, ist der rohe
+  Body sonst der einzige Rest der bereits verbrauchten Nutzdaten (Beispiel:
+  eine MTOM-Antwort auf `empfangen` beim ELDA Transfer-Webservice). Bewusst
+  als Getter statt eigener Eigenschaft, damit `console.error`/`util.inspect`/
+  `JSON.stringify` ihn nicht ungefragt in ein Log schreiben.
+
 ### 0.1.5 — 2026-07-25
 
 - **Doku:** Session-Returncodes `-1..-4` als konform zur BMF-Spec
@@ -237,6 +248,10 @@ brechen).
   für Personennamen; ein nicht darstellbarer oder außerhalb des Vorrats
   liegender Name wirft, statt transliteriert zu werden.
 - Additiv, keine Bruchstelle gegenüber 0.2.0.
+- Mindest-Abhängigkeit auf `@kreiseck/finanzonline-core` `^0.1.6` angehoben
+  (enthält `httpStatus`/`rohantwort` an `FonProtocolError` — die im
+  README dokumentierte Wiederherstellung des rohen Antwort-Bodys bei einem
+  Parse-Fehler auf `empfangen` setzt das voraus).
 
 ### 0.2.0 — 2026-07-28
 

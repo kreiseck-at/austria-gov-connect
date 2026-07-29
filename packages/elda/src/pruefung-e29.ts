@@ -1,5 +1,6 @@
 import { EldaError } from './errors';
-import type { Satzart } from './pflicht-e29';
+import { FELDER_E29 } from './felder-e29';
+import { PFLICHT_E29, type Satzart } from './pflicht-e29';
 
 type Werte = Readonly<Record<string, string | undefined>>;
 
@@ -92,6 +93,103 @@ function gueltigesDatum(wert: string): boolean {
   if (mm < 1 || mm > 12) return false;
   return tt >= 1 && tt <= tageImMonat(mm, jjjj);
 }
+
+/**
+ * Prüft die Struktur der Versicherungsnummer gegen Kapitel D.6, Seite 72. Das Dokument
+ * druckt dort die Stellenfolge `LLLPTTMMJJ` ab und schlüsselt sie auf:
+ *
+ * ```
+ * LLL     Laufnummer
+ * P       Prüfziffer
+ * TTMMJJ  Geburtsdatum bzw. fingiertes Datum bestehend aus
+ *         TT = 01 - 31
+ *         MM = 13 - 15
+ *         JJ = Geburtsjahr
+ * ```
+ *
+ * Der Tag liegt also stets zwischen 01 und 31. Für den Monat nennt das Dokument den Bereich
+ * 13–15 ausdrücklich als den des FINGIERTEN Datums; beim echten Geburtsdatum sind es die
+ * gewöhnlichen 01–12. Zulässig ist damit 01–15, und genau das wird hier geprüft.
+ *
+ * Bewusst NICHT geprüft wird der Tag gegen die tatsächliche Monatslänge: Das Dokument nennt
+ * für TT einen glatten Bereich 01–31 und keine Abhängigkeit vom Monat — bei den fingierten
+ * Monaten 13–15 gäbe es eine solche Länge auch gar nicht.
+ *
+ * Die Prüfziffer bleibt ebenfalls ungeprüft: Ihr Verfahren steht in keiner der verfügbaren
+ * Quellen (weder in Kapitel D.6 noch sonst irgendwo in der Organisationsbeschreibung oder im
+ * Prüfkatalog). Sie zu raten wäre schlimmer als sie wegzulassen — eine falsch berechnete
+ * Prüfziffer würde gültige Versicherungsnummern abweisen. ELDA prüft sie serverseitig
+ * (Prüfkatalog F7020).
+ */
+function gueltigeVsnrStruktur(vsnr: string): boolean {
+  if (!/^\d{10}$/.test(vsnr)) return false;
+  const tt = Number(vsnr.slice(4, 6));
+  const mm = Number(vsnr.slice(6, 8));
+  return tt >= 1 && tt <= 31 && mm >= 1 && mm <= 15;
+}
+
+/**
+ * Entscheidet anhand der Pflichtmatrix aus Kapitel E.29.1, ob ein Feld bei dieser Satzart
+ * überhaupt belegt sein darf. Alle Stufen außer `-` erlauben eine Angabe; `-` bedeutet laut
+ * Legende „keine Angabe, Feld in Grundstellung“ und wird bereits von `pruefePflicht`
+ * abgewiesen.
+ *
+ * Die Wertebereichsprüfungen unten hängen sich an diese Frage, statt ihre Satzarten erneut
+ * aufzuzählen: Ein Code- oder Kennzeichenfeld hat genau einen Wertevorrat — der steht in
+ * seinem Feldkapitel und nicht in der Satzart-Spalte des Prüfkatalogs. Wo die Matrix das Feld
+ * belegen lässt, muss der Wert also aus diesem Vorrat stammen, und wo sie es nicht tut,
+ * erübrigt sich die Frage. Damit können Matrix und Wertebereichsprüfung nicht auseinander-
+ * laufen, wenn eine spätere Ergänzung eine Satzart-Spalte verschiebt.
+ */
+function darfBelegtSein(satzart: Satzart, feld: string): boolean {
+  return PFLICHT_E29[satzart][feld] !== '-';
+}
+
+/**
+ * Zulässige Werte der Kennzeichenfelder GERF, FRDV und BVJN. Alle drei sind einstellige
+ * Codefelder mit demselben, in ihrer jeweiligen Quelle wörtlich abgedruckten Vorrat:
+ *
+ * - `GERF` (Geringfügigkeit): Feldtabelle Kapitel E.29, Feld Nr. 19, Position 539
+ *   (Seite 300). Die Spalte INHALT/BEZEICHNUNG druckt unter dem Feldnamen „J = Ja“ und
+ *   „N = Nein“ ab; ein eigenes D-Kapitel hat das Feld nicht (Spalte SIEHE KAPITEL trägt `-`).
+ * - `FRDV` (Freier Dienstvertrag): Kapitel D.41, Seite 121 — „1 Stellen, Code / J Ja /
+ *   N Nein“. Ebenso in der Feldtabelle, Feld Nr. 20, Position 540.
+ * - `BVJN` (Betriebliche Vorsorge): Kapitel D.47, Seite 127 — „1 Stelle, Code / J - Ja /
+ *   N - Nein“.
+ *
+ * Der Prüfkatalog führt für keines der drei Felder eine Formatzeile (Blatt `VR` kennt zu
+ * GERF und FRDV nur die Warnungen F7102/F7103 zur Teilbelegung bei M6, zu BVJN gar nichts).
+ * Ein `'n'`, `'X'` oder `'Ja'` geht deshalb auch bei ELDA durch die formale Prüfung und
+ * landet als stiller Falschwert in der Versicherungshistorie — die Prüfung hier ist aus den
+ * Felddefinitionen abgeleitet und trägt mangels Katalog-Codes das Quellkapitel im
+ * Meldungstext, wie es schon die aus Kapitel E.30.2 abgeleitete REFV-Regel tut.
+ *
+ * Klein- und Großschreibung werden NICHT stillschweigend angeglichen: Der Satz überträgt das
+ * Byte unverändert, und ein `'n'` an Position 540 ist nicht dasselbe wie ein `'N'`. Welche
+ * Schreibweise gemeint war, entscheidet der Aufrufer — hier wird abgewiesen statt geraten.
+ */
+const KENNZEICHEN_JN: ReadonlySet<string> = new Set(['J', 'N']);
+
+/**
+ * Zulässige Beschäftigungsbereiche laut Kapitel D.39, Seite 119: die dort abgedruckte
+ * Codeliste `01` (Arbeiter) bis `13` (Umschüler, Rehabilitanden – Ang. kein SE), lückenlos.
+ * Deckt sich mit der Formatzeile F7069 des Prüfkatalogs („ungültig (gültig: 01-13)“).
+ */
+const BBER_CODES: ReadonlySet<string> = new Set([
+  '01',
+  '02',
+  '03',
+  '04',
+  '05',
+  '06',
+  '07',
+  '08',
+  '09',
+  '10',
+  '11',
+  '12',
+  '13',
+]);
 
 /** Beschäftigungsbereiche, für die VWAZ ab 01.01.2026 zwingend ist (Prüfkatalog F7115). */
 const VWAZ_PFLICHT_BBER: ReadonlySet<string> = new Set(['01', '02', '03', '04', '11']);
@@ -209,6 +307,141 @@ const AGRD_OHNE_EBSV: ReadonlySet<string> = new Set([
   '33',
 ]);
 
+/**
+ * Datumsfelder, deren Kalenderprüfung bereits eine eigene Katalog-Zeile mit eigener
+ * Satzart-Spalte abdeckt — GEBD (F7030, inklusive der Sonderformen `00MMJJJJ`/`0000JJJJ`),
+ * ADAT (F7061), RDAT (F7066), UMDA (F7104) und RUMD (F7106). Für sie gilt weiterhin genau
+ * die Satzart-Menge des Katalogs; die abgeleitete Prüfung unten fasst sie nicht an, damit
+ * die dort belegten Auslassungen erhalten bleiben (siehe {@link ADAT_FORMAT_PRUEFUNG}: Bei
+ * M8/M9 prüft der Katalog das Format von ADAT bewusst nicht erneut).
+ */
+const DATUM_MIT_KATALOGREGEL: ReadonlySet<string> = new Set(['GEBD', 'ADAT', 'RDAT', 'UMDA', 'RUMD']);
+
+/**
+ * Die übrigen Datumsfelder der Feldtabelle aus Kapitel E.29 (Seiten 299–301): BDAT, EBSV,
+ * KEAB, KEBI, UEAB, UEBI, BVAB und BVEN. Alle acht tragen dort unter dem Feldnamen die
+ * stellenscharfe Vorgabe `TTMMJJJJ` — abgeleitet aus {@link FELDER_E29} statt hier erneut
+ * aufgezählt, damit die beiden Listen nicht auseinanderlaufen können.
+ *
+ * Für keines dieser acht Felder führt der Prüfkatalog (Blatt `VR`) eine Formatzeile. Bis
+ * hierher prüfte nur `festsatz.ts` die STELLENZAHL (genau acht Ziffern, kein Auffüllen) —
+ * das fängt den Auffüll-Fehler ab, aber keinen Kalenderfehler: Ein `KEAB = '31112026'`
+ * (31. November) oder ein `EBSV = '99999999'` sind acht Ziffern und gingen unbeanstandet auf
+ * die Leitung. Am teuersten wäre ein Aufrufer, der versehentlich das US-Format `MMTTJJJJ`
+ * liefert — der erzeugt für jeden Tag ab dem 13. eines Monats einen Monat 13 bis 31, und
+ * genau das bliebe sonst auf beiden Seiten unbemerkt.
+ *
+ * Die Regel stammt nicht aus dem Prüfkatalog, sondern aus der Feldtabelle selbst: Wo dort
+ * `TTMMJJJJ` steht, ist der Inhalt ein Kalenderdatum, und ein nicht existierender Tag kann
+ * nie der gemeinte sein. Die Meldung trägt deshalb das Quellkapitel statt eines Fehlercodes.
+ */
+const DATUM_OHNE_KATALOGREGEL: readonly string[] = FELDER_E29.filter(
+  (f) => f.format === 'TTMMJJJJ' && !DATUM_MIT_KATALOGREGEL.has(f.name),
+).map((f) => f.name);
+
+/**
+ * Satzarten, für die die Abhängigkeitstabelle aus Kapitel D.22, Seite 96 („Der Zusammenhang
+ * zwischen dem Abmeldegrundcode und den abhängigen Feldern") gilt:
+ *
+ * - M4 laut der Einleitung auf Seite 95: „Bei Satzart (SART) M4 – Abmeldung – ist der Grund
+ *   der Abmeldung zwingend anzugeben. In Abhängigkeit vom Abmeldegrund sind weitere Angaben
+ *   erforderlich."
+ * - M9 laut dem Absatz unter der Legende auf Seite 97: „Bei Satzart (SART) M9 –
+ *   Richtigstellung Abmeldung – gelten ebenfalls die für die Satzart Abmeldung beschriebenen
+ *   Abhängigkeiten zwischen den Feldern Abmeldegrundcode (AGRD), Ende des
+ *   Beschäftigungsverhältnisses (EBSV), Betriebliche Vorsorge – ENDE (BVEN),
+ *   Kündigungsentschädigung (KEAB und KEBI) und Urlaubsersatzleistung (UEAB und UEBI)."
+ *
+ * Deckt sich mit den Satzarten, in denen die Pflichtmatrix AGRD überhaupt führt.
+ */
+const D22_SATZARTEN: ReadonlySet<Satzart> = new Set<Satzart>(['M4', 'M9']);
+
+/**
+ * Abmeldegründe, bei denen die Tabelle auf Seite 96 in der Spalte EBSV ein `Z` trägt —
+ * laut Legende auf Seite 97 „Angabe zwingend". Bei diesen Gründen endet das
+ * arbeitsrechtliche Beschäftigungsverhältnis, das Ende-Datum ist der Kern der Abmeldung.
+ *
+ * Dies ist die Gegenrichtung zu F7111 ({@link AGRD_OHNE_EBSV}, die `-`-Zellen derselben
+ * Spalte). Der Prüfkatalog kennt dafür keine Zeile: Eine Abmeldung wegen Kündigung ging
+ * bisher ohne arbeitsrechtliches Ende hinaus, formal einwandfrei und fachlich falsch.
+ *
+ * NICHT enthalten sind zwei der insgesamt 21 Codes mit einer Nicht-`-`-Zelle:
+ *
+ * - `00` trägt zwar `Z`, aber mit Fußnote 32: „Für Meldungen zur Sozialhilfe
+ *   (bedarfsorientierten Mindestsicherung) ist keine Angabe im Feld EBSV erforderlich." Ob
+ *   eine Meldung eine solche ist, ist aus den Feldwerten allein nicht entscheidbar (Seite 95
+ *   nennt dafür den Text „KV-ENDE" im Feld SAGR, aber nicht als verpflichtende Kennung) —
+ *   die Zelle bleibt deshalb unerzwungen.
+ * - `13` (Tod des Dienstnehmers) trägt `Z1`, „zwingend wenn zutreffend". Eine Bedingung
+ *   dieser Art kennt dieses Paket grundsätzlich nicht und erzwingt sie nirgends.
+ */
+const AGRD_MIT_EBSV_PFLICHT: ReadonlySet<string> = new Set([
+  '01',
+  '02',
+  '03',
+  '04',
+  '05',
+  '06',
+  '10',
+  '14',
+  '16',
+  '17',
+  '18',
+  '20',
+  '21',
+  '22',
+  '24',
+  '25',
+  '27',
+  '30',
+  '34',
+]);
+
+/**
+ * Abmeldegründe, bei denen die Tabelle auf Seite 96 in der Spalte BVEN ein `-` trägt — laut
+ * Legende auf Seite 97 „keine Angabe zulässig, Feld Grundstellung": Präsenzdienstleistung im
+ * Bundesheer (08), Zivildienst (09), Truppenübung (15) und Entlassung aus der
+ * Bundesbetreuung (20).
+ *
+ * Die übrigen Codes tragen dort `Z1` („zwingend wenn zutreffend", 07 und 29 sogar nur `Z3`,
+ * „Angabe möglich") — beide Stufen hängen an einer fachlichen Bedingung und bleiben deshalb
+ * wie überall in diesem Paket unerzwungen.
+ */
+const AGRD_OHNE_BVEN: ReadonlySet<string> = new Set(['08', '09', '15', '20']);
+
+/**
+ * Abmeldegründe, bei denen die Tabelle auf Seite 96 in der Spalte KE/UE ein `-` trägt:
+ * keine Kündigungsentschädigung und keine Urlaubsersatzleistung zulässig. Seite 95 benennt
+ * die vier dahinterstehenden Felder ausdrücklich — „Kündigungsentschädigung (KE; Felder KEAB
+ * und KEBI)" und „Urlaubsersatzleistung (UE; Felder UEAB und UEBI)".
+ *
+ * Es sind die fünfzehn Gründe, bei denen entweder das Beschäftigungsverhältnis fortdauert
+ * (Karenz, Präsenz-/Zivildienst, unbezahlter Urlaub, Ummeldung, Truppenübung, Unterbrechung
+ * der Gerichtspraxis, Bildungs-, Pflege- und Familienhospizkarenz, SV-Ende bei aufrechter
+ * Beschäftigung) oder eine Entschädigung fachlich ausgeschlossen ist (Pragmatisierung, Tod,
+ * Entlassung aus der Bundesbetreuung).
+ */
+const AGRD_OHNE_KE_UE: ReadonlySet<string> = new Set([
+  '07',
+  '08',
+  '09',
+  '10',
+  '11',
+  '12',
+  '13',
+  '15',
+  '19',
+  '20',
+  '23',
+  '29',
+  '31',
+  '32',
+  '33',
+]);
+
+/** Die vier Felder der Spalte KE/UE, benannt in Kapitel D.22, Seite 95. */
+const KE_UE_FELDER: readonly string[] = ['KEAB', 'KEBI', 'UEAB', 'UEBI'];
+
 /** Satzarten, bei denen der Prüfkatalog das Format von VWAZ prüft (F7116). */
 const VWAZ_FORMAT_PRUEFUNG: ReadonlySet<Satzart> = new Set<Satzart>(['M3', 'M8']);
 
@@ -324,6 +557,8 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
   const umda = normalisiertNumerisch(werte.UMDA);
   const rumd = normalisiertNumerisch(werte.RUMD);
   const vwaz = normalisiertNumerisch(werte.VWAZ);
+  const kebi = normalisiertNumerisch(werte.KEBI);
+  const uebi = normalisiertNumerisch(werte.UEBI);
   // Alphanumerische Felder (Typ `a/n`): dort ist die Grundstellung blank, eine Ziffernfolge
   // aus Nullen also ein echter Inhalt und keine Grundstellung.
   const refv = normalisiert(werte.REFV);
@@ -331,8 +566,11 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
   const soum = normalisiert(werte.SOUM);
   const ztum = normalisiert(werte.ZTUM);
   const zkum = normalisiert(werte.ZKUM);
+  const gerf = normalisiert(werte.GERF);
   const frdv = normalisiert(werte.FRDV);
+  const bvjn = normalisiert(werte.BVJN);
   const agrd = normalisiert(werte.AGRD);
+  const sagr = normalisiert(werte.SAGR);
 
   if (bknr === undefined) wirf('F7000', 'Die Beitragskontonummer (BKNR) darf nicht leer sein.');
 
@@ -342,6 +580,20 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
     // welches Feld beanstandet ist und was zulässig wäre — dieselbe Zurückhaltung, die
     // `pruefeVorrat` und die Längenprüfung in `festsatz.ts` bereits üben.
     wirf('F7030', 'Das Geburtsdatum (GEBD) ist ungültig. Zulässig: TTMMJJJJ, 00MMJJJJ oder 0000JJJJ.');
+  }
+
+  // F7020 (Prüfkatalog, Blatt VR Nr. 16 „VSNR ungültig", alle sieben Satzarten): Die
+  // Versicherungsnummer ist stellenkodiert (Kapitel D.6, Seite 72) — siehe
+  // gueltigeVsnrStruktur für die geprüften und die bewusst ungeprüften Stellen. Der Wert
+  // selbst steht wie bei GEBD nicht in der Meldung: Er ist ein Personendatum.
+  if (vsnr !== undefined && !gueltigeVsnrStruktur(vsnr)) {
+    wirf(
+      'F7020',
+      'Die Versicherungsnummer (VSNR) ist ungültig. Erwartet: zehn Ziffern in der Form ' +
+        'LLLPTTMMJJ mit Tag 01 bis 31 und Monat 01 bis 12 (bzw. 13 bis 15 bei fingiertem ' +
+        'Datum), siehe Kapitel D.6. Die Prüfziffer wird hier nicht nachgerechnet — das ' +
+        'Verfahren steht in keiner der Quellen; ELDA prüft sie serverseitig.',
+    );
   }
 
   const vsnrBelegt = vsnr !== undefined;
@@ -407,8 +659,64 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
     wirf('F7106', 'Das richtige Ummeldedatum (RUMD) ist ungültig. Erwartet: TTMMJJJJ.');
   }
 
-  if (satzart === 'M3' && bber !== undefined && !/^(0[1-9]|1[0-3])$/.test(bber)) {
+  // Abgeleitete Kalenderprüfung der acht Datumsfelder ohne eigene Katalog-Zeile (siehe
+  // DATUM_OHNE_KATALOGREGEL). Sie läuft NACH den Katalog-Regeln, damit deren Fehlercodes
+  // dort, wo sie gelten, unverändert zuerst greifen. Die Grundstellung (leer oder lauter
+  // Nullen) bleibt in jeder Satzart zulässig — normalisiertNumerisch liefert dafür
+  // `undefined`, das Feld gilt also als unbelegt und wird nicht geprüft.
+  for (const name of DATUM_OHNE_KATALOGREGEL) {
+    const datum = normalisiertNumerisch(werte[name]);
+    if (datum !== undefined && !gueltigesDatum(datum)) {
+      // Der Wert selbst bleibt aus der Meldung: Unter den acht Feldern stehen Daten, die
+      // Rückschlüsse auf die Person zulassen — dieselbe Zurückhaltung wie bei GEBD und VSNR.
+      wirf(
+        'E.29',
+        `Das Feld ${name} ist kein gültiges Kalenderdatum. Erwartet: TTMMJJJJ (Feldtabelle ` +
+          'Kapitel E.29). Der Prüfkatalog führt zu diesem Feld keine Formatregel — die Prüfung ' +
+          'ist aus der Feldtabelle abgeleitet.',
+      );
+    }
+  }
+
+  // F7069 (Prüfkatalog): Beschäftigungsbereich gegen die Codeliste aus Kapitel D.39,
+  // Seite 119. Der Katalog führt die Zeile nur unter M3 — dort ist BBER laut Matrix
+  // zwingend. Die Matrix lässt das Feld aber auch bei M6 zu (Pflichtstufe `V`, gemeinsame
+  // Zelle mit GERF/FRDV), und die Codeliste in D.39 gilt für das Feld, nicht für eine
+  // Satzart: Ein `'1 '` oder `'99'` in einer Änderungsmeldung ist derselbe Falschwert wie in
+  // einer Anmeldung, nur dass ihn dort niemand abfängt. Geprüft wird deshalb überall, wo die
+  // Matrix das Feld belegen lässt; für M6 ist das eine aus D.39 abgeleitete Erweiterung der
+  // Katalog-Zeile, kein eigener Katalog-Code.
+  if (darfBelegtSein(satzart, 'BBER') && bber !== undefined && !BBER_CODES.has(bber)) {
     wirf('F7069', `Der Beschäftigungsbereich (BBER) '${bber}' ist ungültig. Zulässig sind 01 bis 13.`);
+  }
+
+  // Kennzeichenfelder J/N — abgeleitet aus den Felddefinitionen, ohne Katalog-Code (siehe
+  // KENNZEICHEN_JN). Der Meldungstext trägt deshalb das Quellkapitel statt eines Fehlercodes.
+  // Diese drei Prüfungen stehen bewusst VOR der F7115-Prüfung am Ende der Funktion: Jene
+  // vergleicht FRDV zeichengenau gegen `'N'`, so wie es der Prüfkatalog formuliert
+  // („Feld FRDV ist mit N belegt"). Ohne die Prüfung hier käme ein `'n'` als belegter, aber
+  // ungleicher Wert durch — die Meldung wäre dann doppelt falsch: das Kleinbuchstaben-Byte
+  // auf Position 540 UND ein stillschweigend übergangenes Pflichtfeld VWAZ.
+  if (darfBelegtSein(satzart, 'GERF') && gerf !== undefined && !KENNZEICHEN_JN.has(gerf)) {
+    wirf(
+      'E.29',
+      `Die Geringfügigkeit (GERF) '${gerf}' ist ungültig. Zulässig sind ausschließlich 'J' und ` +
+        "'N' (Feldtabelle Kapitel E.29, Feld Nr. 19); der Prüfkatalog führt dazu keine Regel.",
+    );
+  }
+  if (darfBelegtSein(satzart, 'FRDV') && frdv !== undefined && !KENNZEICHEN_JN.has(frdv)) {
+    wirf(
+      'D.41',
+      `Der freie Dienstvertrag (FRDV) '${frdv}' ist ungültig. Zulässig sind ausschließlich 'J' ` +
+        "und 'N' (Kapitel D.41, Seite 121); der Prüfkatalog führt dazu keine Regel.",
+    );
+  }
+  if (darfBelegtSein(satzart, 'BVJN') && bvjn !== undefined && !KENNZEICHEN_JN.has(bvjn)) {
+    wirf(
+      'D.47',
+      `Die betriebliche Vorsorge (BVJN) '${bvjn}' ist ungültig. Zulässig sind ausschließlich ` +
+        "'J' und 'N' (Kapitel D.47, Seite 127); der Prüfkatalog führt dazu keine Regel.",
+    );
   }
 
   // F7096 (Prüfkatalog): AGRD gegen die Codeliste aus Kapitel D.22 (siehe AGRD_CODES).
@@ -425,6 +733,101 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
         'Ende des Beschäftigungsverhältnisses (EBSV) muss deshalb in Grundstellung bleiben ' +
         '(Kapitel D.22, Seite 96).',
     );
+  }
+
+  // Kapitel D.22, Seite 96, Spalte EBSV, Zellen mit `Z` („Angabe zwingend") — die
+  // Gegenrichtung zu F7111. Ohne Katalog-Code, deshalb mit Quellkapitel im Meldungstext.
+  if (
+    D22_SATZARTEN.has(satzart) &&
+    agrd !== undefined &&
+    AGRD_MIT_EBSV_PFLICHT.has(agrd) &&
+    ebsv === undefined
+  ) {
+    wirf(
+      'D.22',
+      `Beim Abmeldegrund (AGRD) '${agrd}' endet das Beschäftigungsverhältnis; das Feld Ende des ` +
+        'Beschäftigungsverhältnisses (EBSV) ist deshalb zwingend anzugeben (Kapitel D.22, ' +
+        'Seite 96, Spalte EBSV: „Z – Angabe zwingend").',
+    );
+  }
+
+  // Kapitel D.22, Seite 95: „Bei Code 00 – sonstiger Grund mit Ende des
+  // Beschäftigungsverhältnisses – ist im Feld SAGR „Abmeldegrund, Text" der nicht
+  // verschlüsselbare Abmeldegrund anzugeben." Der Code selbst sagt nichts aus; ohne den Text
+  // enthält die Abmeldung überhaupt keinen Grund mehr.
+  if (D22_SATZARTEN.has(satzart) && agrd === '00' && sagr === undefined) {
+    wirf(
+      'D.22',
+      "Beim Abmeldegrund (AGRD) '00' — sonstiger Grund mit Ende des Beschäftigungs" +
+        'verhältnisses — ist der nicht verschlüsselbare Grund im Feld Abmeldegrund, Text ' +
+        '(SAGR) anzugeben (Kapitel D.22, Seite 95).',
+    );
+  }
+
+  // Kapitel D.22, Seite 96, Spalte BVEN, Zellen mit `-` („keine Angabe zulässig, Feld
+  // Grundstellung").
+  if (
+    D22_SATZARTEN.has(satzart) &&
+    agrd !== undefined &&
+    AGRD_OHNE_BVEN.has(agrd) &&
+    normalisiertNumerisch(werte.BVEN) !== undefined
+  ) {
+    wirf(
+      'D.22',
+      `Beim Abmeldegrund (AGRD) '${agrd}' ist im Feld Betriebliche Vorsorge – ENDE (BVEN) keine ` +
+        'Angabe zulässig; das Feld muss in Grundstellung bleiben (Kapitel D.22, Seite 96, ' +
+        'Spalte BVEN).',
+    );
+  }
+
+  // Kapitel D.22, Seite 96, Spalte KE/UE, Zellen mit `-`. Die vier dahinterstehenden Felder
+  // benennt Seite 95 ausdrücklich (KEAB/KEBI für die Kündigungsentschädigung, UEAB/UEBI für
+  // die Urlaubsersatzleistung).
+  if (D22_SATZARTEN.has(satzart) && agrd !== undefined && AGRD_OHNE_KE_UE.has(agrd)) {
+    for (const feld of KE_UE_FELDER) {
+      if (normalisiertNumerisch(werte[feld]) !== undefined) {
+        wirf(
+          'D.22',
+          `Beim Abmeldegrund (AGRD) '${agrd}' sind Kündigungsentschädigung und ` +
+            `Urlaubsersatzleistung nicht zulässig; das Feld ${feld} muss in Grundstellung ` +
+            'bleiben (Kapitel D.22, Seite 96, Spalte KE/UE).',
+        );
+      }
+    }
+  }
+
+  // Kapitel E.29.2, Seite 307 (Abschnitt „Satzart M4 – Abmeldung"): „Die Felder
+  // ‚Kündigungsentschädigung bis' (KEBI) bzw. ‚Urlaubsersatzleistung bis' (UEBI) müssen ident
+  // mit dem Feld ‚Ende Entgelt' (ADAT) sein" — mit Fußnote 60 auf derselben Seite: „Wenn
+  // sowohl eine Kündigungsentschädigung (KE) als auch Urlaubsersatzleistung (UE) anfallen,
+  // ist die Zeit der KE vor der Zeit der UE anzugeben und nur das UEBI muss mit ADAT
+  // übereinstimmen."
+  //
+  // Daraus folgt genau zweierlei, beides allein aus Feldwerten entscheidbar: UEBI muss immer
+  // gleich ADAT sein, wenn es belegt ist; KEBI muss gleich ADAT sein, solange KEBI die
+  // einzige der beiden Zeiten ist. Liegen beide vor, endet KEBI vor der UE-Zeit und darf
+  // deshalb nicht mit ADAT übereinstimmen müssen.
+  //
+  // Nur für M4: Der Satz steht im M4-Abschnitt des Kapitels E.29.2 (die nächste Überschrift
+  // ist „Satzart M6 – Änderungsmeldung"). Kapitel D.22, Seite 97 dehnt ausdrücklich nur die
+  // ABHÄNGIGKEITEN VOM ABMELDEGRUND auf M9 aus, nicht diese Identitätsregel.
+  if (satzart === 'M4' && adat !== undefined) {
+    if (uebi !== undefined && uebi !== adat) {
+      wirf(
+        'E.29.2',
+        'Das Feld Urlaubsersatzleistung bis (UEBI) muss mit dem Ende des Entgeltanspruchs ' +
+          '(ADAT) übereinstimmen (Kapitel E.29.2, Seite 307).',
+      );
+    }
+    if (kebi !== undefined && uebi === undefined && kebi !== adat) {
+      wirf(
+        'E.29.2',
+        'Das Feld Kündigungsentschädigung bis (KEBI) muss mit dem Ende des Entgeltanspruchs ' +
+          '(ADAT) übereinstimmen (Kapitel E.29.2, Seite 307). Nur wenn zusätzlich eine ' +
+          'Urlaubsersatzleistung anfällt, liegt die Zeit der Kündigungsentschädigung davor und ' +
+          'ausschließlich UEBI muss mit ADAT übereinstimmen (Fußnote 60 ebenda).',
+      );
+    }
   }
 
   if (UMMELDUNG_ZIEL_PRUEFUNG.has(satzart) && soum !== undefined && soum !== 'J') {

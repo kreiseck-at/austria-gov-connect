@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { inspect } from 'node:util';
 import { callSoap } from './transport';
 import { childText } from './soap/parse';
 import { FonTransportError, FonSoapFaultError, FonProtocolError } from './errors';
@@ -61,6 +62,45 @@ test('wirft FonProtocolError bei unparsebarer Antwort', async () => {
     () => callSoap({ endpoint: 'https://x.test', soapAction: 'login', body: '<x/>' }, { fetchImpl }),
     FonProtocolError,
   );
+});
+
+test('unparsebare Antwort: roher Body bleibt über err.rohantwort erhalten', async () => {
+  // Bei Diensten mit einmaliger Zustellung (ELDA `empfangen`) ist der Body die letzte
+  // Stelle, an der die Nutzdaten noch existieren — er darf nicht verworfen werden.
+  const body =
+    '--MIMEBoundary\r\nContent-Type: application/xop+xml\r\n\r\n<soap:Envelope/>\r\n--MIMEBoundary--';
+  const fetchImpl = (async () => new Response(body, { status: 200 })) as unknown as typeof fetch;
+  await assert.rejects(
+    () => callSoap({ endpoint: 'https://x.test', soapAction: 'empfangen', body: '<x/>' }, { fetchImpl }),
+    (err: unknown) => {
+      assert.ok(err instanceof FonProtocolError);
+      assert.equal(err.rohantwort, body);
+      assert.equal(err.httpStatus, 200);
+      return true;
+    },
+  );
+});
+
+test('rohantwort steht weder in der message noch in inspect/JSON (kann personenbezogen sein)', async () => {
+  const body = 'GEHEIM-1234 kein xml';
+  const fetchImpl = (async () => new Response(body, { status: 200 })) as unknown as typeof fetch;
+  await assert.rejects(
+    () => callSoap({ endpoint: 'https://x.test', soapAction: 'login', body: '<x/>' }, { fetchImpl }),
+    (err: unknown) => {
+      assert.ok(err instanceof FonProtocolError);
+      assert.ok(!err.message.includes('GEHEIM-1234'), 'message trägt den Body');
+      assert.ok(!inspect(err).includes('GEHEIM-1234'), 'util.inspect trägt den Body');
+      assert.ok(!JSON.stringify(err).includes('GEHEIM-1234'), 'JSON.stringify trägt den Body');
+      assert.equal(err.rohantwort, body); // gezielt abrufbar bleibt er
+      return true;
+    },
+  );
+});
+
+test('ohne rohantwort bleibt der Getter undefined (rein additiv)', () => {
+  const err = new FonProtocolError('nur eine Meldung');
+  assert.equal(err.rohantwort, undefined);
+  assert.equal(err.httpStatus, undefined);
 });
 
 test('wirft FonProtocolError bei HTTP 404 ohne Fault', async () => {

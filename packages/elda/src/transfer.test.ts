@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { createEldaTransfer } from './transfer';
 import type { EmpfangenErgebnis } from './transfer-roh';
 import { EldaStatusError, EldaProtocolError } from './errors';
@@ -128,18 +129,19 @@ test('auflisten: 557 wirft, statt eine leere Liste vorzutäuschen', async () => 
 
 test('empfangen: 000 liefert zustand datei mit Inhalt', async () => {
   const b64 = Buffer.from('<protokoll/>').toString('base64');
+  const md5 = createHash('md5').update(Buffer.from('<protokoll/>')).digest('hex');
   const elda = mitAntwort(
     empfangenAntwort(
       '000',
-      `<datei><id>199565708</id><name>mitteilung.xml</name><dateiTyp>1</dateiTyp><md5>abc</md5><payload>${b64}</payload></datei>`,
+      `<datei><id>199565708</id><name>mitteilung.xml</name><dateiTyp>1</dateiTyp><md5>${md5}</md5><payload>${b64}</payload></datei>`,
     ),
   );
   const erg = await elda.empfangen('155764332');
   assert.equal(erg.zustand, 'datei');
   if (erg.zustand !== 'datei') return; // Verengung für TypeScript
   assert.equal(erg.datei.name, 'mitteilung.xml');
-  assert.equal(erg.datei.dateiTyp, 1);
-  assert.equal(erg.datei.md5, 'abc');
+  assert.equal(erg.datei.dateiTyp, '1');
+  assert.equal(erg.datei.md5, md5);
   assert.equal(erg.datei.inhalt.toString('utf8'), '<protokoll/>');
   assert.equal(erg.statusCode, '000');
   assert.equal(erg.meldung, 'M-000');
@@ -151,7 +153,20 @@ test('empfangen: 406 und 408 sind Zustände, kein Fehler', async () => {
   assert.equal(nichtVorhanden.statusCode, '406');
   assert.equal(nichtVorhanden.meldung, 'M-406');
   assert.equal((await mitAntwort(empfangenAntwort('408')).empfangen('1')).zustand, 'bereitsEmpfangen');
-  assert.equal((await mitAntwort(empfangenAntwort('404')).empfangen('1')).zustand, 'nochInArbeit');
+});
+
+test('empfangen: 404 wirft — die Spec kennt den Code für EmpfangenResult nicht', async () => {
+  // Bewusste Umkehr einer früheren Erwartung ('nochInArbeit'): Abschnitt 6 markiert 404 für
+  // EmpfangenResult als nicht zutreffend. Ein stiller 'nochInArbeit' ließe den Aufrufer bei
+  // geänderter Bedeutung endlos pollen, statt laut zu scheitern.
+  await assert.rejects(
+    () => mitAntwort(empfangenAntwort('404')).empfangen('1'),
+    (err: unknown) => err instanceof EldaStatusError && err.statusCode === '404',
+  );
+  // Roh bleibt es wie immer wurffrei und auswertbar.
+  const roh = await mitAntwort(empfangenAntwort('404')).roh.empfangen('1');
+  assert.equal(roh.statusCode, '404');
+  assert.equal(roh.ok, false);
 });
 
 test('empfangen: 407 wirft', async () => {
