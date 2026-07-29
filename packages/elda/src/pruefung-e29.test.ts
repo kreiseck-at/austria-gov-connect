@@ -177,12 +177,37 @@ test('F7069 gilt laut Prüfkatalog nur für M3, nicht für M6', () => {
 });
 
 test('F7104: Ummeldedatum muss TTMMJJJJ sein (reine Formatprüfung wie F7061/F7066)', () => {
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', UMDA: '99992026' }, 'F7104');
+  // AGRD/ZTUM/ZKUM sind in allen vier Fixtures ergänzt, damit ausschließlich das Format von
+  // UMDA verletzt bzw. erfüllt wird und nicht zusätzlich F7105 (A1: UMDA belegt verlangt
+  // Abmeldegrund 12) oder F7108/F7109 (A1: UMDA belegt verlangt ZTUM/ZKUM) zuschlägt — UMDA ist
+  // hier ja immer belegt, auch in den werfenden Fällen (nur eben mit ungültigem Format).
+  wirft(
+    'M4',
+    {
+      BKNR: '1',
+      VSNR: '1234010180',
+      ADAT: '01022026',
+      AGRD: '12',
+      UMDA: '99992026',
+      ZTUM: '17',
+      ZKUM: '7788991',
+    },
+    'F7104',
+  );
   // Februar 2026 ist kein Schaltjahr und hat nur 28 Tage.
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', UMDA: '30022026' }, 'F7104');
-  // AGRD/ZTUM/ZKUM sind hier ergänzt, damit ausschließlich das Format von UMDA geprüft wird und
-  // nicht F7105 (A1: UMDA belegt verlangt Abmeldegrund 12) oder F7108/F7109 (A1: UMDA belegt
-  // verlangt ZTUM/ZKUM) zuschlägt.
+  wirft(
+    'M4',
+    {
+      BKNR: '1',
+      VSNR: '1234010180',
+      ADAT: '01022026',
+      AGRD: '12',
+      UMDA: '30022026',
+      ZTUM: '17',
+      ZKUM: '7788991',
+    },
+    'F7104',
+  );
   assert.doesNotThrow(() =>
     pruefeInhalt('M4', {
       BKNR: '1',
@@ -254,15 +279,16 @@ test('F7106 gilt nicht bei M4: Blatt VR führt RUMD nur für M9', () => {
 });
 
 test('F7107: Sonderfall Ummeldung nur J oder leer', () => {
-  // UMDA/ZTUM/ZKUM sind ergänzt, damit die Fixture ausschließlich SOUM verletzt und nicht
-  // zusätzlich F7112 (A1: ohne UMDA muss auch SOUM leer bleiben) — unabhängig von der
-  // Prüfreihenfolge in pruefeInhalt.
+  // AGRD/UMDA/ZTUM/ZKUM sind ergänzt, damit die Fixture ausschließlich SOUM verletzt und nicht
+  // zusätzlich F7105 (A1-Nachtrag: UMDA belegt verlangt Abmeldegrund 12) oder F7112 (A1: ohne
+  // UMDA muss auch SOUM leer bleiben) — unabhängig von der Prüfreihenfolge in pruefeInhalt.
   wirft(
     'M4',
     {
       BKNR: '1',
       VSNR: '1234010180',
       ADAT: '01022026',
+      AGRD: '12',
       SOUM: 'N',
       UMDA: '01022026',
       ZTUM: '17',
@@ -273,7 +299,22 @@ test('F7107: Sonderfall Ummeldung nur J oder leer', () => {
 });
 
 test('F7114: Zielversicherungsträger 11 bis 19', () => {
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', ZTUM: '20' }, 'F7114');
+  // AGRD/UMDA/ZKUM sind ergänzt, damit die Fixture ausschließlich ZTUM verletzt und nicht
+  // zusätzlich F7112 (A1: ohne UMDA muss auch ZTUM leer bleiben) — ein leeres UMDA neben einem
+  // belegten, aber ungültigen ZTUM wäre sonst eine zweite, unabhängige Regelverletzung.
+  wirft(
+    'M4',
+    {
+      BKNR: '1',
+      VSNR: '1234010180',
+      ADAT: '01022026',
+      AGRD: '12',
+      UMDA: '01022026',
+      ZTUM: '20',
+      ZKUM: '7788991',
+    },
+    'F7114',
+  );
 });
 
 test('F7096: Abmeldegrund gegen die Codeliste aus Kapitel D.22', () => {
@@ -297,12 +338,19 @@ test('F7108/F7109 (A1): Ummeldedatum belegt verlangt Zielversicherungsträger un
   // Kapitel E.29.2, Seite 319, erste Tabelle ("Abmeldung mit Abmeldegrund 12"): UMDA, ZTUM und
   // ZKUM stehen dort gemeinsam mit Pflichtstufe Z. Diese beiden Katalog-Codes decken die Hälfte
   // davon ab, die anhand des Ummeldedatums selbst entscheidbar ist — ohne jede Kenntnis von AGRD.
+  // Bei den beiden M4-Fixtures ist AGRD: '12' ergänzt, damit UMDA belegt nicht zusätzlich F7105
+  // (A1-Nachtrag: UMDA belegt verlangt Abmeldegrund 12) verletzt — bei M9 entfällt das, F7105
+  // gilt dort nicht (siehe der eigene F7105-Test unten).
   wirft(
     'M4',
-    { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', UMDA: '01032026', ZKUM: '7788991' },
+    { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '12', UMDA: '01032026', ZKUM: '7788991' },
     'F7108',
   );
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', UMDA: '01032026', ZTUM: '17' }, 'F7109');
+  wirft(
+    'M4',
+    { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '12', UMDA: '01032026', ZTUM: '17' },
+    'F7109',
+  );
   wirft(
     'M9',
     { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '02022026', UMDA: '01032026', ZKUM: '7788991' },

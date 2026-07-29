@@ -179,6 +179,15 @@ const VSNR_FEHLT_REFV_PFLICHT: ReadonlySet<Satzart> = new Set<Satzart>(['M4', 'M
  * sich ohne fachliche Zusatzkenntnis entscheiden lassen. Der Fehlercode des Katalogs steht
  * im Meldungstext, damit sich eine spätere Rückmeldung von ELDA zuordnen lässt.
  *
+ * Verletzt ein Satz mehrere dieser Regeln gleichzeitig, wirft diese Funktion beim ERSTEN
+ * verletzten Code, in der Reihenfolge, in der die Prüfungen unten im Code stehen — nicht
+ * notwendigerweise beim fachlich "wichtigsten". Diese Reihenfolge ist eine Umsetzungs-
+ * entscheidung dieses Pakets, keine Vorgabe der Quelle: Der Prüfkatalog (Blatt VR) listet
+ * die Fehlercodes als unabhängige Zeilen ohne Prioritäten oder Auswertungsreihenfolge.
+ * ELDA kann bei serverseitiger Prüfung desselben, mehrfach fehlerhaften Satzes deshalb einen
+ * anderen Code melden als den, den diese Funktion zuerst wirft — wer den geworfenen Code
+ * gegen eine spätere ELDA-Rückmeldung hält, sollte das im Hinterkopf behalten.
+ *
  * Zusätzlich zu der im Katalog unter F7051 geführten Regel ("VSNR oder GEBD, mindestens
  * eines muss belegt sein") erzwingt diese Funktion für M4/M6/M8, dass ohne VSNR auch der
  * Referenzwert der VSNR-Anforderung (REFV) belegt sein muss — Beleg und Ausnahme für M3
