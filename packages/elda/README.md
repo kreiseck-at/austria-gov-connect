@@ -5,10 +5,14 @@ Anbindung an den ELDA Transfer-Webservice v4 (österreichische Sozialversicherun
 Basis von [`@kreiseck/finanzonline-core`](https://www.npmjs.com/package/@kreiseck/finanzonline-core)
 (Transport, XML-Parsing) — **keine** eigene Laufzeitabhängigkeit über das hinaus.
 
-Dieses Paket kapselt die drei Methoden des Transfer-Webservice (`senden`,
-`ruecksendungenAuflisten`, `empfangen`) samt Security-Parametern (`securityParameters`,
-SHA-512-Hash) und Envelope-Bau. Es erzeugt **keine** SV-Meldungen (Anmeldung,
-Abmeldung, mBGM …) — dafür siehe „v2" unten.
+Dieses Paket deckt zwei Stufen ab. **Transport:** die drei Methoden des
+Transfer-Webservice (`senden`, `ruecksendungenAuflisten`, `empfangen`) samt
+Security-Parametern (`securityParameters`, SHA-512-Hash) und Envelope-Bau.
+**Meldungsbau:** seit Version 0.3.0 zusätzlich die Sätze der **Versichertenmeldung
+reduziert** (Kapitel E.29 der Organisationsbeschreibung) — Anmeldung, Abmeldung,
+Änderungsmeldung, Richtigstellungen und Stornos — als fertigen, ISO-8859-15-kodierten
+Datenbestand, siehe „Meldungen erzeugen" unten. Andere Meldungsarten, insbesondere die
+monatliche Beitragsgrundlagenmeldung (mBGM), sind **nicht** enthalten.
 
 ## Reifegrad
 
@@ -28,6 +32,42 @@ auftreten kann; ob `<messages>` mehrfach vorkommen kann.
 An all diesen Stellen schlägt der Client bewusst laut fehl, statt stillschweigend
 leere oder halb geparste Daten zu liefern — eine falsche Annahme fällt damit beim
 ersten echten Aufruf auf und nicht erst in den Daten.
+
+Seit Version 0.3.0 gilt dasselbe Vorbehalt auch für den Meldungsbau (Abschnitt
+„Meldungen erzeugen" unten): Auch diese Stufe ist nie gegen eine echte
+ELDA-Gegenstelle gelaufen. Anders als bei der Transport-Schicht stützen sich die
+Tests dort aber nicht nur auf die eigene Lesart der Spezifikation, sondern
+zusätzlich auf die 28 durchgerechneten Beispiele aus Kapitel E.29.2 der
+Organisationsbeschreibung (`beispiele-e29.test.ts`) — jede dort abgedruckte
+Wert-Tabelle ist als Test erfasst und ausschließlich mit den im Dokument
+genannten Werten bestückt. Eine Fehldeutung der Spezifikation, die bereits im
+Dokument selbst durchgerechnet ist, würde also auffallen; eine Fehldeutung an
+einer Stelle, die keines der 28 Beispiele berührt, bliebe dagegen unentdeckt.
+
+Ungeklärt bleibt insbesondere: ob ELDA die Meldungssätze innerhalb eines
+Bestands tatsächlich ohne Trennzeichen aneinandergereiht erwartet (so baut es
+`erstelleBestand` — Fixlängensätze ohne Satztrenner, wie es die
+Identifikationsteil-Konvention aus Kapitel E.1 nahelegt, aber kein Beispiel des
+Dokuments zeigt einen kompletten Bestand als Byte-Strom). Das ist die offenste
+Stelle des Meldungsbaus, und es gibt eine deutliche Gegenanzeige: Kapitel C.1
+sagt auf Seite 49 wörtlich „**Die Übermittlung erfolgt in variabler
+Satzlänge**". Eine variable Satzlänge lässt sich ohne Satztrenner (oder ein
+Längenpräfix) gar nicht auflösen — der Satz spricht also eher für einen Trenner
+als dagegen, auch wenn das Dokument an keiner Stelle sagt, welcher. Innerhalb
+eines einzelnen Bestands ist die Satzlänge allerdings konstant (`erstelleBestand`
+weist ungleich lange Sätze ab, Kapitel C.1.2 nennt die Satzlängen als erste
+Prüfung bei der Übernahme), sodass die Aussage sich plausibel auch nur auf die
+Unterschiede zwischen Verarbeitungen beziehen kann. **Das gehört als Erstes in
+den Kundentest**: denselben Bestand einmal ohne Trenner und einmal mit `\n` bzw.
+`\r\n` hochladen und die Mitteilungsfiles vergleichen. Weiter ungeklärt: ob
+MTOM/XOP-Fragen
+aus der Transport-Schicht (siehe oben) sich auf einen Meldungsbestand als
+Anhang genauso auswirken; und ob die in diesem Paket ergänzte Regel zu `REFV`
+(fehlt die VSNR bei Abmeldung, Änderungsmeldung oder Richtigstellung Anmeldung,
+muss neben dem Geburtsdatum auch `REFV` belegt sein, siehe unten) tatsächlich
+so von ELDA durchgesetzt wird — sie ist aus Kapitel E.30.2 abgeleitet, aber in
+keinem der 28 Beispiele belegt: Alle 28 geben durchweg die VSNR an, keines
+prüft den Fall „VSNR fehlt" durch.
 
 ## Installation
 
@@ -289,13 +329,288 @@ erzwingt, ist erst mit einem echten ELDA-Kundentest-Zugang endgültig zu klären
 bis dahin ist die Logik vollständig unit-getestet, aber der Sendepfad noch nicht
 gegen die echte Gegenstelle verifiziert.
 
-## v2: Meldungs-Builder (Anmeldung/Abmeldung/mBGM) folgen nach SV-Datensatzbeschreibung
+## Meldungen erzeugen
 
-Dieses Paket deckt v1 nur die **Transport-Schicht** ab (Envelope, Security,
-die drei Webservice-Methoden, Status-Codes, Korrelation von Sendung und
-Rücksendung). Builder für die eigentlichen SV-Meldungsarten (An-/Abmeldung,
-monatliche Beitragsgrundlagenmeldung mBGM, …) sind bewusst auf v2 verschoben —
-sie brauchen die SV-Datensatzbeschreibung als eigene Spec-Grundlage.
+Seit Version 0.3.0 baut dieses Paket zusätzlich zur Transport-Schicht auch die
+eigentlichen Meldungssätze der **Versichertenmeldung reduziert** (Kapitel E.29
+der Organisationsbeschreibung, Satzstruktur-Version 03, zwingend ab
+01.02.2026): An-/Abmeldung, Änderungsmeldung, Richtigstellungen und Stornos.
+Ein Builder liefert einen `RohSatz`; `erstelleBestand` klammert beliebig viele
+`RohSatz` zu einem vollständigen, ISO-8859-15-kodierten Datenbestand
+(Vorlaufsatz, Meldungssätze, Schlusssatz), der unverändert als `inhalt` an
+`senden` geht. Andere Meldungsarten (insbesondere die monatliche
+Beitragsgrundlagenmeldung mBGM) sind davon nicht erfasst, siehe „Ausblick"
+unten.
+
+### Durchgehendes Beispiel
+
+```ts
+import {
+  createEldaTransfer,
+  anmeldung,
+  erstelleBestand,
+  wochenarbeitszeit,
+} from '@kreiseck/elda';
+
+const elda = createEldaTransfer({
+  seriennummer: 'DEINE_SERIENNUMMER',
+  kundenpasswort: 'DEIN_KUNDENPASSWORT',
+  apiKey: 'DEIN_API_KEY',
+  umgebung: 'kundentest',
+});
+
+// 1) Meldungssatz bauen. Wirft einen EldaError, wenn die Pflichtmatrix aus
+//    E.29.1 oder eine entscheidbare Regel des Prüfkatalogs verletzt ist
+//    (siehe „Was geprüft wird" unten) — nicht erst beim Senden.
+const meldung = anmeldung({
+  REFW: 'REF-2026-000123', // eigener, eindeutiger Referenzwert dieser Meldung
+  BKNR: '1234567', // Beitragskontonummer beim zuständigen Träger
+  DGNA: 'Muster GmbH',
+  VSNR: '1234010180',
+  FANA: 'Muster',
+  VONA: 'Maria',
+  ADAT: '01022026', // Anmeldedatum TTMMJJJJ
+  BBER: '01', // Beschäftigungsbereich „Arbeiter" (Kapitel D.39)
+  GERF: 'N',
+  FRDV: 'N',
+  VWAZ: wochenarbeitszeit(15, 40), // '1567' — hier zwingend, siehe unten
+});
+
+// 2) Einen oder mehrere Meldungssätze zu einem Bestand klammern.
+const bestand = erstelleBestand([meldung], {
+  seriennummer: '1234567', // Seriennummer zum Datensammelsystem (Feld OBUS)
+  versicherungstraeger: '11',
+  datentraegernummer: '000001',
+  erstellt: new Date(), // echter Zeitpunkt — kein selbst vorverschobenes Datum, siehe unten
+  testdaten: true, // PROJ = 'TM'; für den Echtbetrieb false
+  hersteller: {
+    name: 'Muster Software',
+    kfz: 'A',
+    plz: '1010',
+    ort: 'Wien',
+    strasse: 'Musterstraße 1',
+    mail: 'edv@muster-gmbh.at',
+  },
+});
+
+// 3) Bestand unverändert an senden übergeben.
+await elda.senden({ dateiName: 'meldung.dat', inhalt: bestand });
+```
+
+### Die sieben Satzarten
+
+| Code | Satzart (`SATZART_TEXT`)  | Anmerkung                                                        |
+| ---- | -------------------------- | ----------------------------------------------------------------- |
+| `M3` | Anmeldung                  | Vor Arbeitsantritt zu übermitteln                                  |
+| `M4` | Abmeldung                  |                                                                     |
+| `M6` | Änderungsmeldung           | Ändert ausschließlich `BBER`, `GERF` und `FRDV`                    |
+| `M8` | Richtigstellung Anmeldung  |                                                                     |
+| `M9` | Richtigstellung Abmeldung  |                                                                     |
+| `S3` | Storno Anmeldung           |                                                                     |
+| `S4` | Storno Abmeldung           |                                                                     |
+
+Jeder Code entspricht genau einer Builder-Funktion (`anmeldung` → `M3`,
+`abmeldung` → `M4`, `aenderungsmeldung` → `M6`, `richtigstellungAnmeldung` →
+`M8`, `richtigstellungAbmeldung` → `M9`, `stornoAnmeldung` → `S3`,
+`stornoAbmeldung` → `S4`). Alle sieben teilen sich dieselbe Feldtabelle
+(`MeldungsFelder`) — welche Felder bei welcher Satzart zwingend, verboten oder
+optional sind, steht in `PFLICHT_E29`.
+
+### `wochenarbeitszeit`
+
+Das Feld `VWAZ` erwartet das Ausmaß der vereinbarten wöchentlichen Arbeitszeit
+als vier Ziffern ohne Dezimaltrenner, kaufmännisch auf zwei Nachkommastellen
+gerundete Stunden. `wochenarbeitszeit` übernimmt diese Umrechnung. Das
+Dokument nennt selbst 15 Stunden und 40 Minuten als Beispiel:
+
+```ts
+wochenarbeitszeit(15, 40); // '1567'
+```
+
+`stunden` und `minuten` müssen ganze Zahlen sein (Minuten 0–59) — Dezimal-
+stunden rechnet der Aufrufer selbst in Stunden und Minuten um, weil eine
+Rundung auf Basis von Dezimalstunden bei bestimmten Werten hauchdünn falsch
+landen könnte (siehe Kommentar im Quelltext).
+
+`VWAZ` ist nur in einem einzigen, eng umrissenen Fall zwingend (Prüfkatalog
+`F7115`): bei einer **Anmeldung** (`M3`) mit Meldedatum (`ADAT`) **nach dem
+31.12.2025**, wenn der Beschäftigungsbereich (`BBER`) `01`, `02`, `03`, `04`
+oder `11` ist **und** kein freier Dienstvertrag vorliegt (`FRDV` = `'N'`).
+Außerhalb dieser Kombination bleibt `VWAZ` optional (Pflichtstufe `Z1` bei
+`M3`/`M8`, `-` bei allen übrigen Satzarten).
+
+### Zeichensatz: ISO-8859-15, mit engem Vorrat für Personennamen
+
+ELDA erwartet Fixlängen-Dateien in ISO-8859-15. Dieses Paket kodiert selbst
+(Node kennt nativ nur `latin1` = ISO-8859-1) und prüft dabei zwei Dinge:
+
+1. **Darstellbarkeit.** Jedes Zeichen muss überhaupt einen Codepunkt in
+   ISO-8859-15 haben. Acht Positionen weichen dabei von ISO-8859-1 ab (u. a.
+   `€` statt `¤`); alle anderen Positionen sind identisch.
+2. **Zeichenvorrat je Feldklasse**, laut dem separaten Zeichensatz-Dokument:
+   - **Personennamen** (`FANA`, `VONA`): nur Leerzeichen, Apostroph,
+     Bindestrich, Punkt, Ziffern, Groß- und Kleinbuchstaben sowie
+     `Ä Ö Ü ß ä ö ü` — sonst nichts. Ein `é`, `ñ` oder `č` im Namen ist damit
+     zulässiges ISO-8859-15, aber **nicht** im engeren Personennamen-Vorrat.
+   - **Unternehmensnamen und Adressen** (`DGNA`, `DTEL`, `MAIL`, `SAGR`):
+     deutlich weiter gefasst, nahezu der volle ISO-8859-15-Bereich.
+   - Alle übrigen Felder (Referenzwerte, Codes, freie Informationsfelder)
+     tragen keine Feldklasse und werden nur auf Darstellbarkeit geprüft.
+
+Ein Name, der aus dem zulässigen Vorrat fällt, **wirft** einen `EldaError` —
+er wird nicht automatisch transliteriert oder ersetzt. Das ist Absicht: Ob aus
+„Muñoz" korrekt „Munoz" oder „Munhoz" wird, ist eine fachliche Entscheidung,
+die nur der Dienstgeber treffen kann, keine Ersetzungstabelle im Code treffen
+sollte. Wer Namen mit einem breiteren Zeichensatz führt (z. B. aus einem
+bestehenden Personalsystem), muss diese Fälle selbst abfangen und vorab eine
+zulässige Schreibweise festlegen, bevor der Wert an einen Builder geht.
+
+### Was geprüft wird — und was nicht
+
+Jeder Builder prüft zweistufig, bevor er einen `RohSatz` liefert:
+
+**1. Pflichtmatrix (Kapitel E.29.1, `PFLICHT_E29`).** Jedes Feld trägt je
+Satzart eine von fünf Pflichtstufen (`Z` zwingend, `Z1` zwingend wenn
+zutreffend, `Z3` freigestellt, `V` zwingend bei Veränderung, `-` Grundstellung,
+keine Angabe zulässig). Erzwungen werden nur die beiden objektiv
+entscheidbaren Stufen: `Z` muss belegt sein, `-` muss leer bleiben. `Z1` und
+`V` hängen an einer fachlichen Bedingung, die aus der Feldtabelle allein nicht
+hervorgeht (bei `VSNR`/`GEBD`/`REFV` z. B. eine Alternativbedingung über
+mehrere Felder hinweg, siehe `ALTERNATIVGRUPPEN`) — sie werden hier nicht
+strukturell erzwungen, sondern so weit wie möglich über den Prüfkatalog
+abgedeckt (siehe unten). `Z3` ist ohnehin freigestellt.
+
+**2. Prüfkatalog (Blatt `VR`), soweit ohne fachliche Zusatzkenntnis
+entscheidbar.** Umgesetzt sind:
+
+| Code | Prüft | Satzarten |
+| ---- | ----- | --------- |
+| `F7000` | `BKNR` darf nicht leer sein | alle |
+| `F7030` | Format `GEBD` (`TTMMJJJJ`, `00MMJJJJ` oder `0000JJJJ`, echte Monatslänge inkl. Schaltjahr) | alle, wenn belegt |
+| `F7050` | Ist `REFV` belegt, muss `GEBD` belegt sein | `M3`, `M4`, `M6` |
+| `F7051` | `VSNR` oder `GEBD` muss belegt sein; zusätzlich (eigene, aus Kapitel E.30.2 abgeleitete Ergänzung ohne eigenen Katalog-Code): fehlt die `VSNR`, muss neben `GEBD` auch `REFV` belegt sein | alle bzw. `M4`/`M6`/`M8` |
+| `F7060` | `ADAT` darf nicht leer sein | `M4`, `M6`, `M8`, `M9`, `S3`, `S4` |
+| `F7061` | Format `ADAT` (`TTMMJJJJ`) | `M3`, `M4`, `M6`, `S3`, `S4` |
+| `F7062` | `ADAT` nicht vor 01.01.2019 | alle, wenn belegt |
+| `F7065` | `RDAT` darf nicht leer sein | `M8`, `M9` |
+| `F7066` | Format `RDAT` | `M8`, `M9` |
+| `F7067` | `RDAT` nicht vor 01.01.2019 | `M8`, `M9` |
+| `F7069` | `BBER` zwischen `01` und `13` | `M3` |
+| `F7096` | `AGRD` gegen die Codeliste aus Kapitel D.22 | `M4`, `M9` |
+| `F7104` | Format `UMDA` | `M4`, `M9`, `S4` |
+| `F7105` | Ist `UMDA` belegt, muss `AGRD` `12` sein | nur `M4` (Begründung für `M9` siehe unten) |
+| `F7106` | Format `RUMD` | `M9` |
+| `F7107` | `SOUM` nur `'J'` oder leer | `M4`, `M9` |
+| `F7108` | Ist `UMDA` belegt, muss `ZTUM` belegt sein | `M4`, `M9` |
+| `F7109` | Ist `UMDA` belegt, muss `ZKUM` belegt sein | `M4`, `M9` |
+| `F7111` | Bei `AGRD` `07`, `08`, `09`, `11`, `12`, `15`, `19`, `23`, `29`, `31`, `32`, `33` muss `EBSV` leer bleiben | `M4`, `M9` |
+| `F7112` | Ist `UMDA` leer, dürfen `SOUM`/`ZTUM`/`ZKUM` nicht belegt sein | `M4` |
+| `F7113` | wie `F7112`, zusätzlich `RUMD` | `M9` |
+| `F7114` | `ZTUM` zwischen `11` und `19` | `M4`, `M9` |
+| `F7115` | `VWAZ` zwingend (siehe oben) | `M3` |
+| `F7116` | Format `VWAZ` (vierstellig) | `M3`, `M8` |
+
+Verletzt ein Satz mehrere dieser Regeln gleichzeitig, wirft die Prüfung beim
+**ersten** verletzten Code in der oben stehenden Reihenfolge — das ist eine
+Umsetzungsentscheidung dieses Pakets, keine Vorgabe des Katalogs. ELDA kann
+serverseitig deshalb bei einem mehrfach fehlerhaften Satz einen anderen Code
+melden als den, der hier zuerst geworfen wird.
+
+`F7105` ist für `M9` bewusst **nicht** umgesetzt: Ein dokumentiertes Beispiel
+in Kapitel E.29.2 zeigt eine Richtigstellung mit belegtem `UMDA` und einem
+Abmeldegrund ungleich `12` — die wörtliche Regel würde dieses belegte
+Verhalten fälschlich ablehnen.
+
+**3. Format und Grundstellung numerischer Felder — beim Schreiben.** Numerische
+Felder sind laut Kapitel E.1 rechtsbündig mit führenden Nullen aufzufüllen. Für
+die dreizehn Datumsfelder (`GEBD`, `ADAT`, `BDAT`, `RDAT`, `EBSV`, `KEAB`,
+`KEBI`, `UEAB`, `UEBI`, `BVAB`, `BVEN`, `UMDA`, `RUMD`) und für die
+Versicherungsnummer wäre das falsch: Die Feldtabelle druckt dort eine
+stellenscharfe Vorgabe ab (`TTMMJJJJ` bzw. `LLLPTTMMJJ`), und ein Auffüllen
+machte aus `'1032026'` (10.03.2026, Monat ohne führende Null) klammheimlich
+`'01032026'` — den 01.03.2026. Für acht dieser Felder führt der Prüfkatalog
+überhaupt keine Formatzeile; der Fehler fiele also auch bei ELDA nicht auf.
+Deshalb gilt: ein belegter Wert muss dort die volle Stellenzahl haben, sonst
+**wirft** `erstelleBestand`.
+
+Umgekehrt ist ein numerischer Wert aus lauter Nullen — `''`, `'0'`, `'00000000'`
+— immer die **Grundstellung** des Feldes, also „leer". Ein `String(row.vsnr ?? 0)`
+aus einer Datenbank-Spalte gilt damit nicht als belegte Versicherungsnummer, und
+ein aus einer Datei zurückgelesenes `UMDA = '00000000'` nicht als ungültiges
+Datum. Führende und nachgestellte Leerzeichen werden bei numerischen Feldern
+abgeschnitten. Die Regel gilt auf **allen drei Ebenen gleich** — Pflichtmatrix,
+Prüfkatalog und Serialisierung: Ein vollständig zurückgelesener 772-Byte-Satz
+läuft deshalb unverändert erneut durch einen Builder, ohne an seiner eigenen
+Grundstellung zu scheitern. Bei **alphanumerischen** Feldern gilt sie
+ausdrücklich nicht: Dort ist die Grundstellung blank, `AGRD = '00'` also ein
+echter Abmeldegrund („sonstiger Grund").
+
+> **Achtung bei `VWAZ`:** `'0000'` ist nach dieser Regel die Grundstellung, nicht
+> die Angabe „null Wochenstunden" — und `wochenarbeitszeit(0)` liefert genau
+> diesen Wert. Wo `F7115` das Feld verlangt, wirft der Builder deshalb, statt
+> eine vereinbarte Arbeitszeit von 0,00 Stunden zu melden.
+
+**Und beim Klammern:** `erstelleBestand` verlangt, dass alle übergebenen Sätze
+dieselbe Satzlänge haben — ein Bestand hat genau eine. Kapitel C.1.2 nennt
+Satzlängen und Satzanzahl als die ersten Prüfungen, die ELDA bei der Übernahme
+fährt; ein Fehler dort weist die gesamte Sendung zurück.
+
+**Ausdrücklich nicht umgesetzt** — ELDA prüft diese serverseitig:
+
+- Die **Prüfziffer der Versicherungsnummer** — das Verfahren steht in keiner
+  der verfügbaren Quellen.
+- Die **trägerabhängige Länge der Beitragskontonummer** — im Prüfkatalog nur
+  als Warnung geführt, nicht als harter Fehler.
+- Die inhaltliche **Schreibweise von Namen** (`F7036`/`F7038`) — sie verlangt
+  eine manuelle fachliche Durchsicht, die sich nicht allein aus den Feldwerten
+  entscheiden lässt.
+- Die **Formalprüfung der Beitragskontonummer** selbst (`F7001`/`F7002` und,
+  wortgleich „Formalprüfung analog Feld BKNR", `F7110` für `ZKUM`) — welche Form
+  gültig ist, sagt der Katalog nur über die trägerabhängigen Längenwarnungen.
+- Die als **Warnungen** (Status `W`) geführten Zeilen — etwa `F7101`/`F7102`/
+  `F7103` (Beschäftigungsbereich, Geringfügigkeit und freier Dienstvertrag nur
+  teilweise belegt) oder die Längenwarnungen zur Beitragskontonummer. Sie weisen
+  eine Meldung nicht zurück.
+
+Diese Aufzählung ist nicht abschließend; maßgeblich ist die Tabelle oben.
+
+Unabhängig vom Prüfkatalog enthält Kapitel E.29.2 selbst fachliche Regeln,
+deren Verletzung eine **strukturell einwandfreie, aber inhaltlich falsche**
+Meldung erzeugt — kein `EldaError`, denn es gibt formal nichts zu beanstanden.
+Beispiel: Bleibt bei einer Richtigstellung (`M8`) das Feld „Betriebliche
+Vorsorge AB" (`BVAB`) unbelegt, **storniert** das laut Dokument die Zeit der
+betrieblichen Vorsorge — ein leeres `BVAB` ist dort also keine „keine
+Änderung", sondern eine aktive Löschung.
+
+### Zeitstempel im Bestand: Wiener Ortszeit
+
+`BestandOptionen.erstellt` ist ein echter Zeitpunkt (typischerweise das
+Ergebnis von `new Date()`). `erstelleBestand` rechnet ihn intern in die
+Wanduhrzeit der Zeitzone `Europe/Vienna` um (Sommerzeit inklusive) und trägt
+das Ergebnis in `EDAT`/`EZEI` des Vorlaufsatzes ein. Das Dokument kennt kein
+eigenes Zeitzonenfeld und erwähnt an keiner Stelle UTC — für ein rein
+österreichisches System ist die Wiener Ortszeit die einzig sinnvolle
+Konvention. Ein Aufrufer sollte deshalb ein unverändertes `Date`-Objekt
+übergeben und **nicht** selbst vorverschieben; die Zeitzone lässt sich über
+`BestandOptionen.zeitzone` überschreiben, das ist aber nur für Sonderfälle
+gedacht.
+
+### Quellen
+
+- Organisationsbeschreibung „Datenaustausch mit Dienstgebern", 42. Ergänzung,
+  Version 42.7.0 (07/2026), Kapitel E.1 (Identifikationsteil), E.2
+  (Vorlaufsatz), E.3 (Schlusssatz), E.29 (Versichertenmeldung reduziert:
+  Feldtabelle, Pflichtmatrix, Erstellvorschriften mit Beispielen), D.22
+  (Abmeldegrund-Codeliste), D.39 (Beschäftigungsbereich-Codeliste).
+- Prüfkatalog zur 42. Ergänzung, Blatt `VR`.
+- Das separate Zeichensatz-Dokument (Zeichenvorrat Personennamen bzw.
+  Unternehmensnamen/Adressen in ISO-8859-15).
+
+## Ausblick
+
+Andere Meldungsarten als die Versichertenmeldung reduziert (Kapitel E.29) —
+insbesondere die monatliche Beitragsgrundlagenmeldung (mBGM) — sind von diesem
+Paket bislang nicht abgedeckt und benötigen ihre eigene Spec-Grundlage.
 
 ## Lizenz
 
