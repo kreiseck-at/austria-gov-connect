@@ -228,6 +228,22 @@ brechen).
 
 ## @kreiseck/elda
 
+### 0.4.1 — 2026-07-30
+
+- **Fix:** `erstelleBestand` klammert wieder Bestände, deren Sätze
+  unterschiedlich lang sind. Seit 0.3.0 wies die Funktion sie mit „Alle Sätze
+  eines Datenbestands müssen dieselbe Satzlänge haben" ab — das widerspricht
+  Kapitel E.2 (Seite 175): „Bei Beständen mit Datensätzen unterschiedlicher
+  Satzlängen kommt die Satzlänge jenes Datensatzes zur Anwendung der die
+  maximal mögliche Satzlänge im Bestand aufweist." Vorlauf- und Schlusssatz
+  tragen also die größte im Bestand vorkommende Satzlänge, jeder Datensatz
+  behält seine eigene; die Satzanzahl (`SANZ`) und die laufenden Satznummern
+  bleiben davon unberührt. Für die Versichertenmeldung (Kapitel E.29, alle
+  Sätze 772) ändert sich nichts. Betroffen war der Lohnzettel Finanz, wo ein
+  Informationssatz (Satzart `I1`, Satzlänge 1100, Kapitel E.13) den
+  Mitteilungssätzen (Satzart `L1`, Satzlänge 3500, Kapitel E.14) vorangeht —
+  ein solcher Bestand ließ sich gar nicht bauen.
+
 ### 0.4.0 — 2026-07-30
 
 - **Neu:** `kundenpasswortHash` in `EldaConfig` — statt des Kundenpassworts im

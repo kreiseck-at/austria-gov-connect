@@ -71,12 +71,12 @@ sagt auf Seite 49 wörtlich „**Die Übermittlung erfolgt in variabler
 Satzlänge**". Eine variable Satzlänge lässt sich ohne Satztrenner (oder ein
 Längenpräfix) gar nicht auflösen — der Satz spricht also eher für einen Trenner
 als dagegen, auch wenn das Dokument an keiner Stelle sagt, welcher. Innerhalb
-eines einzelnen Bestands ist die Satzlänge allerdings konstant (`erstelleBestand`
-weist ungleich lange Sätze ab, Kapitel C.1.2 nennt die Satzlängen als erste
-Prüfung bei der Übernahme), sodass die Aussage sich plausibel auch nur auf die
-Unterschiede zwischen Verarbeitungen beziehen kann. **Das gehört als Erstes in
-den Kundentest**: denselben Bestand einmal ohne Trenner und einmal mit `\n` bzw.
-`\r\n` hochladen und die Mitteilungsfiles vergleichen. Weiter ungeklärt: ob
+eines Bestands sind unterschiedliche Satzlängen ausdrücklich vorgesehen —
+Kapitel E.2 regelt sie eigens (siehe unten) —, aufgelöst werden sie über die
+Satzart in den ersten zwei Stellen jedes Satzes (Identifikationsteil, Kapitel
+E.1). **Das gehört als Erstes in den Kundentest**: denselben Bestand einmal
+ohne Trenner und einmal mit `\n` bzw. `\r\n` hochladen und die Mitteilungsfiles
+vergleichen. Weiter ungeklärt: ob
 MTOM/XOP-Fragen
 aus der Transport-Schicht (siehe oben) sich auf einen Meldungsbestand als
 Anhang genauso auswirken; und ob die in diesem Paket ergänzte Regel zu `REFV`
@@ -770,13 +770,24 @@ steht, steht dort auch beim Schreiben. Ein nachträgliches
 `satz.werte.AGRD = '99'` — aus JavaScript heraus oder nach einem `as`-Bruch —
 wirft, statt beide Prüfstufen zu umgehen.
 
-**Und beim Klammern:** `erstelleBestand` verlangt, dass alle übergebenen Sätze
-dieselbe Satzlänge haben — ein Bestand hat genau eine — und dass kein
-Referenzwert (`REFW`) zu derselben Beitragskontonummer zweimal vorkommt
-(Kapitel D.43). Ein doppelter Referenzwert ließe eine spätere Richtigstellung
-oder ein Storno auf zwei Meldungen zugleich zeigen. Kapitel C.1.2 nennt
-Satzlängen und Satzanzahl als die ersten Prüfungen, die ELDA bei der Übernahme
-fährt; ein Fehler dort weist die gesamte Sendung zurück.
+**Und beim Klammern:** `erstelleBestand` verlangt, dass kein Referenzwert
+(`REFW`) zu derselben Beitragskontonummer zweimal vorkommt (Kapitel D.43). Ein
+doppelter Referenzwert ließe eine spätere Richtigstellung oder ein Storno auf
+zwei Meldungen zugleich zeigen. Kapitel C.1.2 nennt Satzlängen und Satzanzahl
+als die ersten Prüfungen, die ELDA bei der Übernahme fährt; ein Fehler dort
+weist die gesamte Sendung zurück.
+
+**Satzlängen dürfen sich innerhalb eines Bestands unterscheiden.** Kapitel E.2
+(Seite 175): „Die Satzlänge des Vorlaufsatzes entspricht der Satzlänge der
+nachfolgenden Datensätze. Hinweis: Bei Beständen mit Datensätzen
+unterschiedlicher Satzlängen kommt die Satzlänge jenes Datensatzes zur
+Anwendung der die maximal mögliche Satzlänge im Bestand aufweist."
+`erstelleBestand` setzt das genau so um: Vorlauf- und Schlusssatz werden über
+ihr Reserve-Feld auf die größte im Bestand vorkommende Satzlänge aufgefüllt,
+jeder Datensatz behält seine eigene. Bei der Versichertenmeldung (Kapitel E.29)
+fällt das nicht auf, weil dort alle Sätze 772 lang sind; beim Lohnzettel Finanz
+ist es der Regelfall — ein Informationssatz (Satzart `I1`, Satzlänge 1100) vor
+Mitteilungssätzen (Satzart `L1`, Satzlänge 3500).
 
 **Ausdrücklich nicht umgesetzt** — ELDA prüft diese serverseitig:
 

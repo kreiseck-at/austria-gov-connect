@@ -66,7 +66,11 @@ export interface RohSatz {
   werte: Readonly<Record<string, string | undefined>>;
   /** Feldtabelle, gegen die `werte` gebaut wird. */
   felder: readonly Feld[];
-  /** Satzlänge dieses Satzes. */
+  /**
+   * Satzlänge dieses Satzes. Die Sätze eines Bestands dürfen unterschiedlich
+   * lang sein — Kapitel E.2 sieht das ausdrücklich vor; Vorlauf- und
+   * Schlusssatz tragen dann die größte im Bestand vorkommende Satzlänge.
+   */
   satzlaenge: number;
 }
 
@@ -190,6 +194,10 @@ function schlussFelder(satzlaenge: number): readonly Feld[] {
  * fortlaufender Satznummer, Schlusssatz mit der Satzanzahl. Das Ergebnis ist
  * ISO-8859-15-kodiert und kann unverändert als Dateiinhalt an `senden`
  * übergeben werden.
+ *
+ * Die Sätze dürfen unterschiedlich lang sein: Vorlauf- und Schlusssatz tragen
+ * dann die größte im Bestand vorkommende Satzlänge (Kapitel E.2), jeder
+ * Datensatz bleibt bei seiner eigenen.
  */
 export function baueBestand(saetze: readonly RohSatz[], opt: BestandOptionen): Buffer {
   if (saetze.length === 0) {
@@ -198,28 +206,42 @@ export function baueBestand(saetze: readonly RohSatz[], opt: BestandOptionen): B
   if (Number.isNaN(opt.erstellt.getTime())) {
     throw new EldaError('Erstellungszeitpunkt (opt.erstellt) ist kein gültiges Datum.');
   }
-  // Ein Datenbestand hat GENAU EINE Satzlänge. Kapitel C.1.2 (Seite 52) nennt
-  // die Satzlängen als erste der vier Prüfungen, die das Datensammelsystem bei
-  // Übernahme eines Datenpaketes fährt (Satzlängen, Satzfolgen, Projektcodes,
-  // Satzanzahl); ein Fehler dort weist die gesamte Übertragungssendung zurück.
-  // Vorlauf- und Schlusssatz füllt diese Funktion auf die Satzlänge des
-  // Bestands auf. Fielen die Meldungssätze unterschiedlich lang aus, ergäbe
-  // sich ein Byte-Strom, dessen Sätze sich nicht mehr auf die im Vorlaufsatz
-  // deklarierte Länge aufteilen lassen — und dessen Satzanzahl im Schlusssatz
-  // damit ebenfalls nicht mehr aufgeht. Über `RohSatz` ist das aus der
-  // öffentlichen Schnittstelle heraus erreichbar, also wird es hier abgewiesen
-  // statt erst bei ELDA.
-  const satzlaenge = saetze[0]!.satzlaenge;
-  for (const [i, s] of saetze.entries()) {
-    if (s.satzlaenge !== satzlaenge) {
-      throw new EldaError(
-        `Alle Sätze eines Datenbestands müssen dieselbe Satzlänge haben: Satz ${i + 1} (Satzart ` +
-          `${s.satzart}) ist ${s.satzlaenge} Zeichen lang, der erste Satz ${satzlaenge}. ` +
-          'ELDA prüft die Satzlängen bei der Übernahme (Kapitel C.1.2) und weist die gesamte ' +
-          'Sendung zurück.',
-      );
-    }
-  }
+  // Satzlänge des Bestands = MAXIMUM über die Sätze. Sätze unterschiedlicher
+  // Länge in einem Bestand sind ausdrücklich vorgesehen, nicht auszuschließen.
+  //
+  // Kapitel E.2 (Seite 175), wörtlich: „Die Satzlänge des Vorlaufsatzes
+  // entspricht der Satzlänge der nachfolgenden Datensätze. Hinweis: Bei
+  // Beständen mit Datensätzen unterschiedlicher Satzlängen kommt die Satzlänge
+  // jenes Datensatzes zur Anwendung der die maximal mögliche Satzlänge im
+  // Bestand aufweist." Kapitel C.1 (Seite 49) dazu: „Die Übermittlung erfolgt
+  // in variabler Satzlänge."
+  //
+  // Der Hinweis in E.2 regelt genau diesen Fall, und er regelt nur den
+  // Umschlag: Vorlauf- und Schlusssatz werden über ihr Reserve-Feld auf das
+  // Maximum aufgefüllt, jeder Datensatz behält seine eigene Länge. Das Maximum
+  // ist dabei der einzige brauchbare Wert für den Umschlag — er kündigt die
+  // Satzlänge des Bestands an, und kein Datensatz darf länger ausfallen als
+  // angekündigt. Ein kleinerer Wert wiese den längsten Datensatz als überlang
+  // aus; genau deshalb nennt der Hinweis „die maximal mögliche Satzlänge im
+  // Bestand".
+  //
+  // Der konkrete Anlassfall ist der Lohnzettel Finanz: Ein solcher Bestand
+  // besteht aus einem Informationssatz (Satzart I1, Satzlänge 1100, Kapitel
+  // E.13, Seite 220) gefolgt von den Mitteilungssätzen (Satzart L1, Satzlänge
+  // 3500, Kapitel E.14, Seite 233). Eine Gleichheitsforderung machte diesen
+  // Bestand unbaubar.
+  //
+  // Zur Vorgeschichte, damit sie nicht ein viertes Mal falsch ausgelegt wird:
+  // Kapitel C.1.2 (Seite 52) nennt die Satzlängen als erste der vier Prüfungen
+  // bei Übernahme eines Datenpaketes (Satzlängen, Satzfolgen, Projektcodes,
+  // Satzanzahl), und ein Fehler dort weist die gesamte Übertragungssendung
+  // zurück. Das ist richtig — geprüft wird dort aber, ob jeder Satz die zu
+  // SEINER Satzart gehörende Länge hat, nicht ob alle Sätze gleich lang sind.
+  // Welche Satzart ein Satz trägt, steht in seinen ersten zwei Stellen
+  // (Identifikationsteil, Kapitel E.1); die Satzfolge eines Bestands ist damit
+  // auch bei gemischten Längen auflösbar. Aus C.1.2 auf einen Einheitswert je
+  // Bestand zu schließen, widerspricht dem ausdrücklichen Hinweis in E.2.
+  const satzlaenge = Math.max(...saetze.map((s) => s.satzlaenge));
 
   // Kapitel D.43 (REFW – Referenzwert, Seite 123): „Der Referenzwert wird grundsätzlich vom
   // meldenden System ermittelt/belegt und dient der eindeutigen Identifikation einer Meldung
