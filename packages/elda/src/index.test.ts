@@ -25,6 +25,7 @@ test('index exportiert kein Innenleben mehr', () => {
   for (const name of [
     'baueSecurity',
     'loeseKundenpasswortHash',
+    'redigiereGeheimnisse',
     'baueEldaEnvelope',
     'ELDA_NAMESPACE',
     'istOk',

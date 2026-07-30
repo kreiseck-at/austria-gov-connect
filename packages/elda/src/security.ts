@@ -69,10 +69,17 @@ const HASH_FORM = /^[0-9a-f]{128}$/;
  * Passwort des Kunden, das anderswo wiederverwendet sein dürfte.
  */
 export function hashKundenpasswort(klartext: string): string {
-  if (typeof klartext !== 'string' || klartext.trim() === '') {
+  if (typeof klartext !== 'string') {
     throw new EldaError(
-      "'kundenpasswort' fehlt oder ist leer. Ein Hash über ein leeres Passwort wäre ein gültig " +
-        'aussehender, aber wertloser Wert — ELDA beantwortete damit jeden Aufruf mit Status 558.',
+      `'kundenpasswort' ist kein String, sondern ${klartext === null ? 'null' : typeof klartext}. ` +
+        'Gehasht würde sonst die Zeichenkettendarstellung des Werts — ein gültig aussehender, ' +
+        'aber falscher Digest, den ELDA nur mit Status 558 beantwortet.',
+    );
+  }
+  if (klartext.trim() === '') {
+    throw new EldaError(
+      "'kundenpasswort' ist leer. Ein Hash über ein leeres Passwort wäre ein gültig aussehender, " +
+        'aber wertloser Wert — ELDA beantwortete damit jeden Aufruf mit Status 558.',
     );
   }
   return createHash('sha512').update(klartext, 'utf8').digest('hex');

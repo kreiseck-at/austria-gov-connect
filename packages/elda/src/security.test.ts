@@ -46,8 +46,37 @@ test('hashKundenpasswort stimmt mit der internen Hashbildung überein', () => {
 });
 
 test('hashKundenpasswort weist leere Eingaben ab, statt einen wertlosen Hash zu liefern', () => {
-  for (const leer of ['', '   ', undefined, null, 42]) {
-    assert.throws(() => hashKundenpasswort(leer as never), EldaError, `muss werfen: ${String(leer)}`);
+  for (const leer of ['', '   ']) {
+    assert.throws(
+      () => hashKundenpasswort(leer),
+      (err: unknown) => {
+        assert.ok(err instanceof EldaError);
+        assert.match((err as Error).message, /ist leer/);
+        return true;
+      },
+      `muss werfen: '${leer}'`,
+    );
+  }
+});
+
+test('hashKundenpasswort nennt bei einem Nicht-String den tatsächlichen Grund', () => {
+  // 'fehlt oder ist leer' wäre bei einer 42 schlicht falsch und schickte den
+  // Aufrufer in die falsche Richtung.
+  for (const [wert, erwartet] of [
+    [undefined, /kein String, sondern undefined/],
+    [null, /kein String, sondern null/],
+    [42, /kein String, sondern number/],
+    [{}, /kein String, sondern object/],
+  ]) {
+    assert.throws(
+      () => hashKundenpasswort(wert as never),
+      (err: unknown) => {
+        assert.ok(err instanceof EldaError);
+        assert.match((err as Error).message, erwartet as RegExp);
+        return true;
+      },
+      `muss werfen: ${String(wert)}`,
+    );
   }
 });
 
