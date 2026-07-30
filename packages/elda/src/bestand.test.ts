@@ -144,53 +144,77 @@ test('leerer Bestand wirft, statt einen sinnlosen Umschlag zu liefern', () => {
 });
 
 // ---------------------------------------------------------------------------
-// I4 — ein Datenbestand hat genau eine Satzlaenge (Kapitel C.1.2, Seite 52)
+// E.2 — Bestaende mit Saetzen unterschiedlicher Satzlaenge
+//
+// Kapitel E.2 (Seite 175): „Die Satzlänge des Vorlaufsatzes entspricht der
+// Satzlänge der nachfolgenden Datensätze. Hinweis: Bei Beständen mit
+// Datensätzen unterschiedlicher Satzlängen kommt die Satzlänge jenes
+// Datensatzes zur Anwendung der die maximal mögliche Satzlänge im Bestand
+// aufweist." Der Umschlag traegt also das Maximum, jeder Datensatz seine
+// eigene Laenge. Anlassfall ist der Lohnzettel Finanz: Informationssatz I1 mit
+// 1100 (E.13) vor Mitteilungssaetzen L1 mit 3500 (E.14).
+//
+// Die Satzlaengen hier sind bewusst frei erfunden und klein: Geprueft wird die
+// Klammer um gemischte Laengen, nicht eine Feldtabelle aus E.13/E.14.
 // ---------------------------------------------------------------------------
 
-/** Ein Satz mit eigener, kuerzerer Feldtabelle — ueber die oeffentliche RohSatz-Schnittstelle baubar. */
-const kurzerSatz: RohSatz = {
-  satzart: 'M3',
+/** Ein Satz mit eigener Feldtabelle und eigener Satzlaenge, ueber die oeffentliche Schnittstelle baubar. */
+const eigenerSatz = (satzart: string, satzlaenge: number): RohSatz => ({
+  satzart,
   werte: { NUR: 'x' },
-  felder: [{ nr: 1, name: 'NUR', pos: 1, laenge: 30, typ: 'a/n' }],
-  satzlaenge: 30,
-};
-
-test('I4: Saetze unterschiedlicher Laenge werden abgewiesen, statt einen unteilbaren Strom zu ergeben', () => {
-  // Frueher war die Satzlaenge des Bestands das Maximum ueber die Eingabe: Vorlauf- und
-  // Schlusssatz wurden auf 772 aufgefuellt, der kurze Meldungssatz aber mit 30 gebaut. Das
-  // Ergebnis waren 2346 Bytes bei deklarierten 772 und SANZ = 4 — ELDA prueft Satzlaengen
-  // und Satzanzahl bei der Uebernahme (Kapitel C.1.2) und weist die ganze Sendung zurueck.
-  for (const saetze of [
-    [satz({ REFW: 'R1' }), kurzerSatz],
-    [kurzerSatz, satz({ REFW: 'R1' })],
-  ]) {
-    assert.throws(
-      () => baueBestand(saetze, OPT),
-      (err: unknown) => {
-        const text = (err as Error).message;
-        assert.ok(err instanceof EldaError);
-        assert.match(text, /Satzlänge/);
-        assert.match(text, /30/);
-        assert.match(text, /772/);
-        return true;
-      },
-    );
-  }
+  felder: [
+    { nr: 1, name: 'IDTEIL', pos: 1, laenge: 20, typ: 'a/n' },
+    { nr: 2, name: 'NUR', pos: 21, laenge: satzlaenge - 20, typ: 'a/n' },
+  ],
+  satzlaenge,
 });
 
-test('I4: ein Bestand aus lauter gleich langen Saetzen bleibt unberuehrt', () => {
-  // Eine von E.29 abweichende, aber in sich einheitliche Satzlaenge bleibt zulaessig —
-  // gefordert ist Gleichheit innerhalb des Bestands, nicht ein bestimmter Wert. 300 statt
-  // 30, weil der Vorlaufsatz aus Kapitel E.2 allein schon 246 Zeichen belegt.
-  const eigener: RohSatz = {
-    satzart: 'M3',
-    werte: { NUR: 'x' },
-    felder: [
-      { nr: 1, name: 'IDTEIL', pos: 1, laenge: 20, typ: 'a/n' },
-      { nr: 2, name: 'NUR', pos: 21, laenge: 280, typ: 'a/n' },
-    ],
-    satzlaenge: 300,
-  };
+test('E.2: gemischte Satzlaengen — Umschlag traegt das Maximum, jeder Datensatz seine eigene Laenge', () => {
+  const kurz = eigenerSatz('I1', 300);
+  const lang = eigenerSatz('L1', 500);
+  const bestand = baueBestand([kurz, lang], OPT);
+
+  // Gesamtlaenge = Summe der Teile: Vorlauf 500 + 300 + 500 + Schluss 500.
+  assert.equal(bestand.length, 500 + 300 + 500 + 500);
+
+  // Vorlaufsatz: Maximum, Satzart 00.
+  assert.equal(bestand.subarray(0, 2).toString('latin1'), '00');
+  // Der kurze Datensatz beginnt unmittelbar nach dem Vorlaufsatz und ist 300 lang.
+  assert.equal(bestand.subarray(500, 502).toString('latin1'), 'I1');
+  // Der lange Datensatz folgt nach 300 Bytes — laege der kurze Satz auf 500,
+  // stuende hier nicht 'L1'.
+  assert.equal(bestand.subarray(800, 802).toString('latin1'), 'L1');
+  // Schlusssatz: wieder das Maximum, Satzart 99.
+  assert.equal(bestand.subarray(1300, 1302).toString('latin1'), '99');
+  assert.equal(bestand.subarray(1300).length, 500);
+});
+
+test('E.2: gemischte Satzlaengen — Satznummern lueckenlos, SANZ zaehlt alle Saetze', () => {
+  const bestand = baueBestand([eigenerSatz('I1', 300), eigenerSatz('L1', 500), eigenerSatz('L1', 500)], OPT);
+  // Vorlauf 500 + 300 + 500 + 500 + Schluss 500.
+  const anfaenge = [0, 500, 800, 1300, 1800];
+  const nummer = (start: number) => bestand.subarray(start + 2, start + 9).toString('latin1');
+  assert.deepEqual(anfaenge.map(nummer), ['0000001', '0000002', '0000003', '0000004', '0000005']);
+  // SANZ steht im Schlusssatz auf Position 21..26 und zaehlt inkl. Vorlauf- und
+  // Schlusssatz (Kapitel E.3) — hier 5, unabhaengig von den Satzlaengen.
+  assert.equal(bestand.subarray(1800 + 20, 1800 + 26).toString('latin1'), '000005');
+});
+
+test('E.2: das Maximum gilt auch, wenn der laengste Satz nicht der erste ist', () => {
+  const vorne = baueBestand([eigenerSatz('L1', 500), eigenerSatz('I1', 300)], OPT);
+  const hinten = baueBestand([eigenerSatz('I1', 300), eigenerSatz('L1', 500)], OPT);
+  assert.equal(vorne.length, 1800);
+  assert.equal(hinten.length, 1800);
+  // In beiden Faellen ist der Vorlaufsatz 500 lang: der Datensatz danach beginnt bei 500.
+  assert.equal(vorne.subarray(500, 502).toString('latin1'), 'L1');
+  assert.equal(hinten.subarray(500, 502).toString('latin1'), 'I1');
+});
+
+test('ein Bestand aus lauter gleich langen Saetzen bleibt unveraendert', () => {
+  // Eine von E.29 abweichende, aber einheitliche Satzlaenge: alle vier Saetze 300.
+  // 300 statt eines kleineren Werts, weil der Vorlaufsatz aus Kapitel E.2 allein
+  // schon 246 Zeichen belegt.
+  const eigener = eigenerSatz('M3', 300);
   const bestand = baueBestand([eigener, eigener], OPT);
   assert.equal(bestand.length, 300 * 4);
   assert.equal(bestand.subarray(0, 2).toString('latin1'), '00');
