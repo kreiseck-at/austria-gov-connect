@@ -95,8 +95,13 @@ Umgebungsvariablen gesteuert und übersprungen, solange keine Zugangsdaten
 gesetzt sind. Standardmäßig ruft er nur `ruecksendungenAuflisten` auf, weil das
 nichts verändert; `senden` (legt echte Daten im Konto an) und `empfangen`
 (verbraucht die Rücksendung endgültig) laufen je nur nach einer eigenen,
-ausdrücklichen Freigabe. Der Kopf des Skripts nennt alle Variablen; jede
-beantwortete Frage kommt als nummerierter Befund heraus.
+ausdrücklichen Freigabe. `empfangen` holt dabei ausschließlich die Rücksendung
+zur eigenen Sendung aus demselben Lauf oder eine ausdrücklich genannte
+Protokollnummer — nie einen Eintrag aus der abgefragten Liste, denn der wäre
+fast sicher ein fremdes Verarbeitungsprotokoll und nach dem Abholen für dessen
+Empfänger verloren. Ein Befund gilt zudem nur dann als beantwortet, wenn der
+zugehörige Aufruf wirklich gelungen ist; sonst steht dort „Frage offen" samt
+Status. Der Kopf des Skripts nennt alle Variablen.
 
 ## Installation
 

@@ -10,6 +10,11 @@
 // Bezugsgröße der md5, Bestand ohne Satztrenner. Jede Antwort wird als
 // nummerierter Befund ausgegeben.
 //
+// Ein Befund gilt nur dann als beantwortet, wenn der zugehörige Aufruf
+// TATSÄCHLICH gelungen ist (Status 000). Andernfalls steht dort „Frage offen"
+// samt Status — eine falsche Antwort wäre schlimmer als gar keine, denn sie
+// wanderte anschließend als vermeintlich belegte Annahme ins Paket.
+//
 // Zugangsdaten (fehlt eines, wird sauber übersprungen):
 //   ELDA_SERIENNUMMER
 //   ELDA_API_KEY
@@ -28,8 +33,14 @@
 //   ELDA_TEST_ALLOW_EMPFANGEN=1     erlaubt `empfangen` — VERBRAUCHT die
 //                                   Rücksendung endgültig, auch für jeden
 //                                   anderen Abrufer.
-//   ELDA_TEST_PROTOKOLLNUMMER       welche Rücksendung geholt wird; ohne
-//                                   Angabe die erste aus der Liste.
+//   ELDA_TEST_PROTOKOLLNUMMER       Ziel für `empfangen`, WENN in diesem Lauf
+//                                   nicht gesendet wurde.
+//
+// Abgeholt wird ausschließlich die Rücksendung zur eigenen Sendung aus DIESEM
+// Lauf oder die ausdrücklich genannte Protokollnummer — NIE ein Eintrag aus der
+// Liste in Befund 1. Der erste Eintrag dort ist die älteste offene Rücksendung
+// und gehört fast sicher einer fremden Verarbeitung; sie abzuholen hieße, ein
+// Verarbeitungsprotokoll zu vernichten, das jemand anderes braucht.
 //
 // Die zu sendende Meldung wird mit den Bausteinen des Pakets selbst gebaut
 // (`anmeldung` + `erstelleBestand`) und ist mit erfundenen Werten vorbelegt.
@@ -48,8 +59,10 @@
 // Der vollständige HTTP-Austausch (Anfrage- und Antwort-Bodys) landet in
 // `mitschnitt/` neben diesem Skript — inklusive der Bytes einer abgeholten
 // Rücksendung, damit auch bei einem späteren Absturz nichts verloren geht. Das
-// Verzeichnis ist gitignoriert; API-Key und Passwort-Hash sind in den
-// Anfrage-Mitschnitten geschwärzt.
+// Verzeichnis ist gitignoriert, die Dateien tragen 0600, und Seriennummer,
+// API-Key sowie Passwort-Hash sind in BEIDEN Richtungen geschwärzt (ein
+// SOAP-Fault zitiert die Anfrage regelmäßig in seinem <detail>). Lässt sich ein
+// Geheimnis nicht schwärzen, wird die Datei nicht geschrieben.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -59,24 +72,41 @@ const {
   anmeldung,
   erstelleBestand,
   wochenarbeitszeit,
+  hashKundenpasswort,
 } = require('../../dist/index.js');
+const { redigiereGeheimnisse } = require('../../dist/redigieren.js');
 
 const MITSCHNITT = path.join(__dirname, 'mitschnitt');
 const LAUF = new Date().toISOString().replace(/[:.]/g, '-');
 
-/** Schreibt eine Datei in den Mitschnitt und liefert den Pfad zur Ausgabe. */
-function schreibe(name, daten) {
+/**
+ * Die Werte, die in keinem Mitschnitt stehen dürfen. Wird von `baueConfig`
+ * befüllt — der Passwort-Hash auch dann, wenn nur das Klartextpasswort gesetzt
+ * ist, denn auf der Leitung steht immer der Hash.
+ */
+const geheimnisse = {};
+
+/** Schreibt Bytes unverändert in den Mitschnitt (nur für Nutzdaten ohne Zugangsdaten). */
+function schreibeBytes(name, daten) {
   fs.mkdirSync(MITSCHNITT, { recursive: true });
   const ziel = path.join(MITSCHNITT, `${LAUF}-${name}`);
-  fs.writeFileSync(ziel, daten);
+  fs.writeFileSync(ziel, daten, { mode: 0o600 });
   return path.relative(process.cwd(), ziel);
 }
 
-/** Schwärzt die beiden Geheimnisse in einem Anfrage-Body. */
-function redigiere(xml) {
-  return xml
-    .replace(/<apiKey>[^<]*<\/apiKey>/, '<apiKey>***</apiKey>')
-    .replace(/<kundenpasswort>[^<]*<\/kundenpasswort>/, '<kundenpasswort>***</kundenpasswort>');
+/**
+ * Schwärzt und schreibt. Wirft, wenn ein Geheimnis nach der Schwärzung noch im
+ * Text steht — dann entsteht keine Datei.
+ *
+ * Der Umweg über `latin1` ist kein Zufall: Er bildet jedes Byte umkehrbar auf
+ * genau ein Zeichen ab. Eine Antwort, in der nichts zu schwärzen ist, geht damit
+ * byteweise unverändert auf die Platte (MTOM-Treue), und eine, in der etwas zu
+ * schwärzen ist, wird trotzdem vollständig erfasst — auch wenn sie teils binär
+ * ist. `utf8` würde alles außerhalb von ASCII beim Dekodieren verändern.
+ */
+function schreibeText(name, kopf, koerper) {
+  const roh = Buffer.concat([Buffer.from(kopf, 'latin1'), koerper]).toString('latin1');
+  return schreibeBytes(name, Buffer.from(redigiereGeheimnisse(roh, geheimnisse), 'latin1'));
 }
 
 const austausch = [];
@@ -84,9 +114,9 @@ const letzter = () => austausch[austausch.length - 1];
 
 /**
  * `fetch`-Ersatz, der Anfrage und Antwort mitschreibt. Die Antwort wird als
- * Bytes gelesen und unverändert neu verpackt weitergereicht — so bleibt eine
- * eventuelle MTOM-/Binärantwort im Mitschnitt exakt erhalten, während der
- * Client sie wie eine gewöhnliche Antwort verarbeitet.
+ * Bytes gelesen und unverändert neu verpackt weitergereicht — der Mitschnitt
+ * entsteht also VOR dem Parsen durch den Client. Das ist Absicht: Scheitert das
+ * Parsen (MTOM, MD5-Abweichung), liegen die Bytes bereits auf der Platte.
  */
 async function mitschnittFetch(url, init) {
   const nr = String(austausch.length + 1).padStart(2, '0');
@@ -97,7 +127,13 @@ async function mitschnittFetch(url, init) {
   const kopf = [`POST ${url}`, ...Object.entries(init.headers).map(([k, v]) => `${k}: ${v}`), '', ''].join(
     '\n',
   );
-  eintrag.anfrageDatei = schreibe(`${nr}-${methode}-anfrage.txt`, kopf + redigiere(init.body));
+  // Bewusst VOR dem Absenden und ohne Auffangnetz: Lässt sich die Anfrage nicht
+  // schwärzen, geht sie auch nicht raus. Hier ist noch nichts verloren.
+  eintrag.anfrageDatei = schreibeText(
+    `${nr}-${methode}-anfrage.txt`,
+    kopf,
+    Buffer.from(init.body, 'utf8'),
+  );
 
   let res;
   try {
@@ -116,10 +152,15 @@ async function mitschnittFetch(url, init) {
     '',
     '',
   ].join('\n');
-  eintrag.antwortDatei = schreibe(
-    `${nr}-${methode}-antwort.txt`,
-    Buffer.concat([Buffer.from(antwortKopf, 'utf8'), bytes]),
-  );
+  try {
+    eintrag.antwortDatei = schreibeText(`${nr}-${methode}-antwort.txt`, antwortKopf, bytes);
+  } catch (err) {
+    // Hier NICHT werfen: Die Antwort ist schon da, und bei `empfangen` hinge an
+    // ihr die einzige Kopie der Rücksendung. Also weiterreichen, aber laut
+    // sagen, dass kein Mitschnitt entstanden ist.
+    eintrag.antwortDatei = undefined;
+    console.log(`\n!!! Antwort-Mitschnitt NICHT geschrieben: ${err.message}`);
+  }
 
   const leer = res.status === 204 || res.status === 304;
   return new Response(leer ? null : bytes, {
@@ -133,11 +174,18 @@ function befund(nr, titel) {
   console.log(`\n=== Befund ${nr}: ${titel} ===`);
 }
 
+/** Einheitlicher Text für „der Aufruf ging schief, die Frage bleibt offen". */
+function offen(grund) {
+  console.log(`FRAGE OFFEN — ${grund}`);
+}
+
 function fehlertext(err) {
   const teile = [`${err.constructor.name}: ${err.message}`];
   if (err.statusCode) teile.push(`statusCode=${err.statusCode}`);
   return teile.join(' | ');
 }
+
+const mitschnittHinweis = () => `Mitschnitt: ${letzter()?.antwortDatei ?? '(keiner)'}`;
 
 // --- Zugangsdaten ----------------------------------------------------------
 
@@ -163,6 +211,11 @@ function baueConfig() {
   }
 
   const passwortanteil = hash ? { kundenpasswortHash: hash.trim() } : { kundenpasswort: klartext };
+  geheimnisse.apiKey = apiKey;
+  geheimnisse.seriennummer = seriennummer;
+  geheimnisse.kundenpasswortHash = passwortanteil.kundenpasswortHash ?? hashKundenpasswort(klartext);
+  if (klartext) geheimnisse.kundenpasswort = klartext;
+
   return {
     seriennummer,
     apiKey,
@@ -226,9 +279,10 @@ function baueTestbestand() {
     hersteller.softwareId = process.env.ELDA_TEST_HERSTELLER_SOFTWAREID;
 
   const optionen = {
-    // Bewusst NICHT die echte ELDA-Seriennummer als Vorbelegung: sie stünde
-    // sonst im Klartext in der Ausgabe dieses Skripts. Wer sie im Feld OBUS
-    // braucht, setzt ELDA_TEST_OBUS ausdrücklich.
+    // Bewusst NICHT die echte ELDA-Seriennummer als Vorbelegung: Der Bestand
+    // wird vor dem Senden vollständig ausgedruckt, sie stünde dann in der
+    // Ausgabe. Wer sie im Feld OBUS braucht, setzt ELDA_TEST_OBUS ausdrücklich —
+    // und nimmt in Kauf, dass sie im Klartext auf dem Bildschirm erscheint.
     seriennummer: process.env.ELDA_TEST_OBUS || '1234567',
     versicherungstraeger: process.env.ELDA_TEST_VSTR || '11',
     datentraegernummer: process.env.ELDA_TEST_DTNR || '000001',
@@ -243,7 +297,7 @@ function baueTestbestand() {
   return { bestand: erstelleBestand([meldung], optionen), satzlaenge: meldung.satzlaenge, optionen };
 }
 
-// --- 1: ruecksendungenAuflisten (verändert nichts) --------------------------
+// --- 1 bis 3: ruecksendungenAuflisten (verändert nichts) --------------------
 
 async function auflisten(elda) {
   befund(1, 'ruecksendungenAuflisten — Erfolg und Drahtform der LEEREN Liste');
@@ -251,10 +305,18 @@ async function auflisten(elda) {
   try {
     erg = await elda.ruecksendungenAuflisten();
   } catch (err) {
-    console.log('FEHLGESCHLAGEN:', fehlertext(err));
-    console.log('Mitschnitt:', letzter()?.antwortDatei ?? '(keine Antwort)');
+    offen(`der Aufruf scheiterte: ${fehlertext(err)}`);
+    console.log(mitschnittHinweis());
+    const a = letzter();
+    befund(2, 'SOAPAction-Header, so wie dieser Client ihn sendet');
+    if (a) console.log(`gesendet: SOAPAction: ${a.anfrageHeader.SOAPAction}`);
+    offen('ohne auswertbare Antwort ist über den Header nichts zu sagen.');
+    befund(3, 'created-Format (ISO-8601 mit Millisekunden und Z)');
+    if (a) console.log(`gesendet: ${/<created>([^<]*)<\/created>/.exec(a.anfrageBody)?.[1]}`);
+    offen('ohne auswertbare Antwort ist über das Format nichts zu sagen.');
     return undefined;
   }
+
   console.log(
     `statusCode=${erg.statusCode} ok=${erg.ok} rücksendungen=${erg.ruecksendungen.length}` +
       (erg.meldung ? ` meldung="${erg.meldung}"` : ''),
@@ -263,42 +325,60 @@ async function auflisten(elda) {
     console.log(`  ${String(rs.protokollnummer).padEnd(12)} ${rs.dateiName}`);
   }
   if (erg.ruecksendungen.length > 20) console.log(`  … und ${erg.ruecksendungen.length - 20} weitere`);
+  console.log(
+    'Diese Liste ist reine Anzeige — sie wird NICHT als Ziel für `empfangen` verwendet.',
+  );
 
-  if (erg.ok && erg.ruecksendungen.length === 0) {
+  if (!erg.ok) {
+    offen(
+      `ELDA hat den Aufruf mit Status ${erg.statusCode} abgelehnt` +
+        `${erg.meldung ? ` ("${erg.meldung}")` : ''}. Eine leere Liste bedeutet hier NICHT ` +
+        '„keine offen", sondern nur, dass der Aufruf selbst fehlschlug.',
+    );
+  } else if (erg.ruecksendungen.length === 0) {
     console.log('\nLeere Liste — Rohantwort (genau die offene Frage aus der README):');
     console.log(letzter().antwortBytes.toString('utf8'));
-  } else if (erg.ruecksendungen.length > 0) {
-    console.log(
-      '\nDie Liste ist NICHT leer — die Drahtform der leeren Liste bleibt offen. ' +
-        'Den Lauf wiederholen, wenn die Warteschlange abgearbeitet ist.',
+  } else {
+    offen(
+      'die Liste ist nicht leer. Den Lauf wiederholen, wenn die Warteschlange ' +
+        'abgearbeitet ist — dann zeigt sich die Drahtform der leeren Liste.',
     );
   }
-  console.log('Mitschnitt:', letzter().antwortDatei);
+  console.log(mitschnittHinweis());
 
-  befund(2, 'SOAPAction-Header, so wie dieser Client ihn sendet');
   const a = letzter();
+  befund(2, 'SOAPAction-Header, so wie dieser Client ihn sendet');
   console.log(`gesendet: SOAPAction: ${a.anfrageHeader.SOAPAction}`);
   console.log(`Content-Type: ${a.anfrageHeader['Content-Type']}`);
-  console.log(
-    `HTTP ${a.status}, Antwort-Content-Type: ${a.antwortHeader['content-type'] ?? '(keiner)'} → ` +
-      (a.status === 200 && erg.statusCode !== '559'
-        ? 'akzeptiert (kein 559 „unerlaubter Content-Type", kein HTTP-Fehler)'
-        : 'NICHT akzeptiert — siehe Status oben'),
-  );
+  console.log(`HTTP ${a.status}, Antwort-Content-Type: ${a.antwortHeader['content-type'] ?? '(keiner)'}`);
+  if (erg.ok) {
+    console.log('AKZEPTIERT — der Aufruf ist mit genau diesem Header durchgelaufen (Status 000).');
+  } else if (erg.statusCode === '559') {
+    console.log('ABGELEHNT — Status 559 „unerlaubter Content-Type".');
+  } else {
+    offen(
+      `ELDA antwortete mit Status ${erg.statusCode}. Dass die Antwort ankam, heißt nicht, ` +
+        'dass der Header akzeptiert wurde — der Aufruf ist an einer anderen Stelle gescheitert.',
+    );
+  }
 
   befund(3, 'created-Format (ISO-8601 mit Millisekunden und Z)');
-  const created = /<created>([^<]*)<\/created>/.exec(a.anfrageBody)?.[1];
-  console.log(`gesendet: ${created}`);
-  console.log(
-    erg.statusCode === '551' || erg.statusCode === '555'
-      ? `ABGELEHNT (statusCode ${erg.statusCode}) — Format oder Uhrzeit stimmen nicht.`
-      : 'akzeptiert (weder 551 „Request abgelaufen" noch 555 „created nicht gesetzt").',
-  );
+  console.log(`gesendet: ${/<created>([^<]*)<\/created>/.exec(a.anfrageBody)?.[1]}`);
+  if (erg.ok) {
+    console.log('AKZEPTIERT — der Aufruf ist mit genau diesem Zeitstempel durchgelaufen (Status 000).');
+  } else if (erg.statusCode === '551' || erg.statusCode === '555') {
+    console.log(`ABGELEHNT — Status ${erg.statusCode} (Request abgelaufen bzw. created nicht gesetzt).`);
+  } else {
+    offen(
+      `ELDA antwortete mit Status ${erg.statusCode} — etwa ein falscher API-Key (557) oder falsche ` +
+        'Zugangsdaten (558). Das `created` hat ELDA dann gar nicht bewertet.',
+    );
+  }
 
   return erg;
 }
 
-// --- 4/6: senden (legt echte Daten an) -------------------------------------
+// --- 4 und 6: senden (legt echte Daten an) ---------------------------------
 
 async function senden(elda) {
   befund(4, 'senden — inline base64Binary oder MTOM?');
@@ -314,8 +394,10 @@ async function senden(elda) {
   try {
     gebaut = baueTestbestand();
   } catch (err) {
-    console.log('Testbestand ließ sich nicht bauen:', fehlertext(err));
+    offen(`der Testbestand ließ sich nicht bauen: ${fehlertext(err)}`);
     console.log('Felder über ELDA_TEST_M3_<FELD> bzw. ELDA_TEST_* anpassen.');
+    befund(6, 'Bestand — Fixlängensätze ohne Trennzeichen?');
+    offen('es wurde nichts gesendet.');
     return undefined;
   }
   const { bestand, satzlaenge, optionen } = gebaut;
@@ -331,14 +413,16 @@ async function senden(elda) {
   for (let i = 0, satz = 1; i < text.length; i += satzlaenge, satz++) {
     console.log(`  Satz ${satz}: ${text.slice(i, i + satzlaenge)}`);
   }
-  console.log(`  Mitschnitt des Bestands: ${schreibe('bestand.dat', bestand)}`);
+  console.log(`  Mitschnitt des Bestands: ${schreibeBytes('bestand.dat', bestand)}`);
 
   let erg;
   try {
     erg = await elda.senden({ dateiName, inhalt: bestand });
   } catch (err) {
-    console.log('FEHLGESCHLAGEN:', fehlertext(err));
-    console.log('Mitschnitt:', letzter()?.antwortDatei ?? '(keine Antwort)');
+    offen(`der Aufruf scheiterte: ${fehlertext(err)}`);
+    console.log(mitschnittHinweis());
+    befund(6, 'Bestand — Fixlängensätze ohne Trennzeichen?');
+    offen('die Sendung kam nicht durch.');
     return undefined;
   }
   console.log(
@@ -348,12 +432,16 @@ async function senden(elda) {
       (erg.eldaZeitstempel ? ` eldaZeitstempel=${erg.eldaZeitstempel}` : '') +
       (erg.meldung ? ` meldung="${erg.meldung}"` : ''),
   );
-  console.log(
-    erg.ok
-      ? 'Inline base64Binary wurde ANGENOMMEN — MTOM ist für senden nicht erforderlich.'
-      : 'Inline base64Binary NICHT angenommen — Status und Meldung oben deuten den Grund.',
-  );
-  console.log('Mitschnitt:', letzter().antwortDatei);
+  if (erg.ok) {
+    console.log('INLINE base64Binary wurde ANGENOMMEN — MTOM ist für senden nicht erforderlich.');
+  } else {
+    offen(
+      `ELDA antwortete mit Status ${erg.statusCode}${erg.meldung ? ` ("${erg.meldung}")` : ''}. ` +
+        'Das ist keine Aussage über das Payload-Format: Zugangsdaten (558), Dateiname (401/402) ' +
+        'oder ein Duplikat (405) scheitern unabhängig davon, wie der Payload kodiert war.',
+    );
+  }
+  console.log(mitschnittHinweis());
 
   befund(6, 'Bestand — Fixlängensätze ohne Trennzeichen?');
   console.log(
@@ -361,44 +449,78 @@ async function senden(elda) {
       `Meldungssatzlänge ${satzlaenge}, kein \\n und kein \\r\\n: ` +
       `${!bestand.includes(0x0a) && !bestand.includes(0x0d)}).`,
   );
-  console.log(
-    erg.ok
-      ? 'ELDA hat die Datei entgegengenommen. Das ist noch KEINE fachliche Zusage — ' +
-          'ob die Sätze richtig getrennt gelesen wurden, sagt erst das Mitteilungsfile ' +
-          `zur Protokollnummer ${erg.protokollnummer ?? '(unbekannt)'}: mit ` +
-          'ELDA_TEST_ALLOW_EMPFANGEN=1 abholen und darin die Satzanzahl prüfen.'
-      : 'Bereits die Entgegennahme scheiterte — siehe Status oben.',
-  );
+  if (erg.ok) {
+    console.log(
+      'ELDA hat die Datei entgegengenommen. Das ist noch KEINE fachliche Zusage — ob die Sätze ' +
+        'richtig getrennt gelesen wurden, sagt erst das Mitteilungsfile zur Protokollnummer ' +
+        `${erg.protokollnummer ?? '(keine erhalten)'}. Genau die holt dieses Skript mit ` +
+        'ELDA_TEST_ALLOW_EMPFANGEN=1 im selben Lauf ab; darin die Satzanzahl prüfen. ' +
+        'KEINE fremde Rücksendung aus der Liste in Befund 1 abholen.',
+    );
+  } else {
+    offen('bereits die Entgegennahme scheiterte — siehe Status oben.');
+  }
   return erg;
 }
 
 // --- 5: empfangen (unwiderruflich) -----------------------------------------
 
-async function empfangen(elda, liste) {
+/**
+ * Bestimmt, WELCHE Rücksendung geholt wird. Ausschließlich die eigene Sendung
+ * aus diesem Lauf oder eine ausdrücklich genannte Protokollnummer. Der erste
+ * Eintrag aus `ruecksendungenAuflisten` wäre die ÄLTESTE offene Rücksendung —
+ * also fast sicher eine fremde, die jemand anderes für seine Lohnverrechnung
+ * braucht. `empfangen` ist einmalig; sie wäre danach für immer weg, und der
+ * daraus gezogene Befund stammte obendrein aus der falschen Datei.
+ */
+function zielProtokollnummer(gesendet) {
+  const eigene = gesendet?.protokollnummer;
+  const ausEnv = process.env.ELDA_TEST_PROTOKOLLNUMMER;
+  if (eigene) {
+    if (ausEnv && ausEnv !== eigene) {
+      console.log(
+        `Hinweis: ELDA_TEST_PROTOKOLLNUMMER=${ausEnv} wird NICHT verwendet — in diesem Lauf ` +
+          'wurde gesendet, und geholt wird ausschließlich die eigene Rücksendung.',
+      );
+    }
+    return { nummer: eigene, herkunft: 'Protokollnummer der eigenen Sendung aus diesem Lauf' };
+  }
+  if (ausEnv) return { nummer: ausEnv, herkunft: 'ELDA_TEST_PROTOKOLLNUMMER' };
+  return undefined;
+}
+
+async function empfangen(elda, gesendet) {
   befund(5, 'empfangen — Payload inline oder als Anhang, und worüber geht die md5?');
   if (process.env.ELDA_TEST_ALLOW_EMPFANGEN !== '1') {
     console.log('Übersprungen: empfangen VERBRAUCHT die Rücksendung endgültig.');
     console.log('Freigabe: ELDA_TEST_ALLOW_EMPFANGEN=1');
     return;
   }
-  const nummer = process.env.ELDA_TEST_PROTOKOLLNUMMER || liste?.ruecksendungen[0]?.protokollnummer;
-  if (!nummer) {
-    console.log('Übersprungen: keine Protokollnummer — weder ELDA_TEST_PROTOKOLLNUMMER noch eine offene Rücksendung.');
+  const ziel = zielProtokollnummer(gesendet);
+  if (!ziel) {
+    console.log('Übersprungen: keine eigene Protokollnummer aus diesem Lauf.');
+    console.log(
+      'Entweder zusätzlich ELDA_TEST_ALLOW_STATE_CHANGE=1 setzen (dann wird die Rücksendung zur ' +
+        'eigenen Sendung geholt) oder ELDA_TEST_PROTOKOLLNUMMER ausdrücklich angeben. Ein Eintrag ' +
+        'aus der Liste in Befund 1 wird NICHT von selbst genommen — er gehört fast sicher einer ' +
+        'fremden Verarbeitung.',
+    );
     return;
   }
 
   console.log('');
   console.log('!!! ACHTUNG — UNWIDERRUFLICH !!!');
-  console.log(`Die Rücksendung ${nummer} wird jetzt abgeholt und ist damit VERBRAUCHT:`);
+  console.log(`Die Rücksendung ${ziel.nummer} wird jetzt abgeholt und ist damit VERBRAUCHT:`);
   console.log('ELDA liefert sie danach niemandem mehr aus — auch nicht der Lohnverrechnung,');
   console.log('die sie eigentlich braucht. Die abgeholten Bytes werden hier weggeschrieben,');
   console.log('bevor irgendetwas anderes geschieht; sie sind dann die einzige Kopie.');
+  console.log(`Quelle der Protokollnummer: ${ziel.herkunft}.`);
   console.log('');
 
   let erg;
   let fehler;
   try {
-    erg = await elda.empfangen(nummer);
+    erg = await elda.empfangen(ziel.nummer);
   } catch (err) {
     fehler = err;
   }
@@ -406,9 +528,9 @@ async function empfangen(elda, liste) {
   // Zuerst sichern, dann auswerten — in dieser Reihenfolge, weil ein Absturz
   // der Auswertung sonst die einzige Kopie mitnähme.
   const inhalt = erg?.datei?.inhalt ?? fehler?.ergebnis?.datei?.inhalt;
-  if (inhalt) console.log('Bytes gesichert:', schreibe(`ruecksendung-${nummer}.bin`, inhalt));
+  if (inhalt) console.log('Bytes gesichert:', schreibeBytes(`ruecksendung-${ziel.nummer}.bin`, inhalt));
   const a = letzter();
-  console.log('Mitschnitt:', a?.antwortDatei ?? '(keine Antwort)');
+  console.log(mitschnittHinweis());
 
   if (fehler) {
     console.log('empfangen wirft:', fehlertext(fehler));
@@ -419,43 +541,50 @@ async function empfangen(elda, liste) {
         (erg.meldung ? ` meldung="${erg.meldung}"` : ''),
     );
   }
-  if (!a?.antwortBytes) return;
+  if (!a?.antwortBytes) {
+    offen('es liegt keine Antwort vor.');
+    return;
+  }
 
   const text = a.antwortBytes.toString('utf8');
   const contentType = a.antwortHeader['content-type'] ?? '';
   const mtom = contentType.includes('multipart/') || contentType.includes('application/xop');
   const xop = /<(\w+:)?Include\b/.test(text);
-  console.log(`\nÜbertragungsform: Content-Type "${contentType}"`);
-  console.log(
-    mtom || xop
-      ? `→ ANHANG (MTOM/XOP${xop ? ', xop:Include im Body' : ''}) — der Client erwartet inline Base64.`
-      : '→ INLINE (<payload> im XML), so wie dieser Client es erwartet.',
-  );
-
   const md5Gemeldet = /<md5>([\s\S]*?)<\/md5>/.exec(text)?.[1]?.trim();
   const payloadRoh = /<payload>([\s\S]*?)<\/payload>/.exec(text)?.[1];
+
+  console.log(`\nÜbertragungsform: Content-Type "${contentType}"`);
+  if (mtom || xop) {
+    console.log(`→ ANHANG (MTOM/XOP${xop ? ', xop:Include im Body' : ''}) — der Client erwartet inline Base64.`);
+  } else if (payloadRoh !== undefined) {
+    console.log('→ INLINE (<payload> im XML), so wie dieser Client es erwartet.');
+  } else {
+    offen('die Antwort enthält weder einen inline <payload> noch eine XOP-Referenz.');
+    return;
+  }
+
   if (!md5Gemeldet) {
-    console.log('ELDA hat KEINE md5 mitgeliefert — die Bezugsgröße bleibt offen.');
+    offen('ELDA hat keine md5 mitgeliefert — die Bezugsgröße bleibt unbeantwortet.');
     return;
   }
   if (payloadRoh === undefined) {
-    console.log(`md5 von ELDA: ${md5Gemeldet} — aber kein inline <payload> zum Vergleichen.`);
+    console.log(`md5 von ELDA: ${md5Gemeldet}`);
+    offen('ohne inline <payload> ist nichts zu vergleichen.');
     return;
   }
   const kompakt = payloadRoh.replace(/\s+/g, '');
+  const treffer = (wert) => (wert === md5Gemeldet.toLowerCase() ? '  <== Treffer' : '');
   const ueberBytes = createHash('md5').update(Buffer.from(kompakt, 'base64')).digest('hex');
   const ueberBase64 = createHash('md5').update(kompakt, 'utf8').digest('hex');
   const ueberBase64Roh = createHash('md5').update(payloadRoh, 'utf8').digest('hex');
   console.log(`md5 von ELDA:               ${md5Gemeldet}`);
-  console.log(`md5 der dekodierten Bytes:  ${ueberBytes}${ueberBytes === md5Gemeldet.toLowerCase() ? '  <== Treffer' : ''}`);
-  console.log(`md5 des Base64-Textes:      ${ueberBase64}${ueberBase64 === md5Gemeldet.toLowerCase() ? '  <== Treffer' : ''}`);
+  console.log(`md5 der dekodierten Bytes:  ${ueberBytes}${treffer(ueberBytes)}`);
+  console.log(`md5 des Base64-Textes:      ${ueberBase64}${treffer(ueberBase64)}`);
   if (ueberBase64Roh !== ueberBase64) {
-    console.log(
-      `md5 des Base64 inkl. Whitespace: ${ueberBase64Roh}${ueberBase64Roh === md5Gemeldet.toLowerCase() ? '  <== Treffer' : ''}`,
-    );
+    console.log(`md5 des Base64 mit Whitespace: ${ueberBase64Roh}${treffer(ueberBase64Roh)}`);
   }
   if (![ueberBytes, ueberBase64, ueberBase64Roh].includes(md5Gemeldet.toLowerCase())) {
-    console.log('KEIN Treffer — die md5 bezieht sich auf etwas anderes als den Payload dieser Antwort.');
+    offen('keine der drei Rechnungen trifft — die md5 bezieht sich auf etwas anderes.');
   }
 }
 
@@ -466,7 +595,7 @@ async function empfangen(elda, liste) {
   if (!config) return;
   console.log(`ELDA-Live-Check gegen Umgebung '${config.umgebung}'.`);
   console.log(`Passwortanteil: ${config.kundenpasswortHash ? 'kundenpasswortHash' : 'kundenpasswort (Klartext)'}`);
-  console.log(`Mitschnitt: ${path.relative(process.cwd(), MITSCHNITT)}`);
+  console.log(`Mitschnitt: ${path.relative(process.cwd(), MITSCHNITT)} (geschwärzt, 0600)`);
 
   let elda;
   try {
@@ -476,7 +605,7 @@ async function empfangen(elda, liste) {
     return;
   }
 
-  const liste = await auflisten(elda);
-  await senden(elda);
-  await empfangen(elda, liste);
+  await auflisten(elda);
+  const gesendet = await senden(elda);
+  await empfangen(elda, gesendet);
 })();

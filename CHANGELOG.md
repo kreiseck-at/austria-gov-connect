@@ -249,7 +249,15 @@ brechen).
   Paket, nicht Teil von `npm test`). Steuerung ausschließlich über
   Umgebungsvariablen; ohne Zugangsdaten wird sauber übersprungen. `senden` und
   `empfangen` laufen nur nach ausdrücklicher Freigabe je eigener Variable, weil
-  beide unwiderruflich sind.
+  beide unwiderruflich sind; `empfangen` holt ausschließlich die Rücksendung zur
+  eigenen Sendung aus demselben Lauf oder eine ausdrücklich genannte
+  Protokollnummer, nie einen Eintrag der abgefragten Liste — der gehörte fast
+  sicher einer fremden Verarbeitung und wäre nach dem Abholen für sie verloren.
+- **Intern:** `redigiereGeheimnisse` schwärzt Zugangsdaten in mitgeschnittenen
+  Requests und Antworten — wertbasiert (auch in XML-escapter Form), damit auch
+  ein SOAP-Fault, der die Anfrage in seinem `<detail>` zitiert, erfasst wird.
+  Steht ein Geheimnis danach noch im Text, wird geworfen statt geschrieben. Nicht
+  über den Barrel exportiert.
 - Additiv, keine Bruchstelle gegenüber 0.3.0 — `kundenpasswort` im Klartext
   bleibt unverändert zulässig.
 
