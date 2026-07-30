@@ -99,13 +99,49 @@ Node ≥ 20.18.
 Für `createEldaTransfer` werden drei Zugangsdaten benötigt:
 
 - **Seriennummer** — vergeben bei der ELDA-Registrierung.
-- **Kundenpasswort** — im Klartext übergeben, wird intern zu SHA-512 (hex,
-  lowercase) gehasht, wie von ELDA gefordert.
+- **Kundenpasswort** — entweder als `kundenpasswort` im Klartext (wird intern zu
+  SHA-512 hex lowercase gehasht, wie von ELDA gefordert) **oder** als fertiger
+  Hash `kundenpasswortHash`. Genau eines von beiden, siehe unten.
 - **API-Key** — separat **bei ELDA anfordern**, unabhängig von Seriennummer/Kundenpasswort.
 
-Diese drei Felder sind Pflicht: Fehlt eines oder ist es leer, wirft
+Diese Felder sind Pflicht: Fehlt eines oder ist es leer, wirft
 `createEldaTransfer` bereits beim Bauen einen `EldaError` — ohne diese Prüfung
 würde ELDA jeden Aufruf nur mit einem kryptischen Status `558` beantworten.
+
+### Nur den Hash speichern, nicht das Passwort
+
+Auf die Leitung geht ausschließlich der SHA-512-Hash des Kundenpassworts; das
+Klartextpasswort wird nach der Eingabe nie wieder gebraucht. Wer Zugangsdaten
+dauerhaft ablegt — etwa ein Mandantensystem, in dem der Kunde seine ELDA-Daten
+einmal einträgt —, sollte deshalb **nur den Hash** ablegen und ihn als
+`kundenpasswortHash` übergeben. Bei einem Einbruch in den Datenbestand ist dann
+zwar der ELDA-Zugang kompromittiert, nicht aber das Passwort des Kunden selbst,
+das erfahrungsgemäß anderswo wiederverwendet ist.
+
+Gehasht wird an der Eingabestelle mit `hashKundenpasswort` — dieselbe Regel, die
+der Client intern anwendet:
+
+```ts
+import { createEldaTransfer, hashKundenpasswort } from '@kreiseck/elda';
+
+// einmal bei der Eingabe: nur das Ergebnis speichern, nicht das Passwort
+const kundenpasswortHash = hashKundenpasswort(eingabeAusDemFormular);
+
+// später bei jedem Aufruf
+const elda = createEldaTransfer({
+  seriennummer,
+  kundenpasswortHash, // statt kundenpasswort
+  apiKey,
+  umgebung: 'produktion',
+});
+```
+
+`kundenpasswort` und `kundenpasswortHash` schließen einander aus: Genau eines von
+beiden muss gesetzt sein, sonst wirft `createEldaTransfer` (auch aus JavaScript
+heraus, nicht nur beim Übersetzen). Der Hash wird zudem auf seine Form geprüft —
+genau 128 Hexziffern in Kleinschreibung. Ein abgeschnittener oder
+großgeschriebener Digest fällt damit sofort auf und nicht erst als ELDA-Status
+`558`, der von einem echten Passwortfehler nicht zu unterscheiden wäre.
 
 `umgebung` bestimmt zusätzlich den Endpoint (`ELDA_ENDPOINTS`) und ist ebenfalls
 **Pflicht** — bewusst **ohne** Produktions-Default: ein vergessenes Feld darf

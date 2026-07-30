@@ -228,6 +228,31 @@ brechen).
 
 ## @kreiseck/elda
 
+### 0.4.0 — 2026-07-30
+
+- **Neu:** `kundenpasswortHash` in `EldaConfig` — statt des Kundenpassworts im
+  Klartext lässt sich der fertige SHA-512-Hex-Digest übergeben. Auf die Leitung
+  geht ohnehin nur dieser Hash; wer Zugangsdaten dauerhaft ablegt (etwa ein
+  Mandantensystem, in dem der Kunde seine ELDA-Daten einmal einträgt), speichert
+  damit nur noch ein ELDA-gleichwertiges Token und nicht mehr das Passwort des
+  Kunden, das anderswo wiederverwendet sein dürfte.
+- **Neu:** `hashKundenpasswort(klartext)` bildet denselben Hash, den der Client
+  intern bildet — zum Hashen an der Eingabestelle, ohne die Regel nachzubauen.
+- `kundenpasswort` und `kundenpasswortHash` schließen einander aus: Genau eines
+  von beiden muss gesetzt sein. Die Ausschließlichkeit steht im Typ und wird
+  zusätzlich zur Laufzeit erzwungen (Aufrufer aus reinem JavaScript haben keinen
+  Compiler). Der Hash wird auf seine Form geprüft — genau 128 Hexziffern in
+  Kleinschreibung; ein abgeschnittener oder großgeschriebener Digest wirft beim
+  Bauen des Clients statt als ELDA-Status `558` zurückzukommen, der von einem
+  echten Passwortfehler nicht zu unterscheiden wäre.
+- **Neu:** Live-Check gegen den echten ELDA-Kundentest (`npm run test:live` im
+  Paket, nicht Teil von `npm test`). Steuerung ausschließlich über
+  Umgebungsvariablen; ohne Zugangsdaten wird sauber übersprungen. `senden` und
+  `empfangen` laufen nur nach ausdrücklicher Freigabe je eigener Variable, weil
+  beide unwiderruflich sind.
+- Additiv, keine Bruchstelle gegenüber 0.3.0 — `kundenpasswort` im Klartext
+  bleibt unverändert zulässig.
+
 ### 0.3.0 — 2026-07-29
 
 - **Neu:** Meldungs-Builder für die sieben Satzarten der Versichertenmeldung

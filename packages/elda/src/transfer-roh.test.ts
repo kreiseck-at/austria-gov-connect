@@ -423,6 +423,51 @@ test('senden: Kundenpasswort geht nur SHA-512-gehasht auf die Leitung, nie im Kl
   );
 });
 
+test('senden: kundenpasswortHash ergibt denselben Request wie das Klartextpasswort', async () => {
+  const request = async (zugang: Record<string, string>): Promise<string> => {
+    let body = '';
+    const elda = createEldaTransferRoh({
+      seriennummer: 'S1',
+      apiKey: 'K1',
+      umgebung: 'kundentest',
+      transport: {
+        fetchImpl: (async (_u: string, init: { body: string }) => {
+          body = init.body;
+          return new Response(sendenOk(), { status: 200 });
+        }) as unknown as typeof fetch,
+      },
+      ...zugang,
+    } as EldaConfig);
+    await elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
+    // nonce und created sind je Request frisch — für den Vergleich neutralisiert.
+    return body
+      .replace(/<nonce>[^<]*<\/nonce>/, '<nonce>N</nonce>')
+      .replace(/<created>[^<]*<\/created>/, '<created>C</created>');
+  };
+  const hash = createHash('sha512').update('geheim', 'utf8').digest('hex');
+  const ausKlartext = await request({ kundenpasswort: 'geheim' });
+  const ausHash = await request({ kundenpasswortHash: hash });
+  assert.equal(ausHash, ausKlartext);
+  assert.ok(ausHash.includes(`<kundenpasswort>${hash}</kundenpasswort>`));
+});
+
+test('createEldaTransferRoh wirft beim Bauen, wenn der Passwortanteil nicht eindeutig ist', () => {
+  const basis = { seriennummer: 'S1', apiKey: 'K1', umgebung: 'kundentest' as const };
+  const hash = createHash('sha512').update('geheim', 'utf8').digest('hex');
+  // weder Klartext noch Hash
+  assert.throws(() => createEldaTransferRoh(basis as never), EldaError);
+  // beide zugleich
+  assert.throws(
+    () => createEldaTransferRoh({ ...basis, kundenpasswort: 'geheim', kundenpasswortHash: hash } as never),
+    EldaError,
+  );
+  // Hash in falscher Form — vor dem ersten Netzaufruf, nicht erst als Status 558
+  assert.throws(
+    () => createEldaTransferRoh({ ...basis, kundenpasswortHash: hash.toUpperCase() } as never),
+    EldaError,
+  );
+});
+
 test('senden: SOAPAction und Content-Type der Anfrage (Status 559 = unerlaubter Content-Type)', async () => {
   let headers: Record<string, string> = {};
   const elda = createEldaTransferRoh(

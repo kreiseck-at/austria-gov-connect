@@ -16,8 +16,20 @@ test('index exportiert die Fehlerklassen mit intakter Kette', () => {
   assert.ok(elda.EldaStatusError.prototype instanceof elda.EldaError);
 });
 
+test('index exportiert hashKundenpasswort für den Aufrufer', () => {
+  assert.equal(typeof elda.hashKundenpasswort, 'function');
+  assert.match(elda.hashKundenpasswort('geheim'), /^[0-9a-f]{128}$/);
+});
+
 test('index exportiert kein Innenleben mehr', () => {
-  for (const name of ['baueSecurity', 'baueEldaEnvelope', 'ELDA_NAMESPACE', 'istOk', 'zuordnung']) {
+  for (const name of [
+    'baueSecurity',
+    'loeseKundenpasswortHash',
+    'baueEldaEnvelope',
+    'ELDA_NAMESPACE',
+    'istOk',
+    'zuordnung',
+  ]) {
     assert.equal((elda as Record<string, unknown>)[name], undefined, `sollte intern sein: ${name}`);
   }
 });
