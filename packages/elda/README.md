@@ -86,6 +86,18 @@ so von ELDA durchgesetzt wird — sie ist aus Kapitel E.30.2 abgeleitet, aber in
 keinem der 28 Beispiele belegt: Alle 28 geben durchweg die VSNR an, keines
 prüft den Fall „VSNR fehlt" durch.
 
+### Der Live-Check gegen den Kundentest
+
+Für genau diese offenen Punkte liegt im Repository ein Live-Check
+(`test/live/live-check.js`, `npm run test:live` — **nicht** Teil von
+`npm test`). Er läuft gegen den echten ELDA-Kundentest, wird ausschließlich über
+Umgebungsvariablen gesteuert und übersprungen, solange keine Zugangsdaten
+gesetzt sind. Standardmäßig ruft er nur `ruecksendungenAuflisten` auf, weil das
+nichts verändert; `senden` (legt echte Daten im Konto an) und `empfangen`
+(verbraucht die Rücksendung endgültig) laufen je nur nach einer eigenen,
+ausdrücklichen Freigabe. Der Kopf des Skripts nennt alle Variablen; jede
+beantwortete Frage kommt als nummerierter Befund heraus.
+
 ## Installation
 
 ```bash
