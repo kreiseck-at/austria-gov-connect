@@ -8,3 +8,6 @@ test-dist/
 .env
 .env.local
 .superpowers/
+# Mitschnitte der Live-Checks: echte Requests und Antworten, also Zugangsdaten
+# und personenbezogene Daten. Gehören nie ins Repository.
+packages/*/test/live/mitschnitt/

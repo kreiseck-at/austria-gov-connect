@@ -63,6 +63,39 @@ test('leere oder fehlende Zugangsdaten werfen beim Bauen, nicht erst bei ELDA', 
   }
 });
 
+const HASH = 'a'.repeat(128);
+
+test('kundenpasswortHash ist dem Klartext gleichwertig', () => {
+  assert.equal(
+    loeseEndpoint({ seriennummer: 'S1', apiKey: 'K1', kundenpasswortHash: HASH, umgebung: 'kundentest' }),
+    ELDA_ENDPOINTS.kundentest,
+  );
+});
+
+test('genau eines von kundenpasswort/kundenpasswortHash — beides oder keines wirft', () => {
+  const basis = { seriennummer: 'S1', apiKey: 'K1', umgebung: 'kundentest' as const };
+  assert.throws(() => loeseEndpoint(basis as never), EldaError);
+  assert.throws(
+    () => loeseEndpoint({ ...basis, kundenpasswort: 'p', kundenpasswortHash: HASH } as never),
+    EldaError,
+  );
+});
+
+test('kundenpasswortHash in falscher Form wirft beim Bauen, nicht erst bei ELDA', () => {
+  const basis = { seriennummer: 'S1', apiKey: 'K1', umgebung: 'kundentest' as const };
+  for (const hash of [HASH.toUpperCase(), HASH.slice(0, 100), `${HASH}0`, 'kein hash', '']) {
+    assert.throws(
+      () => loeseEndpoint({ ...basis, kundenpasswortHash: hash } as never),
+      (err: unknown) => {
+        assert.ok(err instanceof EldaError);
+        assert.match((err as Error).message, /kundenpasswortHash/);
+        return true;
+      },
+      `untauglicher Hash muss werfen: '${hash.slice(0, 12)}'`,
+    );
+  }
+});
+
 test('leerer endpoint wirft statt still auf umgebung zurückzufallen', () => {
   assert.throws(() => loeseEndpoint({ ...zugang, umgebung: 'kundentest', endpoint: '' } as never), EldaError);
 });

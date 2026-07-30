@@ -8,6 +8,7 @@ export {
   type EmpfangenErgebnis,
 } from './transfer-roh';
 export { type EldaConfig } from './konfiguration';
+export { hashKundenpasswort, type KundenpasswortQuelle } from './security';
 export { ELDA_ENDPOINTS, type EldaUmgebung } from './endpoints';
 export { ELDA_STATUS } from './status';
 export { findeRuecksendung, type Ruecksendung } from './zuordnung';

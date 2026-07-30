@@ -1,10 +1,14 @@
 import type { TransportOptions } from '@kreiseck/finanzonline-core';
 import { ELDA_ENDPOINTS, type EldaUmgebung } from './endpoints';
 import { EldaError } from './errors';
-import type { SecurityQuelle } from './security';
+import { loeseKundenpasswortHash, type SecurityQuelle } from './security';
 
-/** Gemeinsame Felder jeder Konfiguration. */
-interface EldaBasisConfig extends SecurityQuelle {
+/**
+ * Gemeinsame Felder jeder Konfiguration. Der Passwortanteil kommt aus
+ * `SecurityQuelle`: entweder `kundenpasswort` (Klartext) ODER
+ * `kundenpasswortHash` (fertiger SHA-512-Hex-Digest), nie beides.
+ */
+type EldaBasisConfig = SecurityQuelle & {
   /**
    * Transport-Feineinstellungen (Timeout, Retries, `fetch`-Implementierung) —
    * siehe `TransportOptions` aus `@kreiseck/finanzonline-core`.
@@ -31,7 +35,7 @@ interface EldaBasisConfig extends SecurityQuelle {
    * des Originals in der Meldung) — ein auswertbarer Zustand, kein Verlust.
    */
   transport?: TransportOptions;
-}
+};
 
 /**
  * Konfiguration des ELDA-Clients. Entweder `umgebung` oder `endpoint` muss
@@ -73,7 +77,12 @@ function pflichtfeld(wert: unknown, name: string): string {
  */
 export function loeseEndpoint(config: EldaConfig): string {
   pflichtfeld(config.seriennummer, 'seriennummer');
-  pflichtfeld(config.kundenpasswort, 'kundenpasswort');
+  // Wirft, wenn weder `kundenpasswort` noch `kundenpasswortHash` gesetzt ist,
+  // wenn beide gesetzt sind oder wenn der Hash nicht die Form eines
+  // SHA-512-Hex-Digests hat. Bewusst schon hier und nicht erst beim ersten
+  // Request: ein Konfigurationsfehler gehört an die Baustelle, nicht in einen
+  // Netzaufruf, der als Status 558 zurückkommt.
+  loeseKundenpasswortHash(config);
   pflichtfeld(config.apiKey, 'apiKey');
 
   if (config.endpoint !== undefined) {
