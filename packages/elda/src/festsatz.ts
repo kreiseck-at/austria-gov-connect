@@ -39,8 +39,12 @@ export interface Feld {
    * die meisten dieser Felder überhaupt keine Formatzeile führt. Bei einem
    * stellenkodierten Wert wie der Versicherungsnummer verschöbe dieselbe
    * Auffüllung die Bedeutung jeder einzelnen Stelle.
+   *
+   * `MMJJJJ` kommt beim Beitragszeitraum der mBGM hinzu (Kapitel E.32,
+   * Seite 339). Dieselbe Begründung in kleinerem Maßstab: `'12026'` würde ohne
+   * Marker zu `'012026'` — Jänner 2026 statt eines erkennbaren Tippfehlers.
    */
-  format?: 'TTMMJJJJ' | 'LLLPTTMMJJ';
+  format?: 'TTMMJJJJ' | 'LLLPTTMMJJ' | 'MMJJJJ';
 }
 
 /** Werte je Feldname. Ein fehlender oder `undefined`-Wert bedeutet Grundstellung. */
