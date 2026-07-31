@@ -66,3 +66,17 @@ test('index exportiert die Satzart-Tabellen, aber kein Innenleben der Versichert
     assert.equal((elda as Record<string, unknown>)[intern], undefined, `sollte intern sein: ${intern}`);
   }
 });
+
+test('die Transport-Fehlerklassen sind weitergereicht und voneinander unterscheidbar', async () => {
+  const m = await import('./index');
+  for (const name of ['FonTransportError', 'FonProtocolError', 'FonSoapFaultError'] as const) {
+    assert.equal(typeof m[name], 'function', `${name} fehlt im öffentlichen Export`);
+  }
+  // Der Grund, warum sie exportiert sind: sie erben NICHT von EldaError. Wer nur
+  // darauf prüft, deutet einen Protokollfehler als "nicht erreichbar".
+  const p = new m.FonProtocolError('kaputt', { httpStatus: 200, rohantwort: '<x' });
+  assert.equal(p instanceof m.EldaError, false);
+  assert.equal(p instanceof m.FonProtocolError, true);
+  assert.equal(p.rohantwort, '<x');
+  assert.equal(new m.FonTransportError('weg') instanceof m.EldaError, false);
+});

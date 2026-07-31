@@ -1,13 +1,26 @@
 {
   "name": "@kreiseck/elda",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "ELDA Transfer-Webservice (österreichische Sozialversicherung) für Node",
   "license": "Apache-2.0",
   "author": "Kreiseck",
   "homepage": "https://github.com/kreiseck-at/austria-gov-connect/tree/main/packages/elda#readme",
-  "repository": { "type": "git", "url": "git+https://github.com/kreiseck-at/austria-gov-connect.git", "directory": "packages/elda" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kreiseck-at/austria-gov-connect.git",
+    "directory": "packages/elda"
+  },
   "bugs": "https://github.com/kreiseck-at/austria-gov-connect/issues",
-  "keywords": ["elda", "sozialversicherung", "ögk", "österreich", "austria", "soap", "webservice", "lohnverrechnung"],
+  "keywords": [
+    "elda",
+    "sozialversicherung",
+    "ögk",
+    "österreich",
+    "austria",
+    "soap",
+    "webservice",
+    "lohnverrechnung"
+  ],
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,15 +30,28 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md", "NOTICE"],
-  "engines": { "node": ">=20.18.0" },
-  "publishConfig": { "access": "public" },
+  "files": [
+    "dist",
+    "README.md",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=20.18.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "tsc -p tsconfig.test.json && node --test $(find test-dist -name '*.test.js')",
     "test:live": "npm run build && node test/live/live-check.js",
     "prepublishOnly": "npm run build"
   },
-  "dependencies": { "@kreiseck/finanzonline-core": "^0.1.6" },
-  "devDependencies": { "typescript": "^5.4.0", "@types/node": "^22.0.0" }
+  "dependencies": {
+    "@kreiseck/finanzonline-core": "^0.1.6"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^22.0.0"
+  }
 }
