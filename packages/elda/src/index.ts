@@ -13,6 +13,25 @@ export { ELDA_ENDPOINTS, type EldaUmgebung } from './endpoints';
 export { ELDA_STATUS } from './status';
 export { findeRuecksendung, type Ruecksendung } from './zuordnung';
 export { EldaError, EldaProtocolError, EldaStatusError } from './errors';
+/**
+ * Die Fehlerklassen der Transportschicht, weitergereicht aus
+ * `@kreiseck/finanzonline-core`. Sie erben NICHT von `EldaError` und fallen
+ * deshalb bei einer Fallunterscheidung, die nur `EldaError` kennt, in den
+ * Sammelzweig — mit dem Ergebnis, dass ein Protokollfehler als „nicht
+ * erreichbar" erscheint. Damit ein Aufrufer sie sauber trennen kann, ohne in
+ * eine transitive Abhängigkeit zu greifen, stehen sie hier:
+ *
+ * - `FonTransportError` — die Anfrage kam nicht durch (DNS, TLS, Zeitlimit).
+ *   Das ist der einzige Fall, der „nicht erreichbar" wirklich bedeutet.
+ * - `FonProtocolError` — es kam eine Antwort, sie war aber nicht auswertbar.
+ *   Trägt den rohen Körper in `rohantwort`.
+ * - `FonSoapFaultError` — die Gegenstelle meldet einen SOAP-Fault.
+ */
+export {
+  FonTransportError,
+  FonProtocolError,
+  FonSoapFaultError,
+} from '@kreiseck/finanzonline-core';
 export {
   anmeldung,
   abmeldung,

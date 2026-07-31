@@ -13,6 +13,45 @@ import { istOk } from './status';
 import { EldaError, EldaProtocolError } from './errors';
 import type { Ruecksendung } from './zuordnung';
 import { loeseEndpoint, type EldaConfig } from './konfiguration';
+import { istMehrteilig, zerlegeMehrteilig, cidAusHref } from './mtom';
+
+/** Was ein Aufruf liefert: der geparste Envelope und die MTOM-Anhänge dieser Antwort. */
+interface EldaAntwort {
+  root: XmlNode;
+  anhaenge: Map<string, Buffer>;
+}
+
+/**
+ * Legt das MTOM-Auspacken unter den Transport: ELDA antwortet stets als
+ * `multipart/related`, der Parser in `callSoap` erwartet aber reines XML.
+ * Der Wurzelteil wird durchgereicht, die übrigen Teile landen in `senke`.
+ *
+ * Bewusst hier und nicht in `@kreiseck/finanzonline-core`: MTOM ist eine
+ * Eigenheit dieses Dienstes, die FinanzOnline-Endpunkte kennen sie nicht.
+ *
+ * Lässt sich der Körper nicht auspacken, geht er **unverändert** weiter. Der
+ * Parser scheitert dann und `FonProtocolError` trägt den rohen Body — bei
+ * `empfangen` ist das die letzte Stelle, an der die Nutzdaten noch existieren.
+ */
+function mitMtom(basis: typeof fetch, senke: Map<string, Buffer>): typeof fetch {
+  return async (eingabe, init) => {
+    const antwort = await basis(eingabe as Parameters<typeof fetch>[0], init);
+    const contentType = antwort.headers.get('content-type');
+    if (!istMehrteilig(contentType)) return antwort;
+
+    const roh = Buffer.from(await antwort.arrayBuffer());
+    const zerlegt = zerlegeMehrteilig(roh, contentType as string);
+    if (!zerlegt) {
+      return new Response(roh, { status: antwort.status, statusText: antwort.statusText });
+    }
+    for (const [id, teil] of zerlegt.anhaenge) senke.set(id, teil);
+    return new Response(zerlegt.wurzel, {
+      status: antwort.status,
+      statusText: antwort.statusText,
+      headers: { 'content-type': 'text/xml; charset=utf-8' },
+    });
+  };
+}
 
 export type { EldaConfig };
 
@@ -271,7 +310,12 @@ interface EmpfangenTeilErgebnis {
  * `statusCode` ist bewusst optional: Fehlt er in der Antwort, wird trotzdem
  * zuerst die Datei gelesen, damit der Aufrufer sie über den Fehler noch bekommt.
  */
-function leseDatei(datei: XmlNode, statusCode: string | undefined, meldung: string | undefined): EldaDatei {
+function leseDatei(
+  datei: XmlNode,
+  statusCode: string | undefined,
+  meldung: string | undefined,
+  anhaenge: Map<string, Buffer>,
+): EldaDatei {
   const metadaten: Pick<EldaDatei, 'id' | 'name' | 'md5' | 'dateiTyp'> = {};
   const id = feldText(datei, 'id');
   if (id) metadaten.id = id;
@@ -296,13 +340,57 @@ function leseDatei(datei: XmlNode, statusCode: string | undefined, meldung: stri
     return t;
   };
 
+  /**
+   * Prüft `inhalt` gegen die von ELDA gemeldete MD5. Beide Wege — inline Base64
+   * wie MTOM/XOP — durchlaufen dieselbe Prüfung; sonst wäre ausgerechnet der
+   * Weg, über den die großen Dateien kommen, der ungeprüfte.
+   */
+  const pruefeMd5 = (inhalt: Buffer, rohPayload?: string): void => {
+    if (!metadaten.md5) return;
+    const anhang = rohPayload !== undefined ? { inhalt, rohPayload } : { inhalt };
+    let berechnet: string;
+    try {
+      berechnet = createHash('md5').update(inhalt).digest('hex');
+    } catch (err) {
+      throw new EldaProtocolError(
+        'Die von ELDA mitgelieferte MD5-Prüfsumme lässt sich in dieser Node-Umgebung nicht ' +
+          'berechnen (z. B. FIPS-Modus). Ungeprüft wird der Inhalt nicht als Erfolg gemeldet; ' +
+          'er hängt vollständig am Fehler (siehe `ergebnis.datei.inhalt`).',
+        teilErgebnis(anhang),
+        { cause: err },
+      );
+    }
+    if (berechnet.toLowerCase() !== metadaten.md5.toLowerCase()) {
+      throw new EldaProtocolError(
+        `MD5-Abweichung: ELDA meldet '${metadaten.md5}', der Payload ergibt '${berechnet}'. ` +
+          'Der Inhalt ist unterwegs verändert oder abgeschnitten worden und wird nicht als geglückte ' +
+          'Abholung gemeldet. Er hängt unverändert am Fehler (siehe `ergebnis.datei.inhalt`) — ein ' +
+          'zweiter Aufruf von empfangen wäre kein verlässlicher Weg an ihn.',
+        teilErgebnis(anhang),
+      );
+    }
+  };
+
   const payloadNode = firstChild(datei, 'payload');
-  if (payloadNode?.children.some((c) => c.name === 'Include')) {
-    throw new EldaProtocolError(
-      'Payload ist MTOM/XOP-referenziert (<xop:Include>), dieser Client erwartet inline Base64. ' +
-        'MTOM wird von diesem Client derzeit nicht unterstützt.',
-      teilErgebnis(),
-    );
+
+  // MTOM/XOP: Statt Base64 im Element steht dort ein Verweis auf einen eigenen
+  // Teil der mehrteiligen Antwort. Dessen Körper sind bereits die Rohbytes der
+  // Datei — es wird NICHT noch einmal base64-dekodiert.
+  const include = payloadNode?.children.find((c) => c.name === 'Include');
+  if (include) {
+    const href = include.attrs.href ?? '';
+    const cid = cidAusHref(href);
+    const teil = cid !== undefined ? anhaenge.get(cid) : undefined;
+    if (!teil) {
+      throw new EldaProtocolError(
+        `Der <payload> verweist per MTOM/XOP auf '${href}', aber dieser Teil fehlt in der Antwort. ` +
+          'Ohne ihn ist der Dateiinhalt nicht rekonstruierbar, und ein zweiter Aufruf von empfangen ' +
+          'wäre kein verlässlicher Weg an ihn.',
+        teilErgebnis(),
+      );
+    }
+    pruefeMd5(teil);
+    return { inhalt: teil, ...metadaten };
   }
 
   const rohPayload = payloadNode?.text ?? '';
@@ -333,30 +421,7 @@ function leseDatei(datei: XmlNode, statusCode: string | undefined, meldung: stri
   }
 
   const inhalt = Buffer.from(kompakt, 'base64');
-
-  if (metadaten.md5) {
-    let berechnet: string;
-    try {
-      berechnet = createHash('md5').update(inhalt).digest('hex');
-    } catch (err) {
-      throw new EldaProtocolError(
-        'Die von ELDA mitgelieferte MD5-Prüfsumme lässt sich in dieser Node-Umgebung nicht ' +
-          'berechnen (z. B. FIPS-Modus). Ungeprüft wird der Inhalt nicht als Erfolg gemeldet; ' +
-          'er hängt vollständig am Fehler (siehe `ergebnis.datei.inhalt`).',
-        teilErgebnis({ inhalt, rohPayload }),
-        { cause: err },
-      );
-    }
-    if (berechnet.toLowerCase() !== metadaten.md5.toLowerCase()) {
-      throw new EldaProtocolError(
-        `MD5-Abweichung: ELDA meldet '${metadaten.md5}', der dekodierte Payload ergibt '${berechnet}'. ` +
-          'Der Inhalt ist unterwegs verändert oder abgeschnitten worden und wird nicht als geglückte ' +
-          'Abholung gemeldet. Er hängt unverändert am Fehler (siehe `ergebnis.datei.inhalt` und ' +
-          '`ergebnis.rohPayload`) — ein zweiter Aufruf von empfangen wäre kein verlässlicher Weg an ihn.',
-        teilErgebnis({ inhalt, rohPayload }),
-      );
-    }
-  }
+  pruefeMd5(inhalt, rohPayload);
 
   return { inhalt, ...metadaten };
 }
@@ -417,12 +482,25 @@ export function createEldaTransferRoh(config: EldaConfig): EldaTransferRoh {
    * Heuristik über `err.cause.code` wäre geraten und durch jeden Proxy hinweg
    * ohnehin falsch. Bleibt: nicht wiederholen.
    */
-  async function ruf(methode: string, felder: EldaFeld[], wiederholbar = true): Promise<XmlNode> {
+  async function ruf(methode: string, felder: EldaFeld[], wiederholbar = true): Promise<EldaAntwort> {
     const maxWiederholungen = wiederholbar ? retries : 0;
     for (let versuch = 0; ; versuch++) {
       const body = baueEldaEnvelope(methode, baueSecurity(config), felder);
+      // Die Anhänge werden je Versuch frisch gesammelt: Ein zweiter Versuch darf
+      // keine Teile des ersten erben, sonst löste ein <xop:Include> womöglich
+      // gegen eine veraltete Zustellung auf.
+      const anhaenge = new Map<string, Buffer>();
       try {
-        return await callSoap({ endpoint, soapAction: methode, body }, { ...transport, retries: 0 });
+        const root = await callSoap(
+          // SOAPAction MUSS leer sein. Die WSDL des Dienstes schreibt bei allen
+          // drei Operationen `soapAction=""` vor; mit dem Methodennamen
+          // antwortet ELDA mit einem SOAP-Fault: „The given SOAPAction
+          // <methode> does not match an operation." Gegen online-test.elda.at
+          // am 31.07.2026 nachgestellt.
+          { endpoint, soapAction: '', body },
+          { ...transport, retries: 0, fetchImpl: mitMtom(transport.fetchImpl ?? fetch, anhaenge) },
+        );
+        return { root, anhaenge };
       } catch (err) {
         if (versuch >= maxWiederholungen || !(err instanceof FonTransportError)) throw err;
       }
@@ -432,7 +510,7 @@ export function createEldaTransferRoh(config: EldaConfig): EldaTransferRoh {
   return {
     async senden(args): Promise<SendenErgebnis> {
       const inhalt = typeof args.inhalt === 'string' ? Buffer.from(args.inhalt, 'utf8') : args.inhalt;
-      const root = await ruf('senden', [
+      const { root } = await ruf('senden', [
         { name: 'dateiName', value: args.dateiName },
         { name: 'payload', value: inhalt.toString('base64') },
       ]);
@@ -450,7 +528,7 @@ export function createEldaTransferRoh(config: EldaConfig): EldaTransferRoh {
     },
 
     async ruecksendungenAuflisten(): Promise<AuflistenErgebnis> {
-      const root = await ruf('ruecksendungenAuflisten', []);
+      const { root } = await ruf('ruecksendungenAuflisten', []);
       const resp = holeReturn(root, 'ruecksendungenAuflisten');
       const { statusCode, meldung } = statusUndMeldung(resp, 'ruecksendungenAuflisten');
       const ruecksendungen = resp.children
@@ -478,7 +556,7 @@ export function createEldaTransferRoh(config: EldaConfig): EldaTransferRoh {
       // `wiederholbar: false` — siehe `ruf` und EldaTransferRoh.empfangen: ein
       // automatischer zweiter Versuch könnte die eigene, bereits verbrauchte
       // Zustellung als fremdes `408` zurückmelden.
-      const root = await ruf('empfangen', [{ name: 'protokollnummer', value: nummer }], false);
+      const { root, anhaenge } = await ruf('empfangen', [{ name: 'protokollnummer', value: nummer }], false);
       const resp = holeReturn(root, 'empfangen');
 
       // Status-Code hier nur LESEN, noch nicht werfen: Liegt eine <datei> bei, hat ELDA die
@@ -490,7 +568,7 @@ export function createEldaTransferRoh(config: EldaConfig): EldaTransferRoh {
       const meldung = sr ? feldText(sr, 'messages') : undefined;
 
       const dateiNode = findDescendant(resp, 'datei');
-      const datei = dateiNode ? leseDatei(dateiNode, statusCode, meldung) : undefined;
+      const datei = dateiNode ? leseDatei(dateiNode, statusCode, meldung, anhaenge) : undefined;
 
       if (statusCode === undefined) {
         const ergebnis: EmpfangenTeilErgebnis = {};

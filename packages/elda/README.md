@@ -16,15 +16,29 @@ monatliche Beitragsgrundlagenmeldung (mBGM), sind **nicht** enthalten.
 
 ## Reifegrad
 
-Dieses Paket ist **noch nie gegen eine echte ELDA-Gegenstelle gelaufen**. Das
-Drahtformat stammt aus der offiziellen Schnittstellenbeschreibung V4; sämtliche
-Tests laufen gegen selbst geschriebene Antwort-Fixtures, die dieselbe Lesart der
-Spezifikation abbilden wie der Code. Eine Fehldeutung der Spezifikation wäre
-folglich in Code und Test gleichermaßen enthalten und bliebe unentdeckt.
+Der **Transport ist seit 0.5.0 gegen die echte Gegenstelle verifiziert**:
+`online-test.elda.at` und `online.elda.at` beantworten einen Aufruf mit
+ungültigem API-Key mit einem sauberen `EldaStatusError 557`. Damit stehen
+Endpunkte, Envelope, `securityParameters`, SOAPAction und das Auspacken der
+Antwort fest.
 
-Ungeklärt, bis ein ELDA-Kundentest-Zugang vorliegt: ob der Payload inline als
-Base64 übertragen wird oder per MTOM/XOP; wie eine leere Rücksendungsliste auf
-dem Draht aussieht; ob `senden` bei Status `000` stets eine Protokollnummer
+Zwei Annahmen waren dabei falsch und sind korrigiert:
+
+- **SOAPAction ist leer.** Die WSDL gibt bei allen drei Operationen
+  `soapAction=""` vor. Mit dem Methodennamen antwortet ELDA mit einem
+  SOAP-Fault („does not match an operation").
+- **Die Antwort ist immer MTOM** — `multipart/related; type="application/xop+xml"`,
+  auch bei Fehlern und auch ohne Binärdaten. Der ungeöffnete Körper ließ jeden
+  XML-Parser mit „Unterminated element(s) in XML" abbrechen.
+
+Was **noch nicht** live verifiziert ist: alles, was einen gültigen Zugang
+braucht — `senden`, `empfangen` und der fachliche Erfolgsfall. Die zugehörigen
+Tests laufen gegen selbst geschriebene Antwort-Fixtures, die dieselbe Lesart der
+Spezifikation abbilden wie der Code; eine Fehldeutung wäre dort in Code und Test
+gleichermaßen enthalten.
+
+Offen, bis ein Aufruf mit gültigen Zugangsdaten vorliegt: wie eine leere
+Rücksendungsliste auf dem Draht aussieht; ob `senden` bei Status `000` stets eine Protokollnummer
 mitliefert; ob bei Status `405` die Protokollnummer der Originalsendung in einem
 Feld oder nur im Meldungstext steht; ob `<messages>` mehrfach vorkommen kann; ob
 `datei.dateiTyp` numerisch kommt (so die Tabelle in Abschnitt 4.2) oder als Text
@@ -484,10 +498,12 @@ verschiedenen Fehlern — je nachdem, wie die Antwort auf der Leitung aussieht:
   Das erkennt `empfangen` und wirft einen **`EldaProtocolError`** — statt still
   eine leere Datei vorzutäuschen.
 
-Ob ELDA im Kundenbetrieb tatsächlich inline-Base64 akzeptiert/liefert oder MTOM
-erzwingt, ist erst mit einem echten ELDA-Kundentest-Zugang endgültig zu klären;
-bis dahin ist die Logik vollständig unit-getestet, aber der Sendepfad noch nicht
-gegen die echte Gegenstelle verifiziert.
+Seit 0.5.0 ist belegt, dass ELDA **immer** MTOM antwortet. Der Client packt die
+mehrteilige Antwort aus (`src/mtom.ts`) und löst `<xop:Include>` gegen den
+zugehörigen Teil auf; inline-Base64 bleibt daneben unterstützt, weil beide
+Formen im selben Feld stehen können. Der Sendepfad selbst — ob ELDA eine
+inline-Base64-Sendung annimmt — ist mangels gültigem Zugang noch nicht gegen die
+echte Gegenstelle verifiziert.
 
 ## Meldungen erzeugen
 
