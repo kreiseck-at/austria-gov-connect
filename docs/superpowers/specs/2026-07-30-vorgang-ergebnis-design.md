@@ -86,12 +86,38 @@ ist die Wirklichkeit der Schnittstelle — und allemal besser als die Heuristik,
 
 ## Die Schnittstelle
 
+Beim Umsetzen sind zwei Annahmen des Entwurfs am Bestandscode gescheitert; die
+Schnittstelle unten ist die korrigierte.
+
+**Vier Klassen, nicht acht.** Die acht Vorgangsarten oben unterscheiden je
+Registrierkasse und Signaturerstellungseinheit. Für die Auslegung eines
+Returncodes ändert das nichts: `B1` ist nur der Kassen-Zwilling zu `B10`, und
+`B6`/`B13` gelten für beide gleich. Die Hälfte der Union wäre Aufwand ohne
+Unterschied gewesen. Was der Entwurf dagegen **übersehen** hat: die
+Außerbetriebnahme ist im Bestand gar keine eigene Vorgangsart — sie steckt als
+Block im `ausfall_kasse`/`ausfall_se`-Vorgang. Genau bei ihr kippt die Bedeutung
+von `B6` und `B13`, sie muss also eine eigene Klasse sein. Übrig bleiben:
+Registrierung, Ausfall, Außerbetriebnahme, Wiederinbetriebnahme.
+
+**Der Name `VorgangArt` war belegt.** `Vorgang['art']` existiert bereits mit
+anderen Werten (`registrierung_se`, nicht `registrierung_see`). Zwei Typen
+namens „Art" mit unterschiedlichen Werten wären eine Falle; der neue heißt
+`VorgangKlasse`. Dazu `vorgangKlasse(v: Vorgang)`, das die Klasse aus dem
+tatsächlich gesendeten Vorgang ableitet — inklusive der Unterscheidung
+Ausfall/Außerbetriebnahme, die sonst niemand von außen richtig treffen kann.
+
 ```ts
-export type VorgangArt =
-  | 'registrierung_see' | 'registrierung_kasse'
-  | 'ausfall_see' | 'ausfall_kasse'
-  | 'ausserbetriebnahme_see' | 'ausserbetriebnahme_kasse'
-  | 'wiederinbetriebnahme_see' | 'wiederinbetriebnahme_kasse';
+export type VorgangKlasse =
+  | 'registrierung'
+  | 'ausfall'
+  | 'ausserbetriebnahme'
+  | 'wiederinbetriebnahme';
+
+/** Das Nötigste aus einem `Ergebnis` — ein `Ergebnis` passt unverändert. */
+export interface UrteilEingabe {
+  rc: string;
+  msg?: string;
+}
 
 export interface VorgangUrteil {
   /** Liegt der gewünschte Zustand jetzt vor? */
@@ -103,12 +129,20 @@ export interface VorgangUrteil {
   statusUnklar: boolean;
   /** Derselbe Aufruf kann unverändert später gelingen (siehe istWiederholbar). */
   wiederholbar: boolean;
-  rc: string | null;
+  rc: string;
   msg: string;
 }
 
-export function vorgangErgebnis(art: VorgangArt, erg: Ergebnis): VorgangUrteil;
+export function vorgangErgebnis(klasse: VorgangKlasse, erg: UrteilEingabe): VorgangUrteil;
+export function vorgangKlasse(v: Vorgang): VorgangKlasse | null;
 ```
+
+`rc` ist `string`, nicht `string | null`: `Ergebnis.rc` ist immer gesetzt (bei
+fehlender `rkdbMessage` leer). Ein Nullable hätte nur Prüfungen erzwungen, die
+nie greifen — der leere String fällt ohnehin unter „abgelehnt".
+
+`vorgangKlasse` liefert `null` für die Belegprüfung: sie liefert Daten, kein
+Ziel.
 
 `zielerreicht` und `statusUnklar` schließen einander aus. `bereitsSo` setzt
 `zielerreicht` voraus.
@@ -140,9 +174,11 @@ Linie, die schon in 0.8.0 gewählt wurde.
 dokumentiert — `StatusErgebnis.status` ist schlicht `string`. Damit kann ein Aufrufer,
 den `statusUnklar` zur Statusabfrage zwingt, das Ergebnis nicht auswerten, ohne zu raten.
 
-Der Werteraum ist **an einer echten FinanzOnline-Antwort zu erheben** und dann als
-Union-Typ samt Konstanten zu hinterlegen. Ohne diesen Schritt ist Ausgang 2 eine
-Sackgasse, und das Design verfehlt seinen Zweck.
+Der Werteraum war im Paket bereits bekannt (README und `outcomes.test.ts` führen
+`AKTIVIERT`, `REGISTRIERT`, `IN_BETRIEB`, `AUSFALL`), nur der **Typ** trug ihn
+nicht. Er ist jetzt als `FonStatus` hinterlegt und bleibt zugleich offen
+(`FonStatus | (string & {})`): die bekannten vier werden beim Tippen
+vorgeschlagen, ein unbekannter Wert bricht die Auswertung trotzdem nicht.
 
 ## Auf der Konsumentenseite
 

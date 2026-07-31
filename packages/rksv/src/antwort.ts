@@ -22,9 +22,25 @@ export interface Pruefung {
   teilpruefungen?: Pruefung[];
 }
 
-/** Ergebnis einer Statusabfrage (`status.kasse`/`status.see`): Betriebsstatus samt Zeitstempeln. */
+/**
+ * Betriebsstatus, den eine Statusabfrage liefert.
+ *
+ * Der Wertebereich bleibt absichtlich offen (`string & {}`): ein unbekannter
+ * Wert soll die Auswertung nicht brechen, während die bekannten vier beim
+ * Tippen vorgeschlagen werden.
+ */
+export type FonStatus = 'AKTIVIERT' | 'REGISTRIERT' | 'IN_BETRIEB' | 'AUSFALL';
+
+/**
+ * Ergebnis einer Statusabfrage (`status.kasse`/`status.see`): Betriebsstatus samt Zeitstempeln.
+ *
+ * Nur für Einheiten **in Betrieb**. Ist eine Einheit außer Betrieb genommen,
+ * antwortet der Dienst mit `B32`/`B33` und ohne `abfrage_ergebnis` — dann fehlt
+ * dieses Feld ganz, und „nie registriert" ist von „bereits abgemeldet" über das
+ * Webservice nicht zu unterscheiden (am 31.07.2026 nachgemessen).
+ */
 export interface StatusErgebnis {
-  status: string;
+  status: FonStatus | (string & {});
   tsRegistrierung?: string;
   tsStatus?: string;
 }
