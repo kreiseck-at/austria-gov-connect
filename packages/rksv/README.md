@@ -68,6 +68,37 @@ sind nach Vorgang getrennt (`ausfall_see`, `ausfall_kasse`,
 `ausserbetriebnahme`) — dieselben Zahlen bedeuten je nach Vorgang etwas
 anderes. Die Vorgangsvalidierung prüft gegen genau diesen Katalog.
 
+## „Ist der Zustand jetzt hergestellt?"
+
+`erg.ok` beantwortet, ob der **Aufruf** funktioniert hat (`rc === '0'`). Die
+Frage, die der Aufrufer wirklich hat, ist eine andere — und sie fällt
+**vorgangsabhängig** auseinander: `B6` heißt bei einer Außerbetriebnahme *Ziel
+erreicht*, bei einer Wiederinbetriebnahme *Ablehnung*; `B13` umgekehrt.
+`vorgangErgebnis` beantwortet sie an einer Stelle, statt sie jedem Aufrufer zu
+überlassen.
+
+```ts
+import { vorgangErgebnis, vorgangKlasse } from '@kreiseck/rksv';
+
+const u = vorgangErgebnis('ausserbetriebnahme', erg);
+u.zielerreicht; // true auch bei B6 — die Einheit ist außer Betrieb
+u.bereitsSo;    // true: sie war es schon, dieser Aufruf hat nichts bewirkt
+
+// Aus einem gesendeten Vorgang ableiten, statt die Klasse zu tippen:
+vorgangKlasse({ art: 'ausfall_se', zertifikatsseriennummer: 'AB', ausserbetriebnahme: { begruendung: 7 } });
+// 'ausserbetriebnahme' — derselbe Vorgang mit `ausfall` ergäbe 'ausfall'
+```
+
+Es gibt drei Ausgänge, nicht zwei. `B1`/`B10` („bereits registriert" / „bereits
+gespeichert") sagen bei einer Registrierung, dass die Einheit dem Dienst
+**bekannt** ist — aber nicht, in welchem Zustand. Sie liefern deshalb
+`statusUnklar: true`, weder Erfolg noch Ablehnung.
+
+`statusUnklar` verspricht **nicht**, dass eine Statusabfrage die Sache löst: der
+Dienst beantwortet sie nur für Einheiten in Betrieb, für abgemeldete kommt
+`B32`/`B33` ohne Status und ohne Datum. Der Fall gehört an einen Menschen, nicht
+in eine Heuristik.
+
 ## Belegcode offline prüfen
 
 Netzfrei, nur `node:crypto`, über den Subpath-Export:

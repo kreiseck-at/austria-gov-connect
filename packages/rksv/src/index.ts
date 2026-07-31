@@ -11,7 +11,14 @@ export type {
   WiederinbetriebnahmeSee,
   BelegpruefungVorgang,
 } from './vorgaenge';
-export type { Ergebnis, Pruefung, StatusErgebnis } from './antwort';
+export type { Ergebnis, Pruefung, StatusErgebnis, FonStatus } from './antwort';
+export {
+  vorgangErgebnis,
+  vorgangKlasse,
+  type VorgangKlasse,
+  type VorgangUrteil,
+  type UrteilEingabe,
+} from './urteil';
 export { parseErgebnisprotokoll, type Ergebnisprotokoll } from './protokoll';
 export {
   RKDB_RC,
