@@ -59,6 +59,31 @@ Deshalb gibt es drei Ausgänge, nicht zwei:
 Ausgang 2 zwingt zur Statusabfrage, statt eine Vermutung zuzulassen. Das ist der Kern:
 **man soll nichts falsch machen können.**
 
+### Die Statusabfrage löst nicht jeden Fall — nachgemessen
+
+Am 31.07.2026 gegen das echte FinanzOnline geprüft (`status_signature`, drei Karten
+desselben Steuerpflichtigen):
+
+| Zustand der Einheit | Antwort |
+|---|---|
+| in Betrieb | `rc 0` · `status: IN_BETRIEB` · `ts_registrierung` |
+| **außer Betrieb genommen** | **`rc B33`** — „Die Seriennummer ist nicht registriert oder bereits außer Betrieb genommen." Kein `status`, kein Datum. |
+
+FinanzOnline beantwortet die Statusabfrage also **nur für Einheiten, die noch in
+Betrieb sind**. Für eine abgemeldete kommt `B33` — derselbe mehrdeutige Code, der
+oben bewusst als Ablehnung eingestuft ist.
+
+**Folge für den Entwurf:** Ausgang 2 darf nicht versprechen, dass eine Statusabfrage
+die Sache klärt. Sie klärt sie, wenn die Einheit in Betrieb ist — sonst bleibt nur
+`B33`, und die Unterscheidung „nie registriert" gegen „bereits abgemeldet" ist über
+das Webservice **nicht** zu treffen. Sie steht nur im FinanzOnline-Portal.
+
+`statusUnklar` bedeutet deshalb genau: *dieser Aufruf kann es nicht entscheiden, und
+ein weiterer möglicherweise auch nicht.* Der Aufrufer muss den Fall an einen Menschen
+geben, statt ihn programmatisch auflösen zu wollen. Das ist unbefriedigend, aber es
+ist die Wirklichkeit der Schnittstelle — und allemal besser als die Heuristik, die
+`B10` als Erfolg missdeutet hat.
+
 ## Die Schnittstelle
 
 ```ts
