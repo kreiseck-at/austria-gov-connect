@@ -77,3 +77,11 @@ export {
   FELDER_VERRECHNUNGSBASIS,
   FELDER_VERRECHNUNGSPOSITION,
 } from './felder-e32';
+export {
+  pruefeMbgmPaket,
+  pruefeBeitragskontonummer,
+  HOECHSTANZAHL,
+  BKNR_LAENGE,
+  type Befund,
+  type Schwere,
+} from './pruefung-e32';
