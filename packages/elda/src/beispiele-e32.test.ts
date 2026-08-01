@@ -39,11 +39,11 @@ test('Beispiel 01a: Arbeiter unter 60, SV-Zeit ohne BV, 2.000,00 EUR', () => {
         tarifbloecke: [
           {
             beschaeftigtengruppe: 'B001', // Arbeiter
-            beginnDerVerrechnung: 1,      // VVON = 01
+            beginnDerVerrechnung: 1, // VVON = 01
             basen: [
               {
-                typ: 'AB',                 // allgemeine Beitragsgrundlage
-                betragCent: 200_000,       // VBBT = 2.000,00
+                typ: 'AB', // allgemeine Beitragsgrundlage
+                betragCent: 200_000, // VBBT = 2.000,00
                 positionen: [{ typ: 'T01', prozentsatz: 39.6, betragCent: 79_200 }],
               },
             ],
@@ -54,7 +54,10 @@ test('Beispiel 01a: Arbeiter unter 60, SV-Zeit ohne BV, 2.000,00 EUR', () => {
     { ...BASIS, verfahren: 'selbstabrechnung' },
   );
 
-  assert.deepEqual(saetze.map((s) => s.satzart), ['PS', 'G1', 'T1', 'BS', 'V1', 'PE']);
+  assert.deepEqual(
+    saetze.map((s) => s.satzart),
+    ['PS', 'G1', 'T1', 'BS', 'V1', 'PE'],
+  );
 
   const [ps, g1, t1, bs, v1, pe] = saetze;
   // PS: GSVZ = +   GSUM = 792,00   ANZM = 1
@@ -116,7 +119,10 @@ test('Beispiel 19: Vorschreiber, Arbeiter mit Nachtschwerarbeitsbeitrag', () => 
     { ...BASIS, verfahren: 'vorschreibung' },
   );
 
-  assert.deepEqual(saetze.map((s) => s.satzart), ['PV', 'G2', 'T1', 'BV', 'V2', 'PE']);
+  assert.deepEqual(
+    saetze.map((s) => s.satzart),
+    ['PV', 'G2', 'T1', 'BV', 'V2', 'PE'],
+  );
 
   const [, , t1, bv, v2] = saetze;
   // T1: BSGR = B001   ERGB = E01   VVON = 01
@@ -185,8 +191,11 @@ test('bei der Selbstabrechnung sind Prozentsatz und Betrag zwingend', () => {
             vorname: 'Max',
             verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_MIT_ZEIT,
             tarifbloecke: [
-              { beschaeftigtengruppe: 'B001', beginnDerVerrechnung: 1,
-                basen: [{ typ: 'AB', betragCent: 200_000, positionen: [{ typ: 'T01' }] }] },
+              {
+                beschaeftigtengruppe: 'B001',
+                beginnDerVerrechnung: 1,
+                basen: [{ typ: 'AB', betragCent: 200_000, positionen: [{ typ: 'T01' }] }],
+              },
             ],
           },
         ],

@@ -99,7 +99,9 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
   const ende = saetze[saetze.length - 1];
 
   if (!kopf || !ende) {
-    return [{ code: 'F9070', schwere: 'fehler', meldung: 'Aufbau des mBGM-Pakets nicht korrekt: leere Satzfolge.' }];
+    return [
+      { code: 'F9070', schwere: 'fehler', meldung: 'Aufbau des mBGM-Pakets nicht korrekt: leere Satzfolge.' },
+    ];
   }
   if (!['PS', 'PV'].includes(kopf.satzart) || ende.satzart !== 'PE') {
     befunde.push({
@@ -146,7 +148,8 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
     /^\d{6}$/.test(bzrm) &&
     monat >= 1 &&
     monat <= 12 &&
-    (jahr > FRUEHESTER_ZEITRAUM.jahr || (jahr === FRUEHESTER_ZEITRAUM.jahr && monat >= FRUEHESTER_ZEITRAUM.monat));
+    (jahr > FRUEHESTER_ZEITRAUM.jahr ||
+      (jahr === FRUEHESTER_ZEITRAUM.jahr && monat >= FRUEHESTER_ZEITRAUM.monat));
   if (!zeitraumGueltig) {
     befunde.push({
       code: 'F9040',

@@ -1,7 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { pruefeMbgmPaket, pruefeBeitragskontonummer, HOECHSTANZAHL } from './pruefung-e32';
-import { erstelleMbgmPaket, VERRECHNUNGSGRUNDLAGE, type PaketOptionen, type Beitragsgrundlagenmeldung } from './mbgm';
+import {
+  erstelleMbgmPaket,
+  VERRECHNUNGSGRUNDLAGE,
+  type PaketOptionen,
+  type Beitragsgrundlagenmeldung,
+} from './mbgm';
 
 const OPT: PaketOptionen = {
   verfahren: 'selbstabrechnung',
@@ -19,8 +24,17 @@ const MELDUNG: Beitragsgrundlagenmeldung = {
   vorname: 'Max',
   verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_MIT_ZEIT,
   tarifbloecke: [
-    { beschaeftigtengruppe: 'B002', beginnDerVerrechnung: 1,
-      basen: [{ typ: 'AB', betragCent: 200_000, positionen: [{ typ: 'T01', prozentsatz: 39.6, betragCent: 79_200 }] }] },
+    {
+      beschaeftigtengruppe: 'B002',
+      beginnDerVerrechnung: 1,
+      basen: [
+        {
+          typ: 'AB',
+          betragCent: 200_000,
+          positionen: [{ typ: 'T01', prozentsatz: 39.6, betragCent: 79_200 }],
+        },
+      ],
+    },
   ],
 };
 
@@ -74,8 +88,14 @@ test('F9031: JAGB kennt nur J und N', () => {
 
 test('F9070: das Paket muss mit PS/PV beginnen und mit PE enden', () => {
   const saetze = erstelleMbgmPaket([MELDUNG], OPT);
-  assert.equal(pruefeMbgmPaket(saetze.slice(1)).some((b) => b.code === 'F9070'), true);
-  assert.equal(pruefeMbgmPaket([]).some((b) => b.code === 'F9070'), true);
+  assert.equal(
+    pruefeMbgmPaket(saetze.slice(1)).some((b) => b.code === 'F9070'),
+    true,
+  );
+  assert.equal(
+    pruefeMbgmPaket([]).some((b) => b.code === 'F9070'),
+    true,
+  );
 });
 
 test('F9072: die Hoechstanzahl der Verrechnungspositionen ist eine Warnung', () => {
@@ -90,7 +110,9 @@ test('F9072: die Hoechstanzahl der Verrechnungspositionen ist eine Warnung', () 
             typ: 'AB' as const,
             betragCent: 200_000,
             positionen: Array.from({ length: HOECHSTANZAHL.verrechnungsposition + 1 }, () => ({
-              typ: 'T01' as const, prozentsatz: 1, betragCent: 1,
+              typ: 'T01' as const,
+              prozentsatz: 1,
+              betragCent: 1,
             })),
           },
         ],

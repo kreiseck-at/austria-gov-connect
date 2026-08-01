@@ -78,14 +78,8 @@ test('KEUE entfällt in den Tarifblöcken ohne Verrechnung', () => {
 
 test('die Matrizen decken genau die Felder ihrer Feldtabelle ab', () => {
   const ohneIdteil = (namen: readonly string[]) => namen.filter((n) => n !== 'IDTEIL');
-  assert.deepEqual(
-    Object.keys(PFLICHT_PAKET).sort(),
-    ohneIdteil(FELDER_PAKET.map((f) => f.name)).sort(),
-  );
-  assert.deepEqual(
-    Object.keys(PFLICHT_MBGM).sort(),
-    ohneIdteil(FELDER_MBGM.map((f) => f.name)).sort(),
-  );
+  assert.deepEqual(Object.keys(PFLICHT_PAKET).sort(), ohneIdteil(FELDER_PAKET.map((f) => f.name)).sort());
+  assert.deepEqual(Object.keys(PFLICHT_MBGM).sort(), ohneIdteil(FELDER_MBGM.map((f) => f.name)).sort());
 });
 
 test('jede Satzart ist genau einem Verfahren zugeordnet — oder bewusst keinem', () => {

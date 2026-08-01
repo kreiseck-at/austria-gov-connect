@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { erstelleMbgmPaket, VERRECHNUNGSGRUNDLAGE, type Beitragsgrundlagenmeldung, type PaketOptionen } from './mbgm';
+import {
+  erstelleMbgmPaket,
+  VERRECHNUNGSGRUNDLAGE,
+  type Beitragsgrundlagenmeldung,
+  type PaketOptionen,
+} from './mbgm';
 import { EldaError } from './errors';
 
 const OPT: PaketOptionen = {
@@ -35,12 +40,18 @@ const MELDUNG: Beitragsgrundlagenmeldung = {
 
 test('die Satzfolge steht in der Reihenfolge, die das Dokument verlangt', () => {
   const saetze = erstelleMbgmPaket([MELDUNG], OPT);
-  assert.deepEqual(saetze.map((s) => s.satzart), ['PS', 'G1', 'T1', 'BS', 'V1', 'PE']);
+  assert.deepEqual(
+    saetze.map((s) => s.satzart),
+    ['PS', 'G1', 'T1', 'BS', 'V1', 'PE'],
+  );
 });
 
 test('das Vorschreibeverfahren erzeugt durchgehend die anderen Satzarten', () => {
   const saetze = erstelleMbgmPaket([MELDUNG], { ...OPT, verfahren: 'vorschreibung' });
-  assert.deepEqual(saetze.map((s) => s.satzart), ['PV', 'G2', 'T1', 'BV', 'V2', 'PE']);
+  assert.deepEqual(
+    saetze.map((s) => s.satzart),
+    ['PV', 'G2', 'T1', 'BV', 'V2', 'PE'],
+  );
 });
 
 test('Gesamtsumme und Anzahl werden gerechnet, nicht entgegengenommen', () => {
@@ -58,7 +69,23 @@ test('Gesamtsumme und Anzahl werden gerechnet, nicht entgegengenommen', () => {
 
 test('ein negativer Beitrag setzt das Vorzeichenfeld, nicht ein Minus im Betrag', () => {
   const saetze = erstelleMbgmPaket(
-    [{ ...MELDUNG, tarifbloecke: [{ ...MELDUNG.tarifbloecke[0]!, basen: [{ typ: 'AB', betragCent: 179777, positionen: [{ typ: 'A01', prozentsatz: -3, betragCent: -5393 }] }] }] }],
+    [
+      {
+        ...MELDUNG,
+        tarifbloecke: [
+          {
+            ...MELDUNG.tarifbloecke[0]!,
+            basen: [
+              {
+                typ: 'AB',
+                betragCent: 179777,
+                positionen: [{ typ: 'A01', prozentsatz: -3, betragCent: -5393 }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
     OPT,
   );
   const pos = saetze.find((s) => s.satzart === 'V1');
@@ -71,7 +98,19 @@ test('ein negativer Beitrag setzt das Vorzeichenfeld, nicht ein Minus im Betrag'
 test('der Prozentsatz wird auf drei Nachkommastellen abgebildet', () => {
   const mit = (p: number) =>
     erstelleMbgmPaket(
-      [{ ...MELDUNG, tarifbloecke: [{ ...MELDUNG.tarifbloecke[0]!, basen: [{ typ: 'AB', betragCent: 1, positionen: [{ typ: 'T01', prozentsatz: p, betragCent: 0 }] }] }] }],
+      [
+        {
+          ...MELDUNG,
+          tarifbloecke: [
+            {
+              ...MELDUNG.tarifbloecke[0]!,
+              basen: [
+                { typ: 'AB', betragCent: 1, positionen: [{ typ: 'T01', prozentsatz: p, betragCent: 0 }] },
+              ],
+            },
+          ],
+        },
+      ],
       OPT,
     ).find((s) => s.satzart === 'V1')?.werte.VPTA;
   assert.equal(mit(12.75), '12750');
@@ -83,7 +122,23 @@ test('ein zu grosser Prozentsatz wird abgewiesen statt gekuerzt', () => {
   assert.throws(
     () =>
       erstelleMbgmPaket(
-        [{ ...MELDUNG, tarifbloecke: [{ ...MELDUNG.tarifbloecke[0]!, basen: [{ typ: 'AB', betragCent: 1, positionen: [{ typ: 'T01', prozentsatz: 1000, betragCent: 0 }] }] }] }],
+        [
+          {
+            ...MELDUNG,
+            tarifbloecke: [
+              {
+                ...MELDUNG.tarifbloecke[0]!,
+                basen: [
+                  {
+                    typ: 'AB',
+                    betragCent: 1,
+                    positionen: [{ typ: 'T01', prozentsatz: 1000, betragCent: 0 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
         OPT,
       ),
     /999,999/,
@@ -94,7 +149,14 @@ test('Bruchteile eines Cent werden abgewiesen', () => {
   assert.throws(
     () =>
       erstelleMbgmPaket(
-        [{ ...MELDUNG, tarifbloecke: [{ ...MELDUNG.tarifbloecke[0]!, basen: [{ typ: 'AB', betragCent: 179777.5, positionen: [] }] }] }],
+        [
+          {
+            ...MELDUNG,
+            tarifbloecke: [
+              { ...MELDUNG.tarifbloecke[0]!, basen: [{ typ: 'AB', betragCent: 179777.5, positionen: [] }] },
+            ],
+          },
+        ],
         OPT,
       ),
     /ganze Zahl/,
@@ -103,11 +165,14 @@ test('Bruchteile eines Cent werden abgewiesen', () => {
 
 test('weder VSNR noch REFV: die Alternativgruppe wird erzwungen', () => {
   const ohne = { ...MELDUNG, versicherungsnummer: undefined };
-  assert.throws(() => erstelleMbgmPaket([ohne], OPT), (e: unknown) => {
-    assert.ok(e instanceof EldaError);
-    assert.match(e.message, /VSNR-Anforderung/);
-    return true;
-  });
+  assert.throws(
+    () => erstelleMbgmPaket([ohne], OPT),
+    (e: unknown) => {
+      assert.ok(e instanceof EldaError);
+      assert.match(e.message, /VSNR-Anforderung/);
+      return true;
+    },
+  );
   // Mit REFV statt VSNR geht es durch.
   const mitRefv = { ...ohne, referenzVsnrAnforderung: 'VSNR-ANF-1' };
   const saetze = erstelleMbgmPaket([mitRefv], OPT);
@@ -146,7 +211,13 @@ test('ein Basistyp darf im Tarifblock nur einmal vorkommen', () => {
 test('KEUE ist im Tarifblock ohne Verrechnung gesperrt', () => {
   const t4 = {
     ...MELDUNG,
-    tarifbloecke: [{ ...MELDUNG.tarifbloecke[0]!, ohneVerrechnung: true, enthaeltKuendigungsentschaedigungOderUrlaubsersatz: true }],
+    tarifbloecke: [
+      {
+        ...MELDUNG.tarifbloecke[0]!,
+        ohneVerrechnung: true,
+        enthaeltKuendigungsentschaedigungOderUrlaubsersatz: true,
+      },
+    ],
   };
   assert.throws(() => erstelleMbgmPaket([t4], OPT), /gesperrt/);
   const gut = { ...MELDUNG, tarifbloecke: [{ ...MELDUNG.tarifbloecke[0]!, ohneVerrechnung: true }] };
@@ -170,7 +241,9 @@ test('der Beitragszeitraum muss MMJJJJ sein', () => {
 test('unbekannte Codes werden abgewiesen', () => {
   const falsch = {
     ...MELDUNG,
-    tarifbloecke: [{ ...MELDUNG.tarifbloecke[0]!, basen: [{ typ: 'XX' as never, betragCent: 1, positionen: [] }] }],
+    tarifbloecke: [
+      { ...MELDUNG.tarifbloecke[0]!, basen: [{ typ: 'XX' as never, betragCent: 1, positionen: [] }] },
+    ],
   };
   assert.throws(() => erstelleMbgmPaket([falsch], OPT), /Verrechnungsbasis-Typ/);
 });

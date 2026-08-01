@@ -12,8 +12,7 @@
 export type PaketArt = 'PS' | 'PV' | 'PE';
 /** Satzarten der mBGM selbst — Meldung (G) und Storno (R). */
 export type MbgmArt =
-  | 'G1' | 'G2' | 'G3' | 'G4' | 'G5' | 'G6' | 'G7'
-  | 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'R6' | 'R7';
+  'G1' | 'G2' | 'G3' | 'G4' | 'G5' | 'G6' | 'G7' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'R6' | 'R7';
 /** Satzarten der Tarifblöcke. */
 export type TarifblockArt = 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6';
 /** Satzarten der Verrechnungsbasis. */
@@ -22,8 +21,7 @@ export type VerrechnungsbasisArt = 'BS' | 'BV';
 export type VerrechnungspositionArt = 'V1' | 'V2';
 
 /** Jede in E.32 vorkommende Satzart. */
-export type E32Satzart =
-  | PaketArt | MbgmArt | TarifblockArt | VerrechnungsbasisArt | VerrechnungspositionArt;
+export type E32Satzart = PaketArt | MbgmArt | TarifblockArt | VerrechnungsbasisArt | VerrechnungspositionArt;
 
 /**
  * Pflichtstufen laut den Legenden zu Kapitel E.32.1.
@@ -68,11 +66,27 @@ export const E32_SATZART_TEXT: Readonly<Record<E32Satzart, string>> = {
 
 /** Satzarten, die zur Selbstabrechnung gehören. */
 export const SELBSTABRECHNER: ReadonlySet<E32Satzart> = new Set<E32Satzart>([
-  'PS', 'G1', 'G3', 'G5', 'R1', 'R3', 'R5', 'BS', 'V1',
+  'PS',
+  'G1',
+  'G3',
+  'G5',
+  'R1',
+  'R3',
+  'R5',
+  'BS',
+  'V1',
 ]);
 /** Satzarten, die zum Vorschreibeverfahren gehören. */
 export const VORSCHREIBER: ReadonlySet<E32Satzart> = new Set<E32Satzart>([
-  'PV', 'G2', 'G4', 'G6', 'R2', 'R4', 'R6', 'BV', 'V2',
+  'PV',
+  'G2',
+  'G4',
+  'G6',
+  'R2',
+  'R4',
+  'R6',
+  'BV',
+  'V2',
 ]);
 
 // --- mBGM-Paket, Seite 344 -------------------------------------------------
@@ -111,11 +125,20 @@ function mbgmZeile(
   r7: Pflichtstufe,
 ): MbgmZeile {
   return {
-    G1: gSelbst, G3: gSelbst, G5: gSelbst,
-    G2: gVorschreiber, G4: gVorschreiber, G6: gVorschreiber,
-    R1: rSelbst, R3: rSelbst, R5: rSelbst,
-    R2: rVorschreiber, R4: rVorschreiber, R6: rVorschreiber,
-    G7: g7, R7: r7,
+    G1: gSelbst,
+    G3: gSelbst,
+    G5: gSelbst,
+    G2: gVorschreiber,
+    G4: gVorschreiber,
+    G6: gVorschreiber,
+    R1: rSelbst,
+    R3: rSelbst,
+    R5: rSelbst,
+    R2: rVorschreiber,
+    R4: rVorschreiber,
+    R6: rVorschreiber,
+    G7: g7,
+    R7: r7,
   };
 }
 
@@ -192,15 +215,14 @@ export const PFLICHT_TARIFBLOCK_FALLWEISE: Readonly<
 };
 
 /** Pflichtstufen des Tarifblocks kürzer als ein Monat `T3`/`T6`. */
-export const PFLICHT_TARIFBLOCK_KURZ: Readonly<
-  Record<string, Readonly<Record<'T3' | 'T6', Pflichtstufe>>>
-> = {
-  BSGR: { T3: 'Z', T6: 'Z' },
-  ERGB: { T3: 'Z1', T6: 'Z1' },
-  BTAB: { T3: 'Z', T6: 'Z' },
-  BTBS: { T3: 'Z', T6: 'Z' },
-  KEUE: { T3: 'Z1', T6: '-' },
-};
+export const PFLICHT_TARIFBLOCK_KURZ: Readonly<Record<string, Readonly<Record<'T3' | 'T6', Pflichtstufe>>>> =
+  {
+    BSGR: { T3: 'Z', T6: 'Z' },
+    ERGB: { T3: 'Z1', T6: 'Z1' },
+    BTAB: { T3: 'Z', T6: 'Z' },
+    BTBS: { T3: 'Z', T6: 'Z' },
+    KEUE: { T3: 'Z1', T6: '-' },
+  };
 
 // --- Verrechnung, Seite 348 ------------------------------------------------
 

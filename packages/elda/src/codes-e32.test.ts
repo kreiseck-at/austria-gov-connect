@@ -27,7 +27,9 @@ test('zu jeder klassischen Beitragsgrundlage gehoert genau eine Standardposition
   // eindeutig -- AB->T01, SZ->T02, UU->T03. AZ und SA tragen KEINE Standard-
   // position; sie dienen allein der speziellen AV-Minderung.
   const zwingend = (vbty: string) =>
-    Object.entries(KOMBINATION[vbty] ?? {}).filter(([, stufe]) => stufe === 'Z').map(([p]) => p);
+    Object.entries(KOMBINATION[vbty] ?? {})
+      .filter(([, stufe]) => stufe === 'Z')
+      .map(([p]) => p);
   assert.deepEqual(zwingend('AB'), ['T01']);
   assert.deepEqual(zwingend('SZ'), ['T02']);
   assert.deepEqual(zwingend('UU'), ['T03']);
@@ -47,7 +49,9 @@ test('die Beitragsgrundlage zur BV verlangt genau die Vorsorge-Position', () => 
 });
 
 test('die SW-Entschaedigung ist der einzige Basistyp mit zwei Positionen', () => {
-  const mehrfach = Object.entries(EINS_ZU_EINS).filter(([, p]) => p.length > 1).map(([v]) => v);
+  const mehrfach = Object.entries(EINS_ZU_EINS)
+    .filter(([, p]) => p.length > 1)
+    .map(([v]) => v);
   assert.deepEqual(mehrfach, ['SW'], 'Lehrling und Nicht-Lehrling');
 });
 

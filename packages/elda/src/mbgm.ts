@@ -260,8 +260,7 @@ function prozentsatz(wert: number, feld: string): { vorzeichen: string; ziffern:
   const tausendstel = Math.round(Math.abs(wert) * 1000);
   if (tausendstel > 999999) {
     throw new EldaError(
-      `${feld}: ${wert} % passt nicht in sechs Stellen mit drei Nachkommastellen ` +
-        '(höchstens 999,999 %).',
+      `${feld}: ${wert} % passt nicht in sechs Stellen mit drei Nachkommastellen ` + '(höchstens 999,999 %).',
     );
   }
   return { vorzeichen: wert < 0 ? '-' : '+', ziffern: String(tausendstel) };
@@ -325,7 +324,9 @@ function pruefeMeldung(m: Beitragsgrundlagenmeldung, nr: number): void {
       gesehen.add(b.typ);
       for (const p of b.positionen) {
         if (!(p.typ in VPTY_CODES)) {
-          throw new EldaError(`${wo}, Tarifblock ${i + 1}: unbekannter Verrechnungspositions-Typ '${p.typ}'.`);
+          throw new EldaError(
+            `${wo}, Tarifblock ${i + 1}: unbekannter Verrechnungspositions-Typ '${p.typ}'.`,
+          );
         }
       }
     }

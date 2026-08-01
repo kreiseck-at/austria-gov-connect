@@ -27,11 +27,7 @@ export { EldaError, EldaProtocolError, EldaStatusError } from './errors';
  *   Trägt den rohen Körper in `rohantwort`.
  * - `FonSoapFaultError` — die Gegenstelle meldet einen SOAP-Fault.
  */
-export {
-  FonTransportError,
-  FonProtocolError,
-  FonSoapFaultError,
-} from '@kreiseck/finanzonline-core';
+export { FonTransportError, FonProtocolError, FonSoapFaultError } from '@kreiseck/finanzonline-core';
 export {
   anmeldung,
   abmeldung,
