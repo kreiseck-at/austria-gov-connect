@@ -129,3 +129,69 @@ test('Beispiel 19: Vorschreiber, Arbeiter mit Nachtschwerarbeitsbeitrag', () => 
   // V2: VPTY = T01 -- mehr druckt das Dokument nicht ab.
   assert.equal(v2?.werte.VPTY, 'T01');
 });
+
+test('Beispiel 19: beim Vorschreiber bleiben alle Betragsfelder leer', () => {
+  // Das abgedruckte Beispiel zeigt auf PV nur ANZM, auf G2 gar nichts und auf
+  // V2 allein VPTY. Pflichtstufe Z4 heisst: darf mitgegeben werden, wird aber
+  // NICHT uebernommen. Der Pruefkatalog fuehrt fuer PV keine Summenpruefung.
+  // Deshalb schreibt dieses Paket dort nichts -- ein uebertragener Wert haette
+  // keinen Nutzen, aber das Risiko, dass jemand den gedeckelten statt des
+  // unbegrenzten Betrags schickt (D.59).
+  const saetze = erstelleMbgmPaket(
+    [
+      {
+        referenzwert: 'M-1',
+        versicherungsnummer: '1234010180',
+        familienname: 'Muster',
+        vorname: 'Max',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B001',
+            ergaenzungen: ['E01'],
+            beginnDerVerrechnung: 1,
+            // Weder Prozentsatz noch Betrag: im Vorschreibeverfahren rechnet
+            // die OeGK, der Aufrufer hat die Zahlen gar nicht.
+            basen: [{ typ: 'AB', betragCent: 200_000, positionen: [{ typ: 'T01' }] }],
+          },
+        ],
+      },
+    ],
+    { ...BASIS, verfahren: 'vorschreibung' },
+  );
+
+  const [pv, g2, , bv, v2] = saetze;
+  assert.equal(pv?.werte.ANZM, '1', 'die Anzahl bleibt zwingend');
+  assert.equal(pv?.werte.GSVZ, undefined);
+  assert.equal(pv?.werte.GSUM, undefined);
+  assert.equal(g2?.werte.VSUM, undefined);
+  assert.equal(bv?.werte.VBBT, '200000', 'die Beitragsgrundlage selbst wird sehr wohl gemeldet');
+  assert.equal(v2?.werte.VPTY, 'T01');
+  assert.equal(v2?.werte.VPVZ, undefined);
+  assert.equal(v2?.werte.VPTA, undefined);
+  assert.equal(v2?.werte.RSVZ, undefined);
+  assert.equal(v2?.werte.RSUM, undefined);
+});
+
+test('bei der Selbstabrechnung sind Prozentsatz und Betrag zwingend', () => {
+  assert.throws(
+    () =>
+      erstelleMbgmPaket(
+        [
+          {
+            referenzwert: 'M-1',
+            versicherungsnummer: '1234010180',
+            familienname: 'Muster',
+            vorname: 'Max',
+            verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_MIT_ZEIT,
+            tarifbloecke: [
+              { beschaeftigtengruppe: 'B001', beginnDerVerrechnung: 1,
+                basen: [{ typ: 'AB', betragCent: 200_000, positionen: [{ typ: 'T01' }] }] },
+            ],
+          },
+        ],
+        { ...BASIS, verfahren: 'selbstabrechnung' },
+      ),
+    /zwingend/,
+  );
+});

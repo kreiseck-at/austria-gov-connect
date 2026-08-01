@@ -80,15 +80,28 @@ export interface Verrechnungsposition {
    * Prozentsatz, kaufmännisch als Zahl — `12.75` für 12,75 %. Auf dem Draht
    * stehen drei Nachkommastellen ohne Trennzeichen (D.61), das übernimmt dieses
    * Modul. Ein negativer Wert setzt das Vorzeichenfeld `VPVZ` auf `'-'`.
+   *
+   * **Nur bei der Selbstabrechnung anzugeben.** Im Vorschreibeverfahren rechnet
+   * die ÖGK; das Feld ist dort `Z4` — siehe {@link betragCent}.
    */
-  prozentsatz: number;
+  prozentsatz?: number;
   /**
    * Beitrag in **Cent**, ganzzahlig. Das Vorzeichen wird nach `RSVZ`
    * übernommen; übergeben wird also `-1234` und nicht ein getrenntes
-   * Vorzeichen. Beim Vorschreiber wird der Wert von der Gegenstelle verworfen
-   * (Pflichtstufe `Z4`) — er darf trotzdem mitgegeben werden.
+   * Vorzeichen.
+   *
+   * **Nur bei der Selbstabrechnung anzugeben.** Im Vorschreibeverfahren tragen
+   * `VPVZ`, `VPTA`, `RSVZ` und `RSUM` die Pflichtstufe `Z4` — „Angabe möglich,
+   * Feldinhalt wird **nicht übernommen**". Das Dokument lässt sie im
+   * abgedruckten Beispiel 19 durchgehend leer, und der Prüfkatalog führt für
+   * die Satzart `PV` keine Summenprüfung. Dieses Modul schreibt sie dort
+   * deshalb nicht: Ein übertragener Wert hätte keinen Nutzen, aber ein Risiko —
+   * beim Vorschreiber ist der richtige Grundlagenbetrag der **unbegrenzte**,
+   * bei der Selbstabrechnung der mit der Höchstbeitragsgrundlage gedeckelte
+   * (D.59). Wer versehentlich den falschen übergibt, schickt still Zahlen, die
+   * zwar verworfen werden, aber in Mitschnitten und Protokollen stehen.
    */
-  betragCent: number;
+  betragCent?: number;
 }
 
 /** Eine Verrechnungsbasis mit den ihr untergeordneten Positionen. */
@@ -392,11 +405,30 @@ export function erstelleMbgmPaket(
         });
 
         for (const p of b.positionen) {
+          // Beim Vorschreiber bleiben VPVZ, VPTA, RSVZ und RSUM in
+          // Grundstellung: Pflichtstufe Z4 — „Angabe möglich, Feldinhalt wird
+          // nicht übernommen". Siehe die Begründung bei `Verrechnungsposition`.
+          if (!selbst) {
+            untersaetze.push({
+              satzart: 'V2',
+              felder: FELDER_VERRECHNUNGSPOSITION,
+              satzlaenge: SATZLAENGE_VERRECHNUNGSPOSITION,
+              werte: { VPTY: p.typ },
+            });
+            continue;
+          }
+          if (p.prozentsatz === undefined || p.betragCent === undefined) {
+            throw new EldaError(
+              `Verrechnungsposition ${p.typ}: Bei der Selbstabrechnung sind Prozentsatz und ` +
+                'Beitrag zwingend (Pflichtstufe Z bzw. Z1 für die Satzart V1). Ohne sie kann ' +
+                'die Gesamtsumme des Pakets nicht gebildet werden.',
+            );
+          }
           const pz = prozentsatz(p.prozentsatz, `Verrechnungsposition ${p.typ}`);
           const be = betragMitVorzeichen(p.betragCent, `Verrechnungsposition ${p.typ}`);
           summeCent += p.betragCent;
           untersaetze.push({
-            satzart: selbst ? 'V1' : 'V2',
+            satzart: 'V1',
             felder: FELDER_VERRECHNUNGSPOSITION,
             satzlaenge: SATZLAENGE_VERRECHNUNGSPOSITION,
             werte: {
@@ -425,7 +457,8 @@ export function erstelleMbgmPaket(
         VONA: m.vorname,
         // VSUM trägt kein eigenes Vorzeichenfeld; ein negativer Gesamtbetrag je
         // Versichertem ist über die Vorzeichen der Einzelpositionen abgebildet.
-        VSUM: vsum.ziffern,
+        // Beim Vorschreiber ist das Feld Z4 und bleibt leer.
+        VSUM: selbst ? vsum.ziffern : undefined,
         VERG: m.verrechnungsgrundlage,
         INF1: m.info1,
         INF2: m.info2,
@@ -449,8 +482,10 @@ export function erstelleMbgmPaket(
       DTEL: opt.telefon,
       MAIL: opt.mail,
       BZRM: opt.beitragszeitraum,
-      GSVZ: gesamt.vorzeichen,
-      GSUM: gesamt.ziffern,
+      // GSVZ und GSUM sind beim Vorschreiber Z4; der Prüfkatalog führt die
+      // Summenprüfungen F9050/F9051 ausdrücklich nur für die Satzart PS.
+      GSVZ: selbst ? gesamt.vorzeichen : undefined,
+      GSUM: selbst ? gesamt.ziffern : undefined,
       ANZM: String(meldungen.length),
     },
   });
