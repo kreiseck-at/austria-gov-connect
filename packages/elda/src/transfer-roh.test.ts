@@ -1016,7 +1016,9 @@ test('MTOM: empfangen löst <xop:Include> gegen den passenden Teil auf', async (
       'href="cid:datei%40elda"/></payload></datei>' +
       '</return></ns2:empfangenResponse>',
   );
-  const elda = createEldaTransferRoh(cfg(async () => mtomAntwort(envelope, [{ id: 'datei@elda', daten: inhalt }])));
+  const elda = createEldaTransferRoh(
+    cfg(async () => mtomAntwort(envelope, [{ id: 'datei@elda', daten: inhalt }])),
+  );
   const r = await elda.empfangen('155764331');
   assert.equal(r.ok, true);
   // Der Anhang ist bereits roh — er darf NICHT noch einmal base64-dekodiert werden.
@@ -1044,14 +1046,17 @@ test('MTOM: die md5 wird auch auf dem XOP-Weg geprüft', async () => {
   const schlecht = createEldaTransferRoh(
     cfg(async () => mtomAntwort(envelopeMit('0'.repeat(32)), [{ id: 'a', daten: inhalt }])),
   );
-  await assert.rejects(() => schlecht.empfangen('1'), (err: unknown) => {
-    assert.ok(err instanceof EldaProtocolError);
-    assert.match(err.message, /MD5-Abweichung/);
-    // Der Inhalt darf nicht verloren gehen, nur weil die Prüfsumme klemmt.
-    const e = err.ergebnis as { datei?: { inhalt?: Buffer } };
-    assert.deepEqual(e.datei?.inhalt, inhalt);
-    return true;
-  });
+  await assert.rejects(
+    () => schlecht.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      assert.match(err.message, /MD5-Abweichung/);
+      // Der Inhalt darf nicht verloren gehen, nur weil die Prüfsumme klemmt.
+      const e = err.ergebnis as { datei?: { inhalt?: Buffer } };
+      assert.deepEqual(e.datei?.inhalt, inhalt);
+      return true;
+    },
+  );
 });
 
 test('MTOM: fehlender XOP-Teil wirft, statt eine leere Datei zu melden', async () => {
@@ -1062,13 +1067,16 @@ test('MTOM: fehlender XOP-Teil wirft, statt eine leere Datei zu melden', async (
       'href="cid:fehlt"/></payload></datei></return></ns2:empfangenResponse>',
   );
   const elda = createEldaTransferRoh(cfg(async () => mtomAntwort(envelope)));
-  await assert.rejects(() => elda.empfangen('1'), (err: unknown) => {
-    assert.ok(err instanceof EldaProtocolError);
-    assert.match(err.message, /cid:fehlt/);
-    const e = err.ergebnis as { statusCode?: string };
-    assert.equal(e.statusCode, '000');
-    return true;
-  });
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      assert.match(err.message, /cid:fehlt/);
+      const e = err.ergebnis as { statusCode?: string };
+      assert.equal(e.statusCode, '000');
+      return true;
+    },
+  );
 });
 
 test('MTOM: inline Base64 funktioniert weiterhin, auch im Multipart', async () => {
@@ -1090,11 +1098,14 @@ test('MTOM: unauspackbarer Multipart-Körper geht roh weiter (Payload bleibt am 
   const elda = createEldaTransferRoh(
     cfg(async () => new Response(roh, { status: 200, headers: { 'content-type': 'multipart/related' } })),
   );
-  await assert.rejects(() => elda.empfangen('1'), (err: unknown) => {
-    assert.ok(err instanceof FonProtocolError);
-    assert.equal(err.rohantwort, roh);
-    return true;
-  });
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof FonProtocolError);
+      assert.equal(err.rohantwort, roh);
+      return true;
+    },
+  );
 });
 
 test('MTOM: nicht-mehrteilige Antworten bleiben unangetastet', async () => {

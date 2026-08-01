@@ -27,11 +27,7 @@ export { EldaError, EldaProtocolError, EldaStatusError } from './errors';
  *   Trägt den rohen Körper in `rohantwort`.
  * - `FonSoapFaultError` — die Gegenstelle meldet einen SOAP-Fault.
  */
-export {
-  FonTransportError,
-  FonProtocolError,
-  FonSoapFaultError,
-} from '@kreiseck/finanzonline-core';
+export { FonTransportError, FonProtocolError, FonSoapFaultError } from '@kreiseck/finanzonline-core';
 export {
   anmeldung,
   abmeldung,
@@ -46,3 +42,42 @@ export {
 } from './versichertenmeldung';
 export { PFLICHT_E29, SATZART_TEXT, ALTERNATIVGRUPPEN, type Satzart, type Pflichtstufe } from './pflicht-e29';
 export type { BestandOptionen, Hersteller, RohSatz } from './bestand';
+
+// --- Monatliche Beitragsgrundlagenmeldung (Kapitel E.32) -------------------
+export {
+  erstelleMbgmPaket,
+  VERRECHNUNGSGRUNDLAGE,
+  type Verfahren,
+  type Verrechnungsgrundlage,
+  type Beitragsgrundlagenmeldung,
+  type Tarifblock,
+  type Verrechnungsbasis,
+  type Verrechnungsposition,
+  type PaketOptionen,
+} from './mbgm';
+export { VBTY_CODES, VPTY_CODES, KOMBINATION, EINS_ZU_EINS, type VbtyCode, type VptyCode } from './codes-e32';
+export {
+  PFLICHT_PAKET,
+  PFLICHT_MBGM,
+  PFLICHT_TARIFBLOCK,
+  PFLICHT_VERRECHNUNGSBASIS,
+  PFLICHT_VERRECHNUNGSPOSITION,
+  ALTERNATIVGRUPPEN_E32,
+  E32_SATZART_TEXT,
+  type E32Satzart,
+} from './pflicht-e32';
+export {
+  FELDER_PAKET,
+  FELDER_MBGM,
+  FELDER_TARIFBLOCK,
+  FELDER_VERRECHNUNGSBASIS,
+  FELDER_VERRECHNUNGSPOSITION,
+} from './felder-e32';
+export {
+  pruefeMbgmPaket,
+  pruefeBeitragskontonummer,
+  HOECHSTANZAHL,
+  BKNR_LAENGE,
+  type Befund,
+  type Schwere,
+} from './pruefung-e32';

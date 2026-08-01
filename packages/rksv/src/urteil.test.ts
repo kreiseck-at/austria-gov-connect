@@ -152,7 +152,12 @@ test('vorgangKlasse: Kasse und SEE fallen in dieselbe Klasse', () => {
     'registrierung',
   );
   assert.equal(
-    vorgangKlasse({ art: 'registrierung_se', artSe: 'SIGNATURKARTE', vdaId: 'AT1', zertifikatsseriennummer: 'AB' }),
+    vorgangKlasse({
+      art: 'registrierung_se',
+      artSe: 'SIGNATURKARTE',
+      vdaId: 'AT1',
+      zertifikatsseriennummer: 'AB',
+    }),
     'registrierung',
   );
   assert.equal(
