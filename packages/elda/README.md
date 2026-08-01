@@ -12,7 +12,10 @@ Security-Parametern (`securityParameters`, SHA-512-Hash) und Envelope-Bau.
 reduziert** (Kapitel E.29 der Organisationsbeschreibung) — Anmeldung, Abmeldung,
 Änderungsmeldung, Richtigstellungen und Stornos — als fertigen, ISO-8859-15-kodierten
 Datenbestand, siehe „Meldungen erzeugen" unten. Andere Meldungsarten, insbesondere die
-monatliche Beitragsgrundlagenmeldung (mBGM), sind **nicht** enthalten.
+monatliche Beitragsgrundlagenmeldung (mBGM) ist seit 0.6.0 als Satzschicht
+enthalten — Feldtabellen, Pflichtmatrix, Codekataloge und der Zusammenbau für
+beide Verfahren (Selbstabrechnung und Vorschreibung). Der Lohnzettel Finanz
+(L16, Kapitel E.13/E.14) ist **nicht** enthalten.
 
 ## Reifegrad
 
