@@ -24,7 +24,15 @@ export type Schwere = 'fehler' | 'warnung';
 
 /** Ein Befund mit dem Fehlercode, den ELDA dafür vergibt. */
 export interface Befund {
-  /** Fehlercode laut Prüfkatalog, z. B. `'F9051'`. */
+  /**
+   * Fehlercode laut Prüfkatalog, z. B. `'F9051'`.
+   *
+   * Codes, die **nicht** mit `F` beginnen, stammen nicht aus dem Katalog,
+   * sondern aus dem Fragen-Antworten-Katalog der ÖGK (Präfix `FAK-` samt
+   * Abschnittsnummer). ELDA weist deswegen nichts zurück — sie sind immer
+   * `warnung`. Wer nur auf die Rückweisung durch ELDA prüft, filtert sie
+   * über das Präfix heraus.
+   */
   code: string;
   /** `fehler` weist die Meldung zurück, `warnung` nicht. */
   schwere: Schwere;
@@ -279,6 +287,54 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
     }
     bisher.add(folge);
     gesehen.set(vsnr, bisher);
+  }
+
+  // Fragen-Antworten-Katalog der ÖGK, Abschnitt 3.1.11 (Stand 01.01.2026):
+  // „Grundsätzlich ist in einer mBGM nur ein Tarifblock zulässig. Mehr als ein
+  // Tarifblock in einer mBGM ist allerdings unter anderem zwingend
+  // erforderlich: Bei regelmäßiger Beschäftigung, wenn mehr als eine
+  // Beschäftigung in einem Beitragszeitraum vorliegt (gilt für zeitlich
+  // hintereinanderliegende Beschäftigungen und auch für parallele
+  // Beschäftigungen […])."
+  //
+  // Nur eine Warnung, und das aus zwei Gründen. „Unter anderem" heißt, dass die
+  // Ausnahmeliste nicht abschließend ist — E.32.2.2.2 nennt fünf Fälle, der FAK
+  // einen, und keine der beiden Aufzählungen beansprucht Vollständigkeit. Und
+  // der Prüfkatalog kennt dafür keinen Fehlercode: ELDA weist ein solches Paket
+  // nicht zurück.
+  //
+  // Nur für die regelmäßige Beschäftigung. Bei fallweiser und bei kürzer als
+  // einem Monat vereinbarter Beschäftigung sind mehrere Tarifblöcke der
+  // Normalfall — FAK 3.2.8: „bei diesen mBGM wird ja pro Beschäftigungszeit je
+  // ein Tarifblock gemeldet".
+  let regelmaessigeMbgm: string | undefined;
+  let regelmaessigeBloecke = 0;
+  const mehrfach = new Set<string>();
+  const merken = () => {
+    if (regelmaessigeMbgm && regelmaessigeBloecke > 1) mehrfach.add(regelmaessigeMbgm);
+  };
+  for (const s of saetze) {
+    if (/^[GR]\d$/.test(s.satzart)) {
+      merken();
+      regelmaessigeMbgm =
+        s.satzart === 'G1' || s.satzart === 'G2' ? s.werte.VSNR?.trim() || s.satzart : undefined;
+      regelmaessigeBloecke = 0;
+    } else if (regelmaessigeMbgm && (s.satzart === 'T1' || s.satzart === 'T4')) {
+      regelmaessigeBloecke++;
+    }
+  }
+  merken();
+  for (const wer of mehrfach) {
+    befunde.push({
+      code: 'FAK-3.1.11',
+      schwere: 'warnung',
+      meldung:
+        `${wer}: mehr als ein Tarifblock in einer mBGM für regelmäßige Beschäftigung. ` +
+        'Grundsätzlich ist nur einer zulässig; mehrere sind es nur, wenn im Beitragszeitraum ' +
+        'mehr als eine Beschäftigung vorliegt — zeitlich hintereinander oder parallel, etwa bei ' +
+        'Aufnahme einer neuen Beschäftigung während laufender Kündigungsentschädigung oder ' +
+        'Urlaubsersatzleistung (ÖGK-FAK 3.1.11).',
+    });
   }
 
   // Die eigentliche Strukturregel steht nicht im Prüfkatalog, sondern in

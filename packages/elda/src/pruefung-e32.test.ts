@@ -247,3 +247,105 @@ test('ein Storno und die neue Meldung desselben Versicherten sind erlaubt', () =
     false,
   );
 });
+
+// --- ÖGK-FAK 3.1.11: nur ein Tarifblock je mBGM ---------------------------
+
+/** Rahmen um eine mBGM samt ihrer Untersaetze. */
+function paket(...inhalt: ReturnType<typeof roh>[]) {
+  const kopf = {
+    REFP: 'P',
+    BKNR: '1',
+    DGNA: 'D',
+    JAGB: 'N',
+    BZRM: '072026',
+    GSVZ: '+',
+    GSUM: '0',
+    ANZM: '1',
+  };
+  return [roh('PS', kopf), ...inhalt, roh('PE', { REFP: 'P', ANZM: '1' })];
+}
+
+const FAK_TARIFBLOCK = /FAK-3\.1\.11/;
+
+test('FAK 3.1.11: zwei Tarifbloecke bei regelmaessiger Beschaeftigung sind eine Warnung', () => {
+  const befunde = pruefeMbgmPaket(
+    paket(
+      roh('G1', { REFW: 'M1', VSNR: '1234010180', VSUM: '0' }),
+      roh('T1', {}),
+      roh('BS', {}),
+      roh('V1', {}),
+      roh('T1', {}),
+      roh('BS', {}),
+      roh('V1', {}),
+    ),
+  );
+  const treffer = befunde.filter((b) => FAK_TARIFBLOCK.test(b.code));
+  assert.equal(treffer.length, 1);
+  assert.equal(treffer[0]?.schwere, 'warnung', 'ELDA weist deswegen nichts zurueck');
+  assert.match(treffer[0]?.meldung ?? '', /1234010180/);
+});
+
+test('FAK 3.1.11: ein Tarifblock ist der Regelfall und schweigt', () => {
+  const befunde = pruefeMbgmPaket(
+    paket(
+      roh('G1', { REFW: 'M1', VSNR: '1234010180', VSUM: '0' }),
+      roh('T1', {}),
+      roh('BS', {}),
+      roh('V1', {}),
+    ),
+  );
+  assert.equal(
+    befunde.some((b) => FAK_TARIFBLOCK.test(b.code)),
+    false,
+  );
+});
+
+test('FAK 3.1.11 gilt nicht fuer fallweise und kuerzer als einen Monat', () => {
+  // FAK 3.2.8: "bei diesen mBGM wird ja pro Beschaeftigungszeit je ein
+  // Tarifblock gemeldet" — mehrere Bloecke sind dort der Normalfall.
+  for (const [mbgm, block] of [
+    ['G3', 'T2'],
+    ['G5', 'T3'],
+  ] as const) {
+    const befunde = pruefeMbgmPaket(
+      paket(
+        roh(mbgm, { REFW: 'M1', VSNR: '1234010180', VSUM: '0' }),
+        roh(block, {}),
+        roh('BS', {}),
+        roh('V1', {}),
+        roh(block, {}),
+        roh('BS', {}),
+        roh('V1', {}),
+      ),
+    );
+    assert.equal(
+      befunde.some((b) => FAK_TARIFBLOCK.test(b.code)),
+      false,
+      `${mbgm}/${block} darf mehrere Tarifbloecke haben`,
+    );
+  }
+});
+
+test('FAK 3.1.11: der Tarifblock ohne Verrechnung (T4) zaehlt mit', () => {
+  // T1 und T4 sind derselbe Tarifblock der regelmaessigen Beschaeftigung, nur
+  // einmal mit und einmal ohne Verrechnung. Zwei davon sind zwei Bloecke.
+  const befunde = pruefeMbgmPaket(
+    paket(roh('G1', { REFW: 'M1', VSNR: '1234010180', VSUM: '0' }), roh('T4', {}), roh('T4', {})),
+  );
+  assert.equal(
+    befunde.some((b) => FAK_TARIFBLOCK.test(b.code)),
+    true,
+  );
+});
+
+test('FAK-Befunde sind am Praefix von den Pruefkatalog-Codes unterscheidbar', () => {
+  // Wer nur wissen will, ob ELDA das Paket zurueckweist, filtert ueber das
+  // Praefix — der Katalog vergibt fuer diese Regel keinen Code.
+  const befunde = pruefeMbgmPaket(
+    paket(roh('G1', { REFW: 'M1', VSNR: '1234010180', VSUM: '0' }), roh('T1', {}), roh('T1', {})),
+  );
+  for (const b of befunde.filter((x) => !x.code.startsWith('F'))) {
+    assert.match(b.code, /^FAK-/);
+    assert.equal(b.schwere, 'warnung');
+  }
+});

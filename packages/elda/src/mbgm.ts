@@ -234,17 +234,28 @@ export interface Beitragsgrundlagenmeldung {
  *
  * Nicht geprüft, weil dieses Modul die Angaben nicht hat:
  *
- * - Ob mehr als ein Tarifblock je mBGM zulässig ist. E.32.2.2.2 nennt fünf
- *   Fälle (fallweise je Tag, kürzer-als-ein-Monat je Abschnitt, mehrere
- *   Beschäftigungen, unterschiedliche Verrechnung im Zeitraum, Unterbrechung
- *   durch Abmeldung). Welcher vorliegt, geht aus den Daten nicht hervor.
- * - Ob ein Storno im Vorschreibeverfahren überhaupt zulässig ist. Bei
- *   regelmäßiger Beschäftigung ist es das nur, solange noch nicht
- *   vorgeschrieben wurde oder bei einer Falschmeldung — das weiß nur der
- *   Aufrufer.
- * - Ob Beitragszeitraum und Gesamtsumme eines Stornos mit der stornierten
- *   mBGM übereinstimmen (Seite 338). Die ursprüngliche Meldung liegt hier
- *   nicht vor.
+ * - **Ob mehr als ein Tarifblock je mBGM sachlich berechtigt ist.** Dass
+ *   grundsätzlich nur einer zulässig ist, prüft `pruefeMbgmPaket` als Warnung
+ *   (ÖGK-FAK 3.1.11). Welcher der Ausnahmefälle vorliegt — mehrere
+ *   Beschäftigungen im Zeitraum, unterschiedliche Verrechnung, Unterbrechung
+ *   durch Abmeldung —, geht aus den übergebenen Daten nicht hervor. Bei
+ *   fallweiser und kürzer-als-ein-Monat vereinbarter Beschäftigung ist je
+ *   Beschäftigungszeit ohnehin ein eigener Block vorgesehen (FAK 3.2.8).
+ * - **Ob die Voraussetzung für ein Storno erfüllt ist.** Zulässig ist es in
+ *   beiden Verfahren; im Vorschreibeverfahren allerdings nur, solange die
+ *   stornierte mBGM noch nicht vorgeschrieben wurde, oder bei einer
+ *   Falschmeldung. Ob vorgeschrieben wurde, weiß nur der Aufrufer.
+ * - **Ob das Storno der ursprünglichen Meldung zugeordnet werden kann.** Die
+ *   ÖGK nennt in FAK 3.2.7 die Kriterien vollständig: Referenzwert der
+ *   ursprünglichen Meldung, Beitragskontonummer und Beitragszeitraum des
+ *   Pakets, Satzart der mBGM, Versicherungsnummer und Summe der Beiträge.
+ *   Beitragskontonummer und Beitragszeitraum stammen aus den Paketoptionen und
+ *   stimmen damit bauartbedingt; die Satzart leitet sich aus `folge` ab. Übrig
+ *   bleiben `referenzUrspruenglicheMeldung`, `versicherungsnummer` und
+ *   `summeCent` — sie muss der Aufrufer aus der ursprünglichen Meldung
+ *   übernehmen. Passt eines davon nicht, weist ELDA das Storno nicht ab,
+ *   sondern legt einen **Clearingfall** an: Es lässt sich weder verarbeiten
+ *   noch seinerseits stornieren.
  */
 
 /**
@@ -283,7 +294,12 @@ export interface Stornomeldung {
    * gilt hier nicht (Pflichtmatrix, Seite 345).
    */
   versicherungsnummer: string;
-  /** Beschäftigungsfolge der zu stornierenden Meldung. */
+  /**
+   * Beschäftigungsfolge der zu stornierenden Meldung. Sie bestimmt die Satzart
+   * des Stornos, und die zählt laut ÖGK-FAK 3.2.7 zu den Kriterien, über die
+   * die ÖGK das Storno der ursprünglichen mBGM zuordnet: Ein `R1` storniert
+   * kein `G3`.
+   */
   folge?: Beschaeftigungsfolge;
   /**
    * Summe der Beiträge (`VSUM`) in **Cent**, nicht negativ.
@@ -293,10 +309,17 @@ export interface Stornomeldung {
    * Summierung der mBGM in einem mBGM-Paket (im Datenfeld GSUM) die VSUM der
    * Storno-mBGM **abzuziehen**." Genau das tut dieses Modul.
    *
-   * Zusätzlich verlangt Seite 338, dass Beitragszeitraum und — im Bereich der
-   * Selbstabrechnung — die Gesamtsumme mit der zu stornierenden mBGM
-   * übereinstimmen. Prüfen lässt sich das hier nicht: Die ursprüngliche Meldung
-   * liegt diesem Modul nicht vor.
+   * Der Betrag muss dem der zu stornierenden mBGM entsprechen (Seite 338).
+   * Er ist eines der Kriterien, über die die ÖGK das Storno der ursprünglichen
+   * Meldung zuordnet (FAK 3.2.7) — nicht bloß eine Plausibilitätsangabe.
+   * Prüfen lässt sich das hier nicht: Die ursprüngliche Meldung liegt diesem
+   * Modul nicht vor.
+   *
+   * Ein Teilstorno gibt es nicht. Auch wenn nur ein einzelner Tag oder eine
+   * einzelne Verrechnungsbasis falsch war, ist die **gesamte** mBGM zu
+   * stornieren und neu zu melden: „Da keine Differenzmeldungen möglich sind,
+   * ist es auch nicht möglich, einzelne Tarifblöcke zu korrigieren" (FAK
+   * 3.2.8).
    */
   summeCent: number;
   /** Freies Informationsfeld (`INF1`). */
