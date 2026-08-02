@@ -134,3 +134,116 @@ test('die Beitragskontonummer wird gegen den Traeger geprueft', () => {
   // Unbekannter Traeger: keine Aussage statt einer geratenen.
   assert.equal(pruefeBeitragskontonummer('123', 'IRGENDWER'), undefined);
 });
+
+// --- Grundsaetze aus E.32.2.2.2 -------------------------------------------
+
+/** Baut eine Satzfolge aus Satzart und Werten; Feldtabelle spielt hier keine Rolle. */
+const roh = (satzart: string, werte: Record<string, string | undefined> = {}) => ({
+  satzart,
+  werte,
+  felder: [],
+  satzlaenge: 0,
+});
+
+test('Storno-Meldungen werden von der Gesamtsumme ABGEZOGEN, nicht addiert', () => {
+  // E.32.2.2.2, Grundsaetze fuer das Storno (Selbstabrechnung), Punkt 4:
+  // "Allerdings ist bei der Summierung der mBGM in einem mBGM-Paket (im
+  // Datenfeld GSUM) die VSUM der Storno-mBGM abzuziehen."
+  const saetze = [
+    roh('PS', {
+      REFP: 'P',
+      BKNR: '1',
+      DGNA: 'D',
+      JAGB: 'N',
+      BZRM: '072026',
+      GSVZ: '+',
+      GSUM: '3000',
+      ANZM: '2',
+    }),
+    roh('R1', { REFW: 'S1', REFU: 'ALT', VSNR: '1234010180', VSUM: '5000' }),
+    roh('G1', { REFW: 'M1', VSNR: '1234010180', VSUM: '8000' }),
+    roh('PE', { REFP: 'P', ANZM: '2' }),
+  ];
+  // 8000 - 5000 = 3000
+  assert.deepEqual(
+    pruefeMbgmPaket(saetze).filter((b) => b.code === 'F9051'),
+    [],
+  );
+
+  const falsch = [...saetze];
+  falsch[0] = roh('PS', { ...saetze[0]!.werte, GSUM: '13000' });
+  const b = pruefeMbgmPaket(falsch).filter((x) => x.code === 'F9051');
+  assert.equal(b.length, 1, 'die Summe 8000+5000 waere falsch');
+});
+
+test('je Versichertem ist nur eine mBGM pro Beschaeftigungsfolge zulaessig', () => {
+  // "Auch wenn z.B. in einem Kalendermonat mehrere (regelmaessige)
+  // Beschaeftigungen liegen, ist nur eine mBGM zulaessig."
+  const zweimalRegelmaessig = [
+    roh('PS', {
+      REFP: 'P',
+      BKNR: '1',
+      DGNA: 'D',
+      JAGB: 'N',
+      BZRM: '072026',
+      GSVZ: '+',
+      GSUM: '0',
+      ANZM: '2',
+    }),
+    roh('G1', { REFW: 'M1', VSNR: '1234010180', VSUM: '0' }),
+    roh('G1', { REFW: 'M2', VSNR: '1234010180', VSUM: '0' }),
+    roh('PE', { REFP: 'P', ANZM: '2' }),
+  ];
+  const b = pruefeMbgmPaket(zweimalRegelmaessig);
+  assert.equal(
+    b.some((x) => /Beschäftigungsfolge/.test(x.meldung)),
+    true,
+  );
+});
+
+test('verschiedene Beschaeftigungsfolgen desselben Versicherten sind erlaubt', () => {
+  const gemischt = [
+    roh('PS', {
+      REFP: 'P',
+      BKNR: '1',
+      DGNA: 'D',
+      JAGB: 'N',
+      BZRM: '072026',
+      GSVZ: '+',
+      GSUM: '0',
+      ANZM: '2',
+    }),
+    roh('G1', { REFW: 'M1', VSNR: '1234010180', VSUM: '0' }),
+    roh('G3', { REFW: 'M2', VSNR: '1234010180', VSUM: '0' }),
+    roh('PE', { REFP: 'P', ANZM: '2' }),
+  ];
+  assert.equal(
+    pruefeMbgmPaket(gemischt).some((x) => /Beschäftigungsfolge/.test(x.meldung)),
+    false,
+  );
+});
+
+test('ein Storno und die neue Meldung desselben Versicherten sind erlaubt', () => {
+  // Grundsatz 1 der Storno-Regeln verlangt genau das: "Bei Aenderungen einer
+  // mBGM ist im Bereich der Selbstabrechnung immer ein Storno der zuletzt
+  // uebermittelten mBGM mit nachfolgender neuer mBGM erforderlich."
+  const stornoUndNeu = [
+    roh('PS', {
+      REFP: 'P',
+      BKNR: '1',
+      DGNA: 'D',
+      JAGB: 'N',
+      BZRM: '072026',
+      GSVZ: '+',
+      GSUM: '0',
+      ANZM: '2',
+    }),
+    roh('R1', { REFW: 'S1', REFU: 'ALT', VSNR: '1234010180', VSUM: '0' }),
+    roh('G1', { REFW: 'M1', VSNR: '1234010180', VSUM: '0' }),
+    roh('PE', { REFP: 'P', ANZM: '2' }),
+  ];
+  assert.equal(
+    pruefeMbgmPaket(stornoUndNeu).some((x) => /Beschäftigungsfolge/.test(x.meldung)),
+    false,
+  );
+});

@@ -74,6 +74,21 @@ export const BKNR_LAENGE: Readonly<Record<string, readonly number[]>> = {
   BVAEB: [5, 10],
 };
 
+/**
+ * Beschäftigungsfolge je mBGM-Satzart (E.32.2.2.2): „Regelmäßige Beschäftigung
+ * (Normalfall)", „Fallweise Beschäftigung", „Für kürzer als ein Monat
+ * vereinbarte Beschäftigung". Je Versichertem und Beitragszeitraum ist von
+ * jeder Kategorie nur eine mBGM zulässig.
+ */
+const BESCHAEFTIGUNGSFOLGE: Readonly<Record<string, string>> = {
+  G1: 'regelmäßig',
+  G2: 'regelmäßig',
+  G3: 'fallweise',
+  G4: 'fallweise',
+  G5: 'kürzer als ein Monat vereinbart',
+  G6: 'kürzer als ein Monat vereinbart',
+};
+
 /** Frühester fachlich gültiger Beitragszeitraum (`F9040`): Zeiträume ab 01.01.2019. */
 const FRUEHESTER_ZEITRAUM = { monat: 1, jahr: 2019 };
 
@@ -174,7 +189,15 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
         meldung: `Vorzeichen der Gesamtsumme (GSVZ) ist ungültig: '${gsvz ?? ''}'. Gültig sind '+' und '-'.`,
       });
     }
-    const summeMeldungen = mbgmSaetze.reduce((s, m) => s + (zahl(m.werte.VSUM) || 0), 0);
+    // Storno-Meldungen werden ABGEZOGEN, nicht addiert. E.32.2.2.2, Grundsätze
+    // für das Storno (Selbstabrechnung), Punkt 4: „Das Datenfeld für die Summe
+    // der Beiträge für einen Versicherten (VSUM) besitzt kein Vorzeichen. […]
+    // Allerdings ist bei der Summierung der mBGM in einem mBGM-Paket (im
+    // Datenfeld GSUM) die VSUM der Storno-mBGM abzuziehen."
+    const summeMeldungen = mbgmSaetze.reduce((s, m) => {
+      const betrag = zahl(m.werte.VSUM) || 0;
+      return m.satzart.startsWith('R') ? s - betrag : s + betrag;
+    }, 0);
     const gsum = zahl(kopf.werte.GSUM) || 0;
     if (gsum !== summeMeldungen) {
       befunde.push({
@@ -226,6 +249,38 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
       if (++positionen > HOECHSTANZAHL.verrechnungsposition) ueberschritten.add('V1/V2');
     }
   }
+  // E.32.2.2.2, Grundsatz 1: „Es ist nur eine mBGM pro Beitragszeitraum und
+  // Beschäftigungsfolge (regelmäßig, fallweise oder kürzer als ein Monat
+  // vereinbart) zulässig. […] Auch wenn z.B. in einem Kalendermonat mehrere
+  // (regelmäßige) Beschäftigungen liegen, ist nur eine mBGM zulässig."
+  //
+  // Ein Paket deckt genau einen Beitragszeitraum ab, deshalb genügt hier der
+  // Vergleich je Versichertem. Storno-Sätze bleiben außen vor: Zu einer
+  // stornierten Meldung darf im selben Paket eine neue folgen — genau das
+  // verlangt Grundsatz 1 der Storno-Regeln bei jeder Änderung.
+  const gesehen = new Map<string, Set<string>>();
+  for (const m of mbgmSaetze) {
+    if (m.satzart.startsWith('R')) continue;
+    const vsnr = m.werte.VSNR?.trim();
+    if (!vsnr) continue;
+    const folge = BESCHAEFTIGUNGSFOLGE[m.satzart];
+    if (!folge) continue;
+    const bisher = gesehen.get(vsnr) ?? new Set<string>();
+    if (bisher.has(folge)) {
+      befunde.push({
+        code: 'F9070',
+        schwere: 'fehler',
+        meldung:
+          `Versicherungsnummer ${vsnr}: mehr als eine mBGM für die Beschäftigungsfolge ` +
+          `„${folge}" im selben Beitragszeitraum. E.32.2.2.2 lässt nur eine zu — mehrere ` +
+          'gleichartige Beschäftigungen in einem Kalendermonat sind in EINE mBGM ' +
+          'zusammenzufassen (dort über mehrere Tarifblöcke).',
+      });
+    }
+    bisher.add(folge);
+    gesehen.set(vsnr, bisher);
+  }
+
   // Die eigentliche Strukturregel steht nicht im Prüfkatalog, sondern in
   // Kapitel E.32.2.2.6 — der Katalog verweist bei F9070 nur darauf.
   befunde.push(...pruefeAbfolge(saetze));
