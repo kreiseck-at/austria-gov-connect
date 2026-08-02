@@ -79,7 +79,12 @@ test('ein negativer Beitrag setzt das Vorzeichenfeld, nicht ein Minus im Betrag'
               {
                 typ: 'AB',
                 betragCent: 179777,
-                positionen: [{ typ: 'A01', prozentsatz: -3, betragCent: -5393 }],
+                positionen: [
+                  // T01 ist zur allgemeinen Beitragsgrundlage zwingend (D.60);
+                  // der Abschlag kommt daneben.
+                  { typ: 'T01', prozentsatz: 39.6, betragCent: 71191 },
+                  { typ: 'A01', prozentsatz: -3, betragCent: -5393 },
+                ],
               },
             ],
           },
@@ -88,7 +93,7 @@ test('ein negativer Beitrag setzt das Vorzeichenfeld, nicht ein Minus im Betrag'
     ],
     OPT,
   );
-  const pos = saetze.find((s) => s.satzart === 'V1');
+  const pos = saetze.filter((s) => s.satzart === 'V1')[1];
   assert.equal(pos?.werte.RSVZ, '-');
   assert.equal(pos?.werte.RSUM, '5393', 'der Betrag selbst bleibt vorzeichenlos');
   assert.equal(pos?.werte.VPVZ, '-');
@@ -153,7 +158,16 @@ test('Bruchteile eines Cent werden abgewiesen', () => {
           {
             ...MELDUNG,
             tarifbloecke: [
-              { ...MELDUNG.tarifbloecke[0]!, basen: [{ typ: 'AB', betragCent: 179777.5, positionen: [] }] },
+              {
+                ...MELDUNG.tarifbloecke[0]!,
+                basen: [
+                  {
+                    typ: 'AB',
+                    betragCent: 179777.5,
+                    positionen: [{ typ: 'T01', prozentsatz: 1, betragCent: 1 }],
+                  },
+                ],
+              },
             ],
           },
         ],
@@ -199,8 +213,16 @@ test('ein Basistyp darf im Tarifblock nur einmal vorkommen', () => {
       {
         ...MELDUNG.tarifbloecke[0]!,
         basen: [
-          { typ: 'AB' as const, betragCent: 1, positionen: [] },
-          { typ: 'AB' as const, betragCent: 2, positionen: [] },
+          {
+            typ: 'AB' as const,
+            betragCent: 1,
+            positionen: [{ typ: 'T01' as const, prozentsatz: 1, betragCent: 1 }],
+          },
+          {
+            typ: 'AB' as const,
+            betragCent: 2,
+            positionen: [{ typ: 'T01' as const, prozentsatz: 1, betragCent: 1 }],
+          },
         ],
       },
     ],
@@ -215,12 +237,19 @@ test('KEUE ist im Tarifblock ohne Verrechnung gesperrt', () => {
       {
         ...MELDUNG.tarifbloecke[0]!,
         ohneVerrechnung: true,
+        // Ein Tarifblock ohne Verrechnung traegt keine Basis (E.32.2.2.3) --
+        // sonst schlaegt diese Regel zuerst an und der Test prueft nicht mehr,
+        // was er pruefen will.
+        basen: [],
         enthaeltKuendigungsentschaedigungOderUrlaubsersatz: true,
       },
     ],
   };
   assert.throws(() => erstelleMbgmPaket([t4], OPT), /gesperrt/);
-  const gut = { ...MELDUNG, tarifbloecke: [{ ...MELDUNG.tarifbloecke[0]!, ohneVerrechnung: true }] };
+  const gut = {
+    ...MELDUNG,
+    tarifbloecke: [{ ...MELDUNG.tarifbloecke[0]!, ohneVerrechnung: true, basen: [] }],
+  };
   const saetze = erstelleMbgmPaket([gut], OPT);
   assert.equal(saetze.find((s) => s.satzart.startsWith('T'))?.satzart, 'T4');
 });
@@ -246,4 +275,116 @@ test('unbekannte Codes werden abgewiesen', () => {
     ],
   };
   assert.throws(() => erstelleMbgmPaket([falsch], OPT), /Verrechnungsbasis-Typ/);
+});
+
+// --- Regeln aus E.32.2.2.3 bis .5 -----------------------------------------
+
+test('ein Tarifblock ohne Verrechnung darf keine Basis tragen', () => {
+  // E.32.2.2.3: "Diese beinhalten keine Verrechnung, daher ist nachfolgend
+  // keine Uebermittlung einer Verrechnungsbasis zulaessig."
+  const mitBasis = {
+    ...MELDUNG,
+    tarifbloecke: [{ ...MELDUNG.tarifbloecke[0]!, ohneVerrechnung: true }],
+  };
+  assert.throws(() => erstelleMbgmPaket([mitBasis], OPT), /keine Verrechnung/);
+});
+
+test('die Verrechnungsposition muss zur Basis passen', () => {
+  // D.60: Zur Beitragsgrundlage zur BV gehoert ausschliesslich V01.
+  const falsch = {
+    ...MELDUNG,
+    tarifbloecke: [
+      {
+        ...MELDUNG.tarifbloecke[0]!,
+        basen: [
+          {
+            typ: 'BV' as const,
+            betragCent: 1000,
+            positionen: [{ typ: 'T01' as const, prozentsatz: 1, betragCent: 10 }],
+          },
+        ],
+      },
+    ],
+  };
+  assert.throws(() => erstelleMbgmPaket([falsch], OPT), /nicht zulässig \(D\.60\)/);
+
+  const richtig = {
+    ...MELDUNG,
+    tarifbloecke: [
+      {
+        ...MELDUNG.tarifbloecke[0]!,
+        basen: [
+          {
+            typ: 'BV' as const,
+            betragCent: 1000,
+            positionen: [{ typ: 'V01' as const, prozentsatz: 1.53, betragCent: 15 }],
+          },
+        ],
+      },
+    ],
+  };
+  assert.doesNotThrow(() => erstelleMbgmPaket([richtig], OPT));
+});
+
+test('eine zwingende Verrechnungsposition darf nicht fehlen', () => {
+  const ohneStandard = {
+    ...MELDUNG,
+    tarifbloecke: [
+      {
+        ...MELDUNG.tarifbloecke[0]!,
+        basen: [
+          {
+            typ: 'AB' as const,
+            betragCent: 1000,
+            positionen: [{ typ: 'A01' as const, prozentsatz: -3, betragCent: -30 }],
+          },
+        ],
+      },
+    ],
+  };
+  assert.throws(() => erstelleMbgmPaket([ohneStandard], OPT), /fehlt die zwingende/);
+});
+
+test('fuer Basistypen ohne Zuordnung im Dokument wird nicht geprueft', () => {
+  // KE, UH und RP fuehrt D.60 in keiner der beiden Tabellen. Eine Ablehnung
+  // waere geraten -- also wird dort nichts geprueft.
+  const ke = {
+    ...MELDUNG,
+    tarifbloecke: [
+      {
+        ...MELDUNG.tarifbloecke[0]!,
+        basen: [
+          {
+            typ: 'KE' as const,
+            betragCent: 1000,
+            positionen: [{ typ: 'T01' as const, prozentsatz: 1, betragCent: 10 }],
+          },
+        ],
+      },
+    ],
+  };
+  assert.doesNotThrow(() => erstelleMbgmPaket([ke], OPT));
+});
+
+test('die Hoechstanzahlen werden schon beim Bauen erzwungen', () => {
+  const zuVieleBloecke = {
+    ...MELDUNG,
+    tarifbloecke: Array.from({ length: 16 }, () => MELDUNG.tarifbloecke[0]!),
+  };
+  assert.throws(() => erstelleMbgmPaket([zuVieleBloecke], OPT), /höchstens 15/);
+
+  const zuVieleBasen = {
+    ...MELDUNG,
+    tarifbloecke: [
+      {
+        ...MELDUNG.tarifbloecke[0]!,
+        basen: Array.from({ length: 11 }, (_, i) => ({
+          typ: (['AB', 'SZ', 'UU', 'AZ', 'SA', 'BV', 'BB', 'SE', 'SW', 'EH', 'AA'] as const)[i]!,
+          betragCent: 1,
+          positionen: [],
+        })),
+      },
+    ],
+  };
+  assert.throws(() => erstelleMbgmPaket([zuVieleBasen], OPT), /höchstens 10/);
 });

@@ -99,28 +99,28 @@ test('F9070: das Paket muss mit PS/PV beginnen und mit PE enden', () => {
 });
 
 test('F9072: die Hoechstanzahl der Verrechnungspositionen ist eine Warnung', () => {
-  const viele = {
-    ...MELDUNG,
-    tarifbloecke: [
-      {
-        beschaeftigtengruppe: 'B002',
-        beginnDerVerrechnung: 1,
-        basen: [
-          {
-            typ: 'AB' as const,
-            betragCent: 200_000,
-            positionen: Array.from({ length: HOECHSTANZAHL.verrechnungsposition + 1 }, () => ({
-              typ: 'T01' as const,
-              prozentsatz: 1,
-              betragCent: 1,
-            })),
-          },
-        ],
-      },
-    ],
-  };
-  const b = pruefeMbgmPaket(erstelleMbgmPaket([viele], OPT));
-  const f = b.filter((x) => x.code === 'F9072');
+  // erstelleMbgmPaket weist das inzwischen selbst ab (E.32.2.2.5), deshalb hier
+  // eine von Hand gebaute Folge: Die Pruefung soll die Warnung auch dann
+  // nennen, wenn die Saetze aus einer anderen Quelle stammen.
+  const saetze = [
+    {
+      satzart: 'PS',
+      werte: { REFP: 'P', BKNR: '1', DGNA: 'D', JAGB: 'N', BZRM: '072026', GSVZ: '+', GSUM: '0', ANZM: '1' },
+      felder: [],
+      satzlaenge: 0,
+    },
+    { satzart: 'G1', werte: { REFW: 'M1', VSNR: '1234010180', VSUM: '0' }, felder: [], satzlaenge: 0 },
+    { satzart: 'T1', werte: {}, felder: [], satzlaenge: 0 },
+    { satzart: 'BS', werte: {}, felder: [], satzlaenge: 0 },
+    ...Array.from({ length: HOECHSTANZAHL.verrechnungsposition + 1 }, () => ({
+      satzart: 'V1',
+      werte: {},
+      felder: [],
+      satzlaenge: 0,
+    })),
+    { satzart: 'PE', werte: { REFP: 'P', ANZM: '1' }, felder: [], satzlaenge: 0 },
+  ];
+  const f = pruefeMbgmPaket(saetze).filter((x) => x.code === 'F9072');
   assert.equal(f.length, 1);
   assert.equal(f[0]?.schwere, 'warnung', 'Status W im Pruefkatalog');
 });

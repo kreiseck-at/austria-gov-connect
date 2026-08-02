@@ -320,3 +320,37 @@ Object.freeze(EINS_ZU_EINS);
 Object.freeze(KOMBINATION);
 for (const zeile of Object.values(KOMBINATION)) Object.freeze(zeile);
 for (const eintrag of Object.values(VPTY_CODES)) Object.freeze(eintrag);
+
+/**
+ * Welche Verrechnungspositions-Typen zu einem Basistyp zulässig sind.
+ *
+ * Führt beide Tabellen aus D.60 zusammen: die 1:1-Beziehungen (Seite 153) und
+ * die Kombinationstabelle der klassischen Beitragsgrundlagen.
+ *
+ * @returns `undefined`, wenn das Dokument für diesen Basistyp keine Zuordnung
+ *   führt. Dann wird **nicht** geprüft — eine Ablehnung wäre geraten. Das
+ *   betrifft `KE`, `UH` und `RP`.
+ */
+export function erlaubtePositionen(vbty: string): ReadonlySet<string> | undefined {
+  const einsZuEins = EINS_ZU_EINS[vbty];
+  if (einsZuEins) return new Set(einsZuEins);
+  const zeile = KOMBINATION[vbty];
+  if (zeile) return new Set(Object.keys(zeile));
+  return undefined;
+}
+
+/**
+ * Positionstypen, die zu einem Basistyp **zwingend** gehören — im Dokument mit
+ * `Z` gekennzeichnet, bei den 1:1-Beziehungen durch „immer genau eine".
+ */
+export function zwingendePositionen(vbty: string): readonly string[] {
+  const einsZuEins = EINS_ZU_EINS[vbty];
+  // Bei SW hängt es davon ab, ob ein Lehrling betroffen ist — beide Positionen
+  // sind zulässig, keine ist für sich zwingend.
+  if (einsZuEins) return einsZuEins.length === 1 ? einsZuEins : [];
+  const zeile = KOMBINATION[vbty];
+  if (!zeile) return [];
+  return Object.entries(zeile)
+    .filter(([, stufe]) => stufe === 'Z')
+    .map(([code]) => code);
+}

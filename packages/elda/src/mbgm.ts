@@ -12,7 +12,15 @@ import {
   SATZLAENGE_VERRECHNUNGSBASIS,
   SATZLAENGE_VERRECHNUNGSPOSITION,
 } from './felder-e32';
-import { VBTY_CODES, VPTY_CODES, type VbtyCode, type VptyCode } from './codes-e32';
+import {
+  VBTY_CODES,
+  VPTY_CODES,
+  erlaubtePositionen,
+  zwingendePositionen,
+  type VbtyCode,
+  type VptyCode,
+} from './codes-e32';
+import { HOECHSTANZAHL } from './pruefung-e32';
 
 /**
  * Zusammenbau der monatlichen Beitragsgrundlagenmeldung (Kapitel E.32).
@@ -283,6 +291,12 @@ function pruefeMeldung(m: Beitragsgrundlagenmeldung, nr: number): void {
         'angegeben werden."',
     );
   }
+  if (m.tarifbloecke.length > HOECHSTANZAHL.tarifblock) {
+    throw new EldaError(
+      `${wo}: ${m.tarifbloecke.length} Tarifblöcke. E.32.2.2.3 lässt bei regelmäßiger ` +
+        `Beschäftigung höchstens ${HOECHSTANZAHL.tarifblock} zu.`,
+    );
+  }
   if (!m.tarifbloecke.length) {
     throw new EldaError(
       `${wo}: keine Tarifblöcke. Eine mBGM ohne Tarifblock ist nur als Satzart G7 ` +
@@ -296,6 +310,19 @@ function pruefeMeldung(m: Beitragsgrundlagenmeldung, nr: number): void {
         `${wo}, Tarifblock ${i + 1}: Bei einer mBGM ohne Versicherungszeit ` +
           `(VERG=${m.verrechnungsgrundlage}) ist der Beginn der Verrechnung laut D.63 zwingend ` +
           `mit 01 zu belegen, angegeben wurde ${t.beginnDerVerrechnung}.`,
+      );
+    }
+    if (t.ohneVerrechnung && t.basen.length > 0) {
+      throw new EldaError(
+        `${wo}, Tarifblock ${i + 1}: Ein Tarifblock ohne Verrechnung darf keine ` +
+          'Verrechnungsbasis tragen. E.32.2.2.3: „Diese beinhalten keine Verrechnung, daher ' +
+          'ist nachfolgend keine Übermittlung einer Verrechnungsbasis zulässig."',
+      );
+    }
+    if (t.basen.length > HOECHSTANZAHL.verrechnungsbasis) {
+      throw new EldaError(
+        `${wo}, Tarifblock ${i + 1}: ${t.basen.length} Verrechnungsbasen, zulässig sind ` +
+          `höchstens ${HOECHSTANZAHL.verrechnungsbasis} (E.32.2.2.4).`,
       );
     }
     if (t.ohneVerrechnung && t.enthaeltKuendigungsentschaedigungOderUrlaubsersatz) {
@@ -322,10 +349,35 @@ function pruefeMeldung(m: Beitragsgrundlagenmeldung, nr: number): void {
         );
       }
       gesehen.add(b.typ);
+      if (b.positionen.length > HOECHSTANZAHL.verrechnungsposition) {
+        throw new EldaError(
+          `${wo}, Tarifblock ${i + 1}, Basis '${b.typ}': ${b.positionen.length} ` +
+            'Verrechnungspositionen, zulässig sind höchstens ' +
+            `${HOECHSTANZAHL.verrechnungsposition} (E.32.2.2.5).`,
+        );
+      }
+      const erlaubt = erlaubtePositionen(b.typ);
       for (const p of b.positionen) {
         if (!(p.typ in VPTY_CODES)) {
           throw new EldaError(
             `${wo}, Tarifblock ${i + 1}: unbekannter Verrechnungspositions-Typ '${p.typ}'.`,
+          );
+        }
+        // Nur prüfen, wo das Dokument eine Zuordnung führt. Für KE, UH und RP
+        // tut es das nicht — dort wäre eine Ablehnung geraten.
+        if (erlaubt && !erlaubt.has(p.typ)) {
+          throw new EldaError(
+            `${wo}, Tarifblock ${i + 1}: Die Verrechnungsposition '${p.typ}' ist zur ` +
+              `Verrechnungsbasis '${b.typ}' nicht zulässig (D.60). Zulässig wären: ` +
+              `${[...erlaubt].sort().join(', ')}.`,
+          );
+        }
+      }
+      for (const pflicht of zwingendePositionen(b.typ)) {
+        if (!b.positionen.some((p) => p.typ === pflicht)) {
+          throw new EldaError(
+            `${wo}, Tarifblock ${i + 1}: Zur Verrechnungsbasis '${b.typ}' fehlt die zwingende ` +
+              `Verrechnungsposition '${pflicht}' (D.60).`,
           );
         }
       }
