@@ -133,3 +133,33 @@ test('nach dem Paket-Ende darf ein weiteres Paket folgen', () => {
   // Auch eines des anderen Verfahrens (Fussnoten 76 und 82).
   assert.deepEqual(pruefeAbfolge(folge('PS', 'R1', 'PE', 'PV')), []);
 });
+
+// --- Satzfolgen aus den Beispielen des Dokuments ---------------------------
+
+test('Beispiel 26: kuerzer als ein Monat vereinbarte Beschaeftigung (Vorschreiber)', () => {
+  // "Geringfuegig beschaeftigter Arbeiter mit einer kuerzer als ein Monat
+  // vereinbarten Beschaeftigung vom Zweiten bis zum Letzten des Monats."
+  // Satzfolge laut Diagramm: PV, G6, T3, BV, V2, PE.
+  assert.deepEqual(pruefeAbfolge(folge('PV', 'G6', 'T3', 'BV', 'V2', 'PE')), []);
+});
+
+test('Beispiel 28: Storno im Vorschreibeverfahren besteht nur aus R2', () => {
+  // Fliesstext vor dem Beispiel: "Fuer den Bereich der Vorschreibung kommt fuer
+  // das Storno einer monatlichen Beitragsgrundlage fuer eine regelmaessige
+  // Beschaeftigung im Bereich mBGM die Satzart R2 zur Anwendung. Weitere
+  // Satzarten sind nicht erforderlich."
+  assert.deepEqual(pruefeAbfolge(folge('PV', 'R2', 'PE')), []);
+  // Ein Tarifblock danach waere unzulaessig.
+  assert.equal(
+    pruefeAbfolge(folge('PV', 'R2', 'T1', 'BV', 'V2', 'PE')).some((b) =>
+      /Auf 'R2' darf 'T1' nicht folgen/.test(b.meldung),
+    ),
+    true,
+  );
+});
+
+test('Beispiel 20 und 21: mehrere Positionen und mehrere Basen je Tarifblock', () => {
+  // 20: eine Basis, drei Positionen. 21: zwei Basen mit je eigenen Positionen.
+  assert.deepEqual(pruefeAbfolge(folge('PV', 'G2', 'T1', 'BV', 'V2', 'V2', 'V2', 'PE')), []);
+  assert.deepEqual(pruefeAbfolge(folge('PV', 'G2', 'T1', 'BV', 'V2', 'V2', 'BV', 'V2', 'PE')), []);
+});

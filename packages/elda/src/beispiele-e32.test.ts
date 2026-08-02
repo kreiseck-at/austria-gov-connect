@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { erstelleMbgmPaket, VERRECHNUNGSGRUNDLAGE, type PaketOptionen } from './mbgm';
+import { pruefeAbfolge } from './abfolge-e32';
+import { pruefeMbgmPaket } from './pruefung-e32';
 
 /**
  * Die durchgerechneten Beispiele aus Kapitel E.32.2 der
@@ -202,5 +204,230 @@ test('bei der Selbstabrechnung sind Prozentsatz und Betrag zwingend', () => {
         { ...BASIS, verfahren: 'selbstabrechnung' },
       ),
     /zwingend/,
+  );
+});
+
+// --- E.32.2.9 ff., Vorschreibung -------------------------------------------
+
+/** Gemeinsamer Rumpf der Vorschreibungs-Beispiele. */
+const vorschreiber = (tarifbloecke: unknown) =>
+  erstelleMbgmPaket(
+    [
+      {
+        referenzwert: 'M-1',
+        versicherungsnummer: '1234010180',
+        familienname: 'Muster',
+        vorname: 'Max',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_MIT_ZEIT,
+        tarifbloecke: tarifbloecke as never,
+      },
+    ],
+    { ...BASIS, verfahren: 'vorschreibung' },
+  );
+
+test('Beispiel 20: Neugruendungsfoerderung — drei Positionen zu einer Basis', () => {
+  // "Arbeiter mit durchgehender Versicherungszeit SV (ohne BV) mit einem
+  // Einkommen von EUR 1.400,00 und Neugruendungsfoerderung."
+  const saetze = vorschreiber([
+    {
+      beschaeftigtengruppe: 'B001',
+      beginnDerVerrechnung: 1,
+      basen: [
+        {
+          typ: 'AB',
+          betragCent: 140_000,
+          // T01 Standardverrechnung, A07 WF-Entfall, A08 UV-Entfall.
+          positionen: [{ typ: 'T01' }, { typ: 'A07' }, { typ: 'A08' }],
+        },
+      ],
+    },
+  ]);
+  assert.deepEqual(
+    saetze.map((s) => s.satzart),
+    ['PV', 'G2', 'T1', 'BV', 'V2', 'V2', 'V2', 'PE'],
+  );
+  assert.deepEqual(
+    saetze.filter((s) => s.satzart === 'V2').map((s) => s.werte.VPTY),
+    ['T01', 'A07', 'A08'],
+  );
+  assert.equal(saetze.find((s) => s.satzart === 'BV')?.werte.VBBT, '140000');
+});
+
+test('Beispiel 21: zwei Verrechnungsbasen, Betrag ueber der Hoechstbeitragsgrundlage', () => {
+  // "Arbeiter ueber 60 und unter 63 Jahre mit bestehendem Anspruch auf eine
+  // Alterspension [...] mit einem Einkommen von EUR 6.200,00."
+  //
+  // Anmerkung des Dokuments: "Wie nachfolgend ersichtlich ist hier auch fuer die
+  // allgemeine Beitragsgrundlage das Einkommen OHNE Beruecksichtigung der
+  // Hoechstbeitragsgrundlage zu uebergeben, die Begrenzung erfolgt im Rahmen
+  // der Vorschreibung." Genau deshalb steht hier der volle Betrag.
+  const saetze = vorschreiber([
+    {
+      beschaeftigtengruppe: 'B001',
+      beginnDerVerrechnung: 1,
+      basen: [
+        { typ: 'AB', betragCent: 620_000, positionen: [{ typ: 'T01' }, { typ: 'A10' }] },
+        { typ: 'BV', betragCent: 620_000, positionen: [{ typ: 'V01' }] },
+      ],
+    },
+  ]);
+  assert.deepEqual(
+    saetze.map((s) => s.satzart),
+    ['PV', 'G2', 'T1', 'BV', 'V2', 'V2', 'BV', 'V2', 'PE'],
+  );
+  const basen = saetze.filter((s) => s.satzart === 'BV');
+  assert.deepEqual(
+    basen.map((s) => s.werte.VBTY),
+    ['AB', 'BV'],
+  );
+  assert.deepEqual(
+    basen.map((s) => s.werte.VBBT),
+    ['620000', '620000'],
+  );
+});
+
+test('Beispiel 23: zwei Beschaeftigungen im Monat — zwei Tarifbloecke', () => {
+  // "Ein Angestellter [...] beendet am 10ten des Kalendermonats die
+  // Beschaeftigung [...] und nimmt am 11ten [...] eine neuerliche Beschaeftigung
+  // beim selben Dienstgeber auf."
+  //
+  // E.32.2.2.2, Grundsatz 2c: Mehr als ein Tarifblock ist bei mehreren
+  // Beschaeftigungen im Beitragszeitraum ZWINGEND. Beide gehoeren aber in
+  // dieselbe mBGM (Grundsatz 1).
+  const saetze = vorschreiber([
+    {
+      beschaeftigtengruppe: 'B002',
+      beginnDerVerrechnung: 1,
+      basen: [
+        { typ: 'AB', betragCent: 200_000, positionen: [{ typ: 'T01' }] },
+        { typ: 'BV', betragCent: 200_000, positionen: [{ typ: 'V01' }] },
+      ],
+    },
+    {
+      beschaeftigtengruppe: 'B002',
+      beginnDerVerrechnung: 11,
+      basen: [
+        { typ: 'AB', betragCent: 700_000, positionen: [{ typ: 'T01' }] },
+        { typ: 'BV', betragCent: 700_000, positionen: [{ typ: 'V01' }] },
+      ],
+    },
+  ]);
+  assert.deepEqual(
+    saetze.map((s) => s.satzart),
+    ['PV', 'G2', 'T1', 'BV', 'V2', 'BV', 'V2', 'T1', 'BV', 'V2', 'BV', 'V2', 'PE'],
+  );
+  const bloecke = saetze.filter((s) => s.satzart === 'T1');
+  assert.deepEqual(
+    bloecke.map((s) => s.werte.VVON),
+    ['1', '11'],
+  );
+  // Die Betraege sind tageweise aliquotiert, nicht die vollen Monatsbezuege.
+  assert.deepEqual(
+    saetze.filter((s) => s.satzart === 'BV' && s.werte.VBTY === 'AB').map((s) => s.werte.VBBT),
+    ['200000', '700000'],
+  );
+});
+
+// --- E.32.2.6, Beispiel 10: drei Beschaeftigungsfolgen in einem Paket ------
+
+test('Beispiel 10: drei mBGM fuer denselben Versicherten, Summen gehen auf', () => {
+  // "Fallweise geringfuegig beschaeftigter Arbeiter am Zweiten des Monats
+  // (EUR 100,00), anschliessend kuerzer als ein Monat vereinbarte, geringfuegige
+  // Beschaeftigung als Angestellter vom Fuenften bis zum Zehnten (EUR 333,33),
+  // abschliessend regelmaessige Beschaeftigung als Angestellter ab dem
+  // Fuenfundzwanzigsten (aliquoter Monatslohn EUR 400,00)."
+  //
+  // Der Fall ist aus zwei Gruenden wertvoll: Er ist das einzige Beispiel mit
+  // ANZM=3, und er zeigt, dass drei mBGM fuer DENSELBEN Versicherten zulaessig
+  // sind, solange sie zu verschiedenen Beschaeftigungsfolgen gehoeren
+  // (E.32.2.2.2, Grundsatz 1).
+  //
+  // G3 und G5 baut erstelleMbgmPaket noch nicht (siehe TODO dort), deshalb hier
+  // die Satzfolge von Hand — geprueft wird die Auswertung.
+  const s = (satzart: string, werte: Record<string, string | undefined>) => ({
+    satzart,
+    werte,
+    felder: [],
+    satzlaenge: 0,
+  });
+  const saetze = [
+    s('PS', {
+      REFP: 'P',
+      BKNR: '1234567',
+      DGNA: 'D',
+      JAGB: 'N',
+      BZRM: '072026',
+      GSVZ: '+',
+      GSUM: '16325',
+      ANZM: '3',
+    }),
+    s('G3', { REFW: 'M1', VSNR: '1234010180', VSUM: '130' }),
+    s('T2', { BSGR: 'B010', FTAG: '2' }),
+    s('BS', { VBTY: 'AB', VBBT: '10000' }),
+    s('V1', { VPTY: 'T01', VPVZ: '+', VPTA: '1300', RSVZ: '+', RSUM: '130' }),
+    s('G5', { REFW: 'M2', VSNR: '1234010180', VSUM: '943' }),
+    s('T3', { BSGR: 'B030', BTAB: '5', BTBS: '10' }),
+    s('BS', { VBTY: 'AB', VBBT: '33333' }),
+    s('V1', { VPTY: 'T01', VPVZ: '+', VPTA: '1300', RSVZ: '+', RSUM: '433' }),
+    s('BS', { VBTY: 'BV', VBBT: '33333' }),
+    s('V1', { VPTY: 'V01', VPVZ: '+', VPTA: '1530', RSVZ: '+', RSUM: '510' }),
+    s('G1', { REFW: 'M3', VSNR: '1234010180', VSUM: '15252' }),
+    s('T1', { BSGR: 'B002', VVON: '25' }),
+    s('BS', { VBTY: 'AB', VBBT: '40000' }),
+    s('V1', { VPTY: 'T01', VPVZ: '+', VPTA: '39600', RSVZ: '+', RSUM: '15840' }),
+    s('V1', { VPTY: 'A03', VPVZ: '-', VPTA: '3000', RSVZ: '-', RSUM: '1200' }),
+    s('BS', { VBTY: 'BV', VBBT: '40000' }),
+    s('V1', { VPTY: 'V01', VPVZ: '+', VPTA: '1530', RSVZ: '+', RSUM: '612' }),
+    s('PE', { REFP: 'P', ANZM: '3' }),
+  ];
+
+  // Weder die Abfolge noch die Paketpruefungen duerfen etwas beanstanden.
+  assert.deepEqual(pruefeAbfolge(saetze), []);
+  assert.deepEqual(pruefeMbgmPaket(saetze), []);
+
+  // Die Rechnung des Dokuments, Stelle fuer Stelle nachvollzogen:
+  assert.equal(130 + 943 + 15252, 16325, 'GSUM = Summe der drei VSUM');
+  assert.equal(433 + 510, 943, 'VSUM der G5-Meldung');
+  assert.equal(15840 - 1200 + 612, 15252, 'VSUM der G1-Meldung, Abschlag abgezogen');
+  assert.equal(Math.round(40000 * 0.396), 15840, '400,00 x 39,60 %');
+  assert.equal(Math.round(33333 * 0.0153), 510, '333,33 x 1,53 % kaufmaennisch gerundet');
+});
+
+test('Beispiel 10: dieselbe Beschaeftigungsfolge zweimal waere unzulaessig', () => {
+  // Die Gegenprobe zu Grundsatz 1: Drei mBGM sind erlaubt, weil es drei
+  // VERSCHIEDENE Folgen sind. Zweimal dieselbe waere es nicht.
+  const s = (satzart: string, werte: Record<string, string | undefined>) => ({
+    satzart,
+    werte,
+    felder: [],
+    satzlaenge: 0,
+  });
+  const zweimalFallweise = [
+    s('PS', {
+      REFP: 'P',
+      BKNR: '1',
+      DGNA: 'D',
+      JAGB: 'N',
+      BZRM: '072026',
+      GSVZ: '+',
+      GSUM: '260',
+      ANZM: '2',
+    }),
+    s('G3', { REFW: 'M1', VSNR: '1234010180', VSUM: '130' }),
+    s('T2', { BSGR: 'B010', FTAG: '2' }),
+    s('BS', { VBTY: 'AB', VBBT: '10000' }),
+    s('V1', { VPTY: 'T01', VPVZ: '+', VPTA: '1300', RSVZ: '+', RSUM: '130' }),
+    s('G3', { REFW: 'M2', VSNR: '1234010180', VSUM: '130' }),
+    s('T2', { BSGR: 'B010', FTAG: '3' }),
+    s('BS', { VBTY: 'AB', VBBT: '10000' }),
+    s('V1', { VPTY: 'T01', VPVZ: '+', VPTA: '1300', RSVZ: '+', RSUM: '130' }),
+    s('PE', { REFP: 'P', ANZM: '2' }),
+  ];
+  // Die Abfolge selbst ist zulaessig -- der Verstoss liegt eine Ebene hoeher.
+  assert.deepEqual(pruefeAbfolge(zweimalFallweise), []);
+  assert.equal(
+    pruefeMbgmPaket(zweimalFallweise).some((b) => /Beschäftigungsfolge/.test(b.meldung)),
+    true,
+    'zwei fallweise mBGM fuer denselben Versicherten sind unzulaessig — die Tage gehoeren in EINE mBGM, dort als mehrere Tarifbloecke',
   );
 });

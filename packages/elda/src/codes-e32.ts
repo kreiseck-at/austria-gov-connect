@@ -37,6 +37,35 @@ export const VBTY_CODES = {
   RP: 'Allgemeine Beitragsgrundlage für PV-Reduktion',
 } as const;
 
+/**
+ * Wozu die besonderen Basistypen da sind — aus den Spezialfällen in
+ * Kapitel E.32.2.15. Ohne diesen Zusammenhang wirken sie wie Dubletten der
+ * allgemeinen Beitragsgrundlage.
+ *
+ * - `AZ`/`SA` — **abweichende Grundlage für die AV-Minderung** (E.32.2.15.1).
+ *   Weicht die Beitragsgrundlage für die SV vom tatsächlichen Entgelt ab (etwa
+ *   bei Altersteilzeit: fiktive Grundlage in Höhe des Einkommens vor der
+ *   Herabsetzung), darf die Minderung des AV-Beitrags nur das **tatsächliche**
+ *   Entgelt betreffen — den Dienstnehmeranteil aus der Differenz trägt der
+ *   Dienstgeber allein, er kann nicht entfallen. Deshalb eine eigene Basis.
+ *   Genau darum tragen `AZ` und `SA` **keine** Standard-Tarifgruppenverrechnung.
+ * - `UU` — **unbezahlter Urlaub** (E.32.2.15.2). Normale Versicherungszeit und
+ *   unbezahlter Urlaub im selben Beitragszeitraum gehören in **eine** mBGM,
+ *   dort aber getrennt.
+ * - `SR` — **Reduktion der SW-Entschädigung bei Kurzarbeit** (E.32.2.15.6). Die
+ *   Standardverrechnung rechnet auf dem Einkommen vor der Kurzarbeit und ergibt
+ *   damit einen zu hohen Schlechtwetterentschädigungsbeitrag; über diese Basis
+ *   und den Abschlag `A21` wird die Differenz wieder herausgerechnet.
+ *
+ * Zur Verrechnungszeit-Unterbrechung (E.32.2.15.5) hält das Dokument fest:
+ * „Bei Übermittlung der mBGM ist jedenfalls darauf zu achten, dass es zu keinen
+ * Rundungsdifferenzen kommt. Somit muss das Einkommen vor und nach der
+ * Unterbrechung gem. Granularität der Tarifblöcke auch in der Lohnverrechnung
+ * getrennt voneinander betrachtet/berechnet werden." Das betrifft den
+ * Aufrufer, nicht dieses Paket — ein nachträgliches Aufteilen einer bereits
+ * gerundeten Summe erzeugt genau die Differenzen, die dort gemeint sind.
+ */
+
 /** Ein Verrechnungsbasis-Typ. */
 export type VbtyCode = keyof typeof VBTY_CODES;
 
