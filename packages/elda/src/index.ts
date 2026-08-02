@@ -81,3 +81,4 @@ export {
   type Befund,
   type Schwere,
 } from './pruefung-e32';
+export { pruefeAbfolge, ABFOLGE } from './abfolge-e32';

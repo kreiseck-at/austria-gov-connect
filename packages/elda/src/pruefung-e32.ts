@@ -1,4 +1,5 @@
 import type { RohSatz } from './bestand';
+import { pruefeAbfolge } from './abfolge-e32';
 
 /**
  * Prüfregeln des mBGM-Pakets aus dem Prüfkatalog der 42. Ergänzung,
@@ -225,6 +226,10 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
       if (++positionen > HOECHSTANZAHL.verrechnungsposition) ueberschritten.add('V1/V2');
     }
   }
+  // Die eigentliche Strukturregel steht nicht im Prüfkatalog, sondern in
+  // Kapitel E.32.2.2.6 — der Katalog verweist bei F9070 nur darauf.
+  befunde.push(...pruefeAbfolge(saetze));
+
   for (const was of ueberschritten) {
     befunde.push({
       code: 'F9072',
