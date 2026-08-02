@@ -4,15 +4,27 @@ import {
   FELDER_PAKET,
   FELDER_MBGM,
   FELDER_TARIFBLOCK,
+  FELDER_TARIFBLOCK_FALLWEISE,
+  FELDER_TARIFBLOCK_KURZ,
   FELDER_VERRECHNUNGSBASIS,
   FELDER_VERRECHNUNGSPOSITION,
   SATZLAENGE_PAKET,
   SATZLAENGE_MBGM,
   SATZLAENGE_TARIFBLOCK,
+  SATZLAENGE_TARIFBLOCK_FALLWEISE,
+  SATZLAENGE_TARIFBLOCK_KURZ,
   SATZLAENGE_VERRECHNUNGSBASIS,
   SATZLAENGE_VERRECHNUNGSPOSITION,
 } from './felder-e32';
-import { VBTY_CODES, VPTY_CODES, type VbtyCode, type VptyCode } from './codes-e32';
+import {
+  VBTY_CODES,
+  VPTY_CODES,
+  erlaubtePositionen,
+  zwingendePositionen,
+  type VbtyCode,
+  type VptyCode,
+} from './codes-e32';
+import { HOECHSTANZAHL } from './pruefung-e32';
 
 /**
  * Zusammenbau der monatlichen Beitragsgrundlagenmeldung (Kapitel E.32).
@@ -122,6 +134,22 @@ export interface Verrechnungsbasis {
   positionen: readonly Verrechnungsposition[];
 }
 
+/**
+ * Beschäftigungsfolge im Sinne von E.32.2.2.2. Sie bestimmt die Satzarten der
+ * gesamten Meldung — mBGM **und** Tarifblock — und ist damit keine Nebenangabe:
+ *
+ * | Folge | mBGM (S / V) | Storno (S / V) | Tarifblock |
+ * |---|---|---|---|
+ * | `regelmaessig` | `G1` / `G2` | `R1` / `R2` | `T1` bzw. `T4` |
+ * | `fallweise` | `G3` / `G4` | `R3` / `R4` | `T2` bzw. `T5` |
+ * | `kuerzerAlsEinMonat` | `G5` / `G6` | `R5` / `R6` | `T3` bzw. `T6` |
+ *
+ * Je Versichertem und Beitragszeitraum ist **eine** mBGM pro Folge zulässig
+ * (Grundsatz 1). Mehrere gleichartige Beschäftigungen gehören in dieselbe
+ * mBGM, dort als mehrere Tarifblöcke.
+ */
+export type Beschaeftigungsfolge = 'regelmaessig' | 'fallweise' | 'kuerzerAlsEinMonat';
+
 /** Ein Tarifblock mit den ihm untergeordneten Verrechnungsbasen. */
 export interface Tarifblock {
   /**
@@ -134,10 +162,24 @@ export interface Tarifblock {
   ergaenzungen?: readonly string[];
   /**
    * Beginn der Verrechnung (`VVON`) — der Tag im Beitragszeitraum, ab dem der
-   * Tarifblock gilt. Bei einer mBGM **ohne** Versicherungszeit ist laut D.63
-   * zwingend `1` einzusetzen; das erzwingt dieses Modul.
+   * Tarifblock gilt. **Nur bei regelmäßiger Beschäftigung.** Bei einer mBGM
+   * ohne Versicherungszeit ist laut D.63 zwingend `1` einzusetzen; das
+   * erzwingt dieses Modul.
    */
-  beginnDerVerrechnung: number;
+  beginnDerVerrechnung?: number;
+  /**
+   * Beschäftigungstag (`FTAG`, D.55) — **nur bei fallweiser Beschäftigung**.
+   * Je Beschäftigungstag ein eigener Tarifblock (E.32.2.2.2, Grundsatz 2a).
+   */
+  beschaeftigungstag?: number;
+  /**
+   * Erster Tag der kürzer als einen Monat vereinbarten Beschäftigung (`BTAB`,
+   * D.56) — **nur bei dieser Beschäftigungsfolge**. Je Beschäftigungsabschnitt
+   * ein eigener Tarifblock (Grundsatz 2b).
+   */
+  ersterTag?: number;
+  /** Letzter Tag der kürzer als einen Monat vereinbarten Beschäftigung (`BTBS`, D.57). */
+  letzterTag?: number;
   /**
    * Ob der Tarifblock (auch) eine Kündigungsentschädigung oder
    * Urlaubsersatzleistung enthält (`KEUE`, D.64). In einem Tarifblock ohne
@@ -168,6 +210,11 @@ export interface Beitragsgrundlagenmeldung {
   vorname: string;
   /** Verrechnungsgrundlage (`VERG`) — siehe {@link VERRECHNUNGSGRUNDLAGE}. */
   verrechnungsgrundlage: Verrechnungsgrundlage;
+  /**
+   * Beschäftigungsfolge — bestimmt Satzart der mBGM und des Tarifblocks.
+   * Ohne Angabe gilt `regelmaessig`, der Normalfall.
+   */
+  folge?: Beschaeftigungsfolge;
   /** Die Tarifblöcke dieses Versicherten, in der zu meldenden Reihenfolge. */
   tarifbloecke: readonly Tarifblock[];
   /** Freies Informationsfeld für den Dienstgeber (`INF1`, 12 Stellen). */
@@ -177,24 +224,131 @@ export interface Beitragsgrundlagenmeldung {
 }
 
 /*
- * TODO — noch nicht über diese Schicht erreichbar, bewusst offengelassen:
+ * Noch nicht über diese Schicht erreichbar:
  *
- * - **Storno** (`R1`/`R2`). Die Satzarten sind in `pflicht-e32.ts` vollständig
- *   erfasst; es fehlt der benannte Einstieg. Ein Storno trägt `REFU` (Verweis
- *   auf die ursprüngliche Meldung) und kommt ohne Tarifblock aus. Zusätzlich
- *   verlangt Seite 338: „muss aber auch jedenfalls der Beitragszeitraum und im
- *   Bereich der Selbstabrechnung die Gesamtsumme der Beiträge für das Storno
- *   mit jenem der zu stornierende mBGM übereinstimmen" — das ist ohne Kenntnis
- *   der ursprünglichen Meldung nicht prüfbar und braucht eine eigene Zusage.
- * - **Fallweise Beschäftigung** (`G3`/`G4`, Tarifblock `T2`/`T5`, Feld `FTAG`).
- * - **Kürzer als ein Monat vereinbarte Beschäftigung** (`G5`/`G6`, Tarifblock
- *   `T3`/`T6`, Felder `BTAB`/`BTBS`).
- * - **mBGM ohne Versicherten** (`G7`/`R7`) — abweichende Pflichtstufen, kein
- *   Tarifblock.
+ * - **mBGM ohne Versicherten** (`G7`/`R7`). Laut den Fußnoten 67–69 zu
+ *   Kapitel E.32.2.2.6 „nur für das BMJ" — für gewöhnliche Dienstgeber also
+ *   gar nicht vorgesehen. Über die Satzschicht und `baueBestand` wäre die
+ *   Meldung baubar; `pruefeAbfolge` lässt den Weg nur mit ausdrücklichem
+ *   `bmj`-Schalter durch.
  *
- * Alle vier sind über die Satzschicht (`felder-e32.ts`, `pflicht-e32.ts`) und
- * `baueBestand` bereits heute baubar; es fehlt allein die bequeme Fassung.
+ * Nicht geprüft, weil dieses Modul die Angaben nicht hat:
+ *
+ * - **Ob mehr als ein Tarifblock je mBGM sachlich berechtigt ist.** Dass
+ *   grundsätzlich nur einer zulässig ist, prüft `pruefeMbgmPaket` als Warnung
+ *   (ÖGK-FAK 3.1.11). Welcher der Ausnahmefälle vorliegt — mehrere
+ *   Beschäftigungen im Zeitraum, unterschiedliche Verrechnung, Unterbrechung
+ *   durch Abmeldung —, geht aus den übergebenen Daten nicht hervor. Bei
+ *   fallweiser und kürzer-als-ein-Monat vereinbarter Beschäftigung ist je
+ *   Beschäftigungszeit ohnehin ein eigener Block vorgesehen (FAK 3.2.8).
+ * - **Ob die Voraussetzung für ein Storno erfüllt ist.** Zulässig ist es in
+ *   beiden Verfahren; im Vorschreibeverfahren allerdings nur, solange die
+ *   stornierte mBGM noch nicht vorgeschrieben wurde, oder bei einer
+ *   Falschmeldung. Ob vorgeschrieben wurde, weiß nur der Aufrufer.
+ * - **Ob das Storno der ursprünglichen Meldung zugeordnet werden kann.** Die
+ *   ÖGK nennt in FAK 3.2.7 die Kriterien vollständig: Referenzwert der
+ *   ursprünglichen Meldung, Beitragskontonummer und Beitragszeitraum des
+ *   Pakets, Satzart der mBGM, Versicherungsnummer und Summe der Beiträge.
+ *   Beitragskontonummer und Beitragszeitraum stammen aus den Paketoptionen und
+ *   stimmen damit bauartbedingt; die Satzart leitet sich aus `folge` ab. Übrig
+ *   bleiben `referenzUrspruenglicheMeldung`, `versicherungsnummer` und
+ *   `summeCent` — sie muss der Aufrufer aus der ursprünglichen Meldung
+ *   übernehmen. Passt eines davon nicht, weist ELDA das Storno nicht ab,
+ *   sondern legt einen **Clearingfall** an: Es lässt sich weder verarbeiten
+ *   noch seinerseits stornieren.
  */
+
+/**
+ * Storno einer bereits übermittelten mBGM.
+ *
+ * Eine Storno-Meldung besteht **nur aus dem mBGM-Satz** — Tarifblock,
+ * Verrechnungsbasis und Verrechnungsposition sind dort ausdrücklich unzulässig
+ * (E.32.2.2.2 und E.32.2.2.6).
+ *
+ * **Wann ein Storno nötig ist, unterscheidet sich nach Verfahren:**
+ *
+ * - *Selbstabrechnung:* „Bei Änderungen einer mBGM ist im Bereich der
+ *   Selbstabrechnung **immer** ein Storno der zuletzt übermittelten mBGM mit
+ *   nachfolgender neuer mBGM erforderlich." Auch beim Nachreichen fehlender
+ *   Teile — eine Differenzmeldung gibt es nicht.
+ * - *Vorschreibung:* Bei **regelmäßiger** Beschäftigung ist grundsätzlich
+ *   **kein** Storno zulässig; die neue mBGM überschreibt die bisherige. Ein
+ *   Storno ist nur zulässig, solange noch nicht vorgeschrieben wurde, oder bei
+ *   einer Falschmeldung (etwa falsche Versicherungsnummer). Bei fallweiser
+ *   Beschäftigung ist Storno und Neumeldung dagegen stets erforderlich.
+ *
+ * Dieses Modul erzwingt die Verfahrensregel nicht — ob bereits vorgeschrieben
+ * wurde, weiß nur der Aufrufer.
+ */
+export interface Stornomeldung {
+  /** Eindeutige Identifikation dieser Storno-Meldung (`REFW`). */
+  referenzwert: string;
+  /**
+   * Referenzwert der zu stornierenden Meldung (`REFU`). Zwingend — über ihn
+   * wird die ursprüngliche mBGM identifiziert.
+   */
+  referenzUrspruenglicheMeldung: string;
+  /**
+   * Versicherungsnummer (`VSNR`). Beim Storno **einzeln zwingend**; die
+   * Alternative „Versicherungsnummer ODER Referenz auf die VSNR-Anforderung"
+   * gilt hier nicht (Pflichtmatrix, Seite 345).
+   */
+  versicherungsnummer: string;
+  /**
+   * Beschäftigungsfolge der zu stornierenden Meldung. Sie bestimmt die Satzart
+   * des Stornos, und die zählt laut ÖGK-FAK 3.2.7 zu den Kriterien, über die
+   * die ÖGK das Storno der ursprünglichen mBGM zuordnet: Ein `R1` storniert
+   * kein `G3`.
+   */
+  folge?: Beschaeftigungsfolge;
+  /**
+   * Summe der Beiträge (`VSUM`) in **Cent**, nicht negativ.
+   *
+   * Aus E.32.2.2.2: „Das Datenfeld für die Summe der Beiträge für einen
+   * Versicherten (VSUM) besitzt kein Vorzeichen. […] Allerdings ist bei der
+   * Summierung der mBGM in einem mBGM-Paket (im Datenfeld GSUM) die VSUM der
+   * Storno-mBGM **abzuziehen**." Genau das tut dieses Modul.
+   *
+   * Der Betrag muss dem der zu stornierenden mBGM entsprechen (Seite 338).
+   * Er ist eines der Kriterien, über die die ÖGK das Storno der ursprünglichen
+   * Meldung zuordnet (FAK 3.2.7) — nicht bloß eine Plausibilitätsangabe.
+   * Prüfen lässt sich das hier nicht: Die ursprüngliche Meldung liegt diesem
+   * Modul nicht vor.
+   *
+   * Ein Teilstorno gibt es nicht. Auch wenn nur ein einzelner Tag oder eine
+   * einzelne Verrechnungsbasis falsch war, ist die **gesamte** mBGM zu
+   * stornieren und neu zu melden: „Da keine Differenzmeldungen möglich sind,
+   * ist es auch nicht möglich, einzelne Tarifblöcke zu korrigieren" (FAK
+   * 3.2.8).
+   */
+  summeCent: number;
+  /** Freies Informationsfeld (`INF1`). */
+  info1?: string;
+  /** Zweites freies Informationsfeld (`INF2`). */
+  info2?: string;
+}
+
+/** Ein Eintrag im Paket: entweder eine Meldung oder ein Storno. */
+export type MbgmEintrag = Beitragsgrundlagenmeldung | Stornomeldung;
+
+/** Unterscheidet Storno von Meldung, ohne dass der Aufrufer etwas markieren muss. */
+function istStorno(e: MbgmEintrag): e is Stornomeldung {
+  return 'referenzUrspruenglicheMeldung' in e;
+}
+
+/** Satzart der mBGM je Folge, Verfahren und Meldungsart. */
+const SATZART_MBGM: Readonly<Record<Beschaeftigungsfolge, Readonly<Record<string, string>>>> = {
+  regelmaessig: { selbstMeldung: 'G1', vorMeldung: 'G2', selbstStorno: 'R1', vorStorno: 'R2' },
+  fallweise: { selbstMeldung: 'G3', vorMeldung: 'G4', selbstStorno: 'R3', vorStorno: 'R4' },
+  kuerzerAlsEinMonat: { selbstMeldung: 'G5', vorMeldung: 'G6', selbstStorno: 'R5', vorStorno: 'R6' },
+};
+
+/** Satzart des Tarifblocks je Folge — mit und ohne Verrechnung. */
+const SATZART_TARIFBLOCK: Readonly<Record<Beschaeftigungsfolge, readonly [string, string]>> = {
+  regelmaessig: ['T1', 'T4'],
+  fallweise: ['T2', 'T5'],
+  kuerzerAlsEinMonat: ['T3', 'T6'],
+};
 
 /** Angaben, die für das ganze Paket gelten. */
 export interface PaketOptionen {
@@ -268,8 +422,9 @@ function prozentsatz(wert: number, feld: string): { vorzeichen: string; ziffern:
 
 // --- Zusammenbau -----------------------------------------------------------
 
-function pruefeMeldung(m: Beitragsgrundlagenmeldung, nr: number): void {
+function pruefeMeldung(m: Beitragsgrundlagenmeldung, nr: number, selbst: boolean): void {
   const wo = `Meldung ${nr} (${m.referenzwert || 'ohne Referenzwert'})`;
+  const folge = m.folge ?? 'regelmaessig';
   if (!m.referenzwert?.trim()) {
     throw new EldaError(`${wo}: Referenzwert (REFW) fehlt — er identifiziert die Meldung eindeutig.`);
   }
@@ -283,49 +438,139 @@ function pruefeMeldung(m: Beitragsgrundlagenmeldung, nr: number): void {
         'angegeben werden."',
     );
   }
+  if (m.tarifbloecke.length > HOECHSTANZAHL.tarifblock && folge === 'regelmaessig') {
+    throw new EldaError(
+      `${wo}: ${m.tarifbloecke.length} Tarifblöcke. E.32.2.2.3 lässt bei regelmäßiger ` +
+        `Beschäftigung höchstens ${HOECHSTANZAHL.tarifblock} zu.`,
+    );
+  }
+  if (m.tarifbloecke.length > HOECHSTANZAHL.tarifblockTagesbezogen) {
+    throw new EldaError(
+      `${wo}: ${m.tarifbloecke.length} Tarifblöcke. Bei tagesbezogener Beschäftigung ist die ` +
+        `Anzahl durch die Kalendertage des Monats begrenzt (höchstens ` +
+        `${HOECHSTANZAHL.tarifblockTagesbezogen}).`,
+    );
+  }
   if (!m.tarifbloecke.length) {
     throw new EldaError(
       `${wo}: keine Tarifblöcke. Eine mBGM ohne Tarifblock ist nur als Satzart G7 ` +
-        '(„ohne Versicherten") vorgesehen, die dieses Modul nicht über diesen Weg erzeugt.',
+        '(„ohne Versicherten") vorgesehen, die laut Fußnote nur für das BMJ gilt.',
     );
   }
+  // Im Vorschreibeverfahren führt die Abfolgetabelle bei G4 ausschließlich T2 —
+  // ein Tarifblock ohne Verrechnung ist dort nicht vorgesehen (Seite 363).
+  if (!selbst && folge === 'fallweise' && m.tarifbloecke.some((t) => t.ohneVerrechnung)) {
+    throw new EldaError(
+      `${wo}: Bei fallweiser Beschäftigung im Vorschreibeverfahren ist kein Tarifblock ohne ` +
+        'Verrechnung vorgesehen — die Abfolgetabelle führt zu G4 ausschließlich T2 (E.32.2.2.6).',
+    );
+  }
+
   const ohneZeit = !MIT_VERSICHERUNGSZEIT.has(m.verrechnungsgrundlage);
   m.tarifbloecke.forEach((t, i) => {
-    if (ohneZeit && t.beginnDerVerrechnung !== 1) {
+    const woT = `${wo}, Tarifblock ${i + 1}`;
+
+    // Je Beschäftigungsfolge trägt der Tarifblock ein anderes Zeitfeld
+    // (E.32.2.2.3). Ein fehlendes oder ein überzähliges ist beides ein Fehler:
+    // Das überzählige landete sonst stillschweigend nirgends.
+    if (folge === 'regelmaessig') {
+      if (t.beginnDerVerrechnung === undefined) {
+        throw new EldaError(`${woT}: Beginn der Verrechnung (VVON) fehlt.`);
+      }
+      if (t.beschaeftigungstag !== undefined || t.ersterTag !== undefined || t.letzterTag !== undefined) {
+        throw new EldaError(
+          `${woT}: Beschäftigungstag bzw. erster/letzter Tag gehören nicht zur regelmäßigen ` +
+            'Beschäftigung — dort stellt VVON den Bezug zur Versicherungszeit her.',
+        );
+      }
+      if (ohneZeit && t.beginnDerVerrechnung !== 1) {
+        throw new EldaError(
+          `${woT}: Bei einer mBGM ohne Versicherungszeit (VERG=${m.verrechnungsgrundlage}) ist ` +
+            `der Beginn der Verrechnung laut D.63 zwingend mit 01 zu belegen, angegeben wurde ` +
+            `${t.beginnDerVerrechnung}.`,
+        );
+      }
+    } else if (folge === 'fallweise') {
+      if (t.beschaeftigungstag === undefined) {
+        throw new EldaError(`${woT}: Beschäftigungstag (FTAG) fehlt.`);
+      }
+      if (t.beginnDerVerrechnung !== undefined) {
+        throw new EldaError(`${woT}: VVON gehört nicht zur fallweisen Beschäftigung — dort zählt FTAG.`);
+      }
+    } else {
+      if (t.ersterTag === undefined || t.letzterTag === undefined) {
+        throw new EldaError(`${woT}: Erster und letzter Tag (BTAB/BTBS) sind zwingend.`);
+      }
+      if (t.letzterTag < t.ersterTag) {
+        throw new EldaError(`${woT}: Letzter Tag (${t.letzterTag}) liegt vor dem ersten (${t.ersterTag}).`);
+      }
+      if (t.beginnDerVerrechnung !== undefined) {
+        throw new EldaError(`${woT}: VVON gehört nicht hierher — den Bezug stellen BTAB und BTBS her.`);
+      }
+    }
+
+    if (t.ohneVerrechnung && t.basen.length > 0) {
       throw new EldaError(
-        `${wo}, Tarifblock ${i + 1}: Bei einer mBGM ohne Versicherungszeit ` +
-          `(VERG=${m.verrechnungsgrundlage}) ist der Beginn der Verrechnung laut D.63 zwingend ` +
-          `mit 01 zu belegen, angegeben wurde ${t.beginnDerVerrechnung}.`,
+        `${woT}: Ein Tarifblock ohne Verrechnung darf keine Verrechnungsbasis tragen. ` +
+          'E.32.2.2.3: „Diese beinhalten keine Verrechnung, daher ist nachfolgend keine ' +
+          'Übermittlung einer Verrechnungsbasis zulässig."',
+      );
+    }
+    if (t.basen.length > HOECHSTANZAHL.verrechnungsbasis) {
+      throw new EldaError(
+        `${woT}: ${t.basen.length} Verrechnungsbasen, zulässig sind höchstens ` +
+          `${HOECHSTANZAHL.verrechnungsbasis} (E.32.2.2.4).`,
       );
     }
     if (t.ohneVerrechnung && t.enthaeltKuendigungsentschaedigungOderUrlaubsersatz) {
       throw new EldaError(
-        `${wo}, Tarifblock ${i + 1}: In einem Tarifblock ohne Verrechnung (T4) ist KEUE ` +
-          'gesperrt (Pflichtmatrix, Seite 347).',
+        `${woT}: In einem Tarifblock ohne Verrechnung ist KEUE gesperrt (Pflichtmatrix, Seite 347).`,
       );
     }
     if ((t.ergaenzungen?.length ?? 0) > 5) {
       throw new EldaError(
-        `${wo}, Tarifblock ${i + 1}: höchstens fünf Ergänzungen zur Beschäftigtengruppe ` +
-          `(BLOCK FÜR 5 ERGÄNZUNGEN), angegeben wurden ${t.ergaenzungen?.length}.`,
+        `${woT}: höchstens fünf Ergänzungen zur Beschäftigtengruppe (BLOCK FÜR 5 ERGÄNZUNGEN), ` +
+          `angegeben wurden ${t.ergaenzungen?.length}.`,
       );
     }
+
     const gesehen = new Set<string>();
     for (const b of t.basen) {
       if (!(b.typ in VBTY_CODES)) {
-        throw new EldaError(`${wo}, Tarifblock ${i + 1}: unbekannter Verrechnungsbasis-Typ '${b.typ}'.`);
+        throw new EldaError(`${woT}: unbekannter Verrechnungsbasis-Typ '${b.typ}'.`);
       }
       if (gesehen.has(b.typ)) {
         throw new EldaError(
-          `${wo}, Tarifblock ${i + 1}: Der Verrechnungsbasis-Typ '${b.typ}' kommt mehrfach vor. ` +
-            'D.58: „Jeder Verrechnungsbasis-Typ darf für einen Tarifblock nur einmal verwendet werden."',
+          `${woT}: Der Verrechnungsbasis-Typ '${b.typ}' kommt mehrfach vor. D.58: „Jeder ` +
+            'Verrechnungsbasis-Typ darf für einen Tarifblock nur einmal verwendet werden."',
         );
       }
       gesehen.add(b.typ);
+      if (b.positionen.length > HOECHSTANZAHL.verrechnungsposition) {
+        throw new EldaError(
+          `${woT}, Basis '${b.typ}': ${b.positionen.length} Verrechnungspositionen, zulässig ` +
+            `sind höchstens ${HOECHSTANZAHL.verrechnungsposition} (E.32.2.2.5).`,
+        );
+      }
+      const erlaubt = erlaubtePositionen(b.typ);
       for (const p of b.positionen) {
         if (!(p.typ in VPTY_CODES)) {
+          throw new EldaError(`${woT}: unbekannter Verrechnungspositions-Typ '${p.typ}'.`);
+        }
+        // Nur prüfen, wo das Dokument eine Zuordnung führt. Für KE, UH und RP
+        // tut es das nicht — dort wäre eine Ablehnung geraten.
+        if (erlaubt && !erlaubt.has(p.typ)) {
           throw new EldaError(
-            `${wo}, Tarifblock ${i + 1}: unbekannter Verrechnungspositions-Typ '${p.typ}'.`,
+            `${woT}: Die Verrechnungsposition '${p.typ}' ist zur Verrechnungsbasis '${b.typ}' ` +
+              `nicht zulässig (D.60). Zulässig wären: ${[...erlaubt].sort().join(', ')}.`,
+          );
+        }
+      }
+      for (const pflicht of zwingendePositionen(b.typ)) {
+        if (!b.positionen.some((p) => p.typ === pflicht)) {
+          throw new EldaError(
+            `${woT}: Zur Verrechnungsbasis '${b.typ}' fehlt die zwingende Verrechnungsposition ` +
+              `'${pflicht}' (D.60).`,
           );
         }
       }
@@ -333,68 +578,132 @@ function pruefeMeldung(m: Beitragsgrundlagenmeldung, nr: number): void {
   });
 }
 
+function pruefeStorno(st: Stornomeldung, nr: number): void {
+  const wo = `Storno ${nr} (${st.referenzwert || 'ohne Referenzwert'})`;
+  if (!st.referenzwert?.trim()) {
+    throw new EldaError(`${wo}: Referenzwert (REFW) fehlt.`);
+  }
+  if (!st.referenzUrspruenglicheMeldung?.trim()) {
+    throw new EldaError(
+      `${wo}: Referenzwert der ursprünglichen Meldung (REFU) fehlt. Über ihn wird die zu ` +
+        'stornierende mBGM identifiziert (D.44).',
+    );
+  }
+  if (!st.versicherungsnummer?.trim()) {
+    throw new EldaError(
+      `${wo}: Versicherungsnummer (VSNR) fehlt. Beim Storno ist sie einzeln zwingend — die ` +
+        'Alternative zur VSNR-Anforderung gilt dort nicht (Pflichtmatrix, Seite 345).',
+    );
+  }
+  ganzzahl(st.summeCent, wo);
+  if (st.summeCent < 0) {
+    throw new EldaError(
+      `${wo}: Die Summe der Beiträge ist ${st.summeCent}. Das Feld VSUM trägt kein Vorzeichen; ` +
+        'der Betrag einer Storno-mBGM ist laut E.32.2.2.2 „immer größer oder gleich 0". ' +
+        'Abgezogen wird er erst bei der Bildung der Gesamtsumme des Pakets.',
+    );
+  }
+}
+
 /**
- * Baut die vollständige Satzfolge eines mBGM-Pakets: Paket-Beginn, je Meldung
- * die mBGM mit ihren Tarifblöcken, Verrechnungsbasen und -positionen, zum
- * Schluss der Paket-Ende-Satz.
+ * Baut die vollständige Satzfolge eines mBGM-Pakets: Paket-Beginn, je Eintrag
+ * die mBGM (bei einer Meldung mit ihren Tarifblöcken, Verrechnungsbasen und
+ * -positionen; bei einem Storno ohne), zum Schluss der Paket-Ende-Satz.
  *
  * Die Reihenfolge ist bedeutungstragend und darf vom Aufrufer nicht verändert
  * werden — die Zugehörigkeit der Sätze ergibt sich allein aus ihr.
  *
- * `GSUM` (Gesamtsumme) und `ANZM` (Anzahl) werden aus den übergebenen Meldungen
- * berechnet, nicht vom Aufrufer entgegengenommen: Eine von Hand gesetzte Summe,
- * die nicht zur Satzfolge passt, ist einer der häufigsten Rückweisungsgründe
- * und lässt sich hier vollständig vermeiden.
+ * `GSUM` und `ANZM` werden aus den übergebenen Einträgen berechnet, nicht
+ * entgegengenommen: Eine von Hand gesetzte Summe, die nicht zur Satzfolge
+ * passt, ist einer der häufigsten Rückweisungsgründe (`F9051`) und lässt sich
+ * hier vollständig vermeiden. Storno-Beträge werden dabei **abgezogen**.
  *
  * @returns geordnete Rohsätze, geeignet für `baueBestand`.
  */
-export function erstelleMbgmPaket(
-  meldungen: readonly Beitragsgrundlagenmeldung[],
-  opt: PaketOptionen,
-): RohSatz[] {
-  if (!meldungen.length) {
+export function erstelleMbgmPaket(eintraege: readonly MbgmEintrag[], opt: PaketOptionen): RohSatz[] {
+  if (!eintraege.length) {
     throw new EldaError('Ein mBGM-Paket ohne Meldungen ist nicht vorgesehen.');
   }
   if (!/^\d{6}$/.test(opt.beitragszeitraum)) {
     throw new EldaError(
-      `Beitragszeitraum '${opt.beitragszeitraum}' muss genau sechs Ziffern im Format MMJJJJ haben ` +
-        "— z. B. '072026' für Juli 2026.",
+      `Beitragszeitraum '${opt.beitragszeitraum}' muss genau sechs Ziffern im Format MMJJJJ ` +
+        "haben — z. B. '072026' für Juli 2026.",
     );
   }
-  meldungen.forEach((m, i) => pruefeMeldung(m, i + 1));
-
   const selbst = opt.verfahren === 'selbstabrechnung';
+  eintraege.forEach((e, i) => {
+    if (istStorno(e)) pruefeStorno(e, i + 1);
+    else pruefeMeldung(e, i + 1, selbst);
+  });
+
   const saetze: RohSatz[] = [];
-
-  // Gesamtsumme über alle Meldungen — Summe aller VSUM, wie im Feldtext zu
-  // GSUM beschrieben: „Summe aller im Paket enthaltenen Abrechnungspositionen
-  // der Einzelmeldungen (Summe aller VSUM, Storno-Meldungen werden abgezogen)".
-  let gesamtCent = 0;
   const meldungssaetze: RohSatz[] = [];
+  let gesamtCent = 0;
 
-  for (const m of meldungen) {
+  for (const e of eintraege) {
+    const folge = e.folge ?? 'regelmaessig';
+    const arten = SATZART_MBGM[folge];
+
+    if (istStorno(e)) {
+      // Storno: nur der mBGM-Satz, keine untergeordneten Sätze.
+      gesamtCent -= e.summeCent;
+      meldungssaetze.push({
+        satzart: (selbst ? arten.selbstStorno : arten.vorStorno) as string,
+        felder: FELDER_MBGM,
+        satzlaenge: SATZLAENGE_MBGM,
+        werte: {
+          REFW: e.referenzwert,
+          REFU: e.referenzUrspruenglicheMeldung,
+          VSNR: e.versicherungsnummer,
+          VSUM: selbst ? String(e.summeCent) : undefined,
+          INF1: e.info1,
+          INF2: e.info2,
+        },
+      });
+      continue;
+    }
+
+    const m = e;
     let summeCent = 0;
     const untersaetze: RohSatz[] = [];
+    const [mitVerrechnung, ohneVerrechnung] = SATZART_TARIFBLOCK[folge];
+    const tarifblockFelder =
+      folge === 'fallweise'
+        ? FELDER_TARIFBLOCK_FALLWEISE
+        : folge === 'kuerzerAlsEinMonat'
+          ? FELDER_TARIFBLOCK_KURZ
+          : FELDER_TARIFBLOCK;
+    const tarifblockLaenge =
+      folge === 'fallweise'
+        ? SATZLAENGE_TARIFBLOCK_FALLWEISE
+        : folge === 'kuerzerAlsEinMonat'
+          ? SATZLAENGE_TARIFBLOCK_KURZ
+          : SATZLAENGE_TARIFBLOCK;
 
     for (const t of m.tarifbloecke) {
       const ergb: Record<string, string | undefined> = {};
-      (t.ergaenzungen ?? []).forEach((e, i) => {
-        ergb[`ERGB${i + 1}`] = e;
+      (t.ergaenzungen ?? []).forEach((wert, i) => {
+        ergb[`ERGB${i + 1}`] = wert;
       });
+      const zeitfelder: Record<string, string | undefined> =
+        folge === 'fallweise'
+          ? { FTAG: String(t.beschaeftigungstag) }
+          : folge === 'kuerzerAlsEinMonat'
+            ? { BTAB: String(t.ersterTag), BTBS: String(t.letzterTag) }
+            : { VVON: String(t.beginnDerVerrechnung) };
+      // KEUE gibt es nur im Tarifblock der regelmäßigen und der kürzer als ein
+      // Monat vereinbarten Beschäftigung; der fallweise Tarifblock hat das Feld
+      // gar nicht (Feldtabellen, Seiten 341–342).
+      const keue =
+        folge !== 'fallweise' && !t.ohneVerrechnung && t.enthaeltKuendigungsentschaedigungOderUrlaubsersatz
+          ? 'J'
+          : undefined;
+
       untersaetze.push({
-        satzart: t.ohneVerrechnung ? 'T4' : 'T1',
-        felder: FELDER_TARIFBLOCK,
-        satzlaenge: SATZLAENGE_TARIFBLOCK,
-        werte: {
-          BSGR: t.beschaeftigtengruppe,
-          ...ergb,
-          VVON: String(t.beginnDerVerrechnung),
-          KEUE: t.ohneVerrechnung
-            ? undefined
-            : t.enthaeltKuendigungsentschaedigungOderUrlaubsersatz
-              ? 'J'
-              : undefined,
-        },
+        satzart: t.ohneVerrechnung ? ohneVerrechnung : mitVerrechnung,
+        felder: tarifblockFelder,
+        satzlaenge: tarifblockLaenge,
+        werte: { BSGR: t.beschaeftigtengruppe, ...ergb, ...zeitfelder, ...(keue ? { KEUE: keue } : {}) },
       });
 
       for (const b of t.basen) {
@@ -447,7 +756,7 @@ export function erstelleMbgmPaket(
     gesamtCent += summeCent;
     const vsum = betragMitVorzeichen(summeCent, `Meldung ${m.referenzwert}`);
     meldungssaetze.push({
-      satzart: selbst ? 'G1' : 'G2',
+      satzart: (selbst ? arten.selbstMeldung : arten.vorMeldung) as string,
       felder: FELDER_MBGM,
       satzlaenge: SATZLAENGE_MBGM,
       werte: {
@@ -466,7 +775,6 @@ export function erstelleMbgmPaket(
       },
     });
     meldungssaetze.push(...untersaetze);
-    untersaetze.length = 0;
   }
 
   const gesamt = betragMitVorzeichen(gesamtCent, 'Gesamtsumme des Pakets');
@@ -487,7 +795,7 @@ export function erstelleMbgmPaket(
       // Summenprüfungen F9050/F9051 ausdrücklich nur für die Satzart PS.
       GSVZ: selbst ? gesamt.vorzeichen : undefined,
       GSUM: selbst ? gesamt.ziffern : undefined,
-      ANZM: String(meldungen.length),
+      ANZM: String(eintraege.length),
     },
   });
   saetze.push(...meldungssaetze);
@@ -495,7 +803,7 @@ export function erstelleMbgmPaket(
     satzart: 'PE',
     felder: FELDER_PAKET,
     satzlaenge: SATZLAENGE_PAKET,
-    werte: { REFP: opt.paketreferenzwert, ANZM: String(meldungen.length) },
+    werte: { REFP: opt.paketreferenzwert, ANZM: String(eintraege.length) },
   });
 
   return saetze;

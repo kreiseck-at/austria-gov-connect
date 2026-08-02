@@ -37,6 +37,35 @@ export const VBTY_CODES = {
   RP: 'Allgemeine Beitragsgrundlage für PV-Reduktion',
 } as const;
 
+/**
+ * Wozu die besonderen Basistypen da sind — aus den Spezialfällen in
+ * Kapitel E.32.2.15. Ohne diesen Zusammenhang wirken sie wie Dubletten der
+ * allgemeinen Beitragsgrundlage.
+ *
+ * - `AZ`/`SA` — **abweichende Grundlage für die AV-Minderung** (E.32.2.15.1).
+ *   Weicht die Beitragsgrundlage für die SV vom tatsächlichen Entgelt ab (etwa
+ *   bei Altersteilzeit: fiktive Grundlage in Höhe des Einkommens vor der
+ *   Herabsetzung), darf die Minderung des AV-Beitrags nur das **tatsächliche**
+ *   Entgelt betreffen — den Dienstnehmeranteil aus der Differenz trägt der
+ *   Dienstgeber allein, er kann nicht entfallen. Deshalb eine eigene Basis.
+ *   Genau darum tragen `AZ` und `SA` **keine** Standard-Tarifgruppenverrechnung.
+ * - `UU` — **unbezahlter Urlaub** (E.32.2.15.2). Normale Versicherungszeit und
+ *   unbezahlter Urlaub im selben Beitragszeitraum gehören in **eine** mBGM,
+ *   dort aber getrennt.
+ * - `SR` — **Reduktion der SW-Entschädigung bei Kurzarbeit** (E.32.2.15.6). Die
+ *   Standardverrechnung rechnet auf dem Einkommen vor der Kurzarbeit und ergibt
+ *   damit einen zu hohen Schlechtwetterentschädigungsbeitrag; über diese Basis
+ *   und den Abschlag `A21` wird die Differenz wieder herausgerechnet.
+ *
+ * Zur Verrechnungszeit-Unterbrechung (E.32.2.15.5) hält das Dokument fest:
+ * „Bei Übermittlung der mBGM ist jedenfalls darauf zu achten, dass es zu keinen
+ * Rundungsdifferenzen kommt. Somit muss das Einkommen vor und nach der
+ * Unterbrechung gem. Granularität der Tarifblöcke auch in der Lohnverrechnung
+ * getrennt voneinander betrachtet/berechnet werden." Das betrifft den
+ * Aufrufer, nicht dieses Paket — ein nachträgliches Aufteilen einer bereits
+ * gerundeten Summe erzeugt genau die Differenzen, die dort gemeint sind.
+ */
+
 /** Ein Verrechnungsbasis-Typ. */
 export type VbtyCode = keyof typeof VBTY_CODES;
 
@@ -320,3 +349,37 @@ Object.freeze(EINS_ZU_EINS);
 Object.freeze(KOMBINATION);
 for (const zeile of Object.values(KOMBINATION)) Object.freeze(zeile);
 for (const eintrag of Object.values(VPTY_CODES)) Object.freeze(eintrag);
+
+/**
+ * Welche Verrechnungspositions-Typen zu einem Basistyp zulässig sind.
+ *
+ * Führt beide Tabellen aus D.60 zusammen: die 1:1-Beziehungen (Seite 153) und
+ * die Kombinationstabelle der klassischen Beitragsgrundlagen.
+ *
+ * @returns `undefined`, wenn das Dokument für diesen Basistyp keine Zuordnung
+ *   führt. Dann wird **nicht** geprüft — eine Ablehnung wäre geraten. Das
+ *   betrifft `KE`, `UH` und `RP`.
+ */
+export function erlaubtePositionen(vbty: string): ReadonlySet<string> | undefined {
+  const einsZuEins = EINS_ZU_EINS[vbty];
+  if (einsZuEins) return new Set(einsZuEins);
+  const zeile = KOMBINATION[vbty];
+  if (zeile) return new Set(Object.keys(zeile));
+  return undefined;
+}
+
+/**
+ * Positionstypen, die zu einem Basistyp **zwingend** gehören — im Dokument mit
+ * `Z` gekennzeichnet, bei den 1:1-Beziehungen durch „immer genau eine".
+ */
+export function zwingendePositionen(vbty: string): readonly string[] {
+  const einsZuEins = EINS_ZU_EINS[vbty];
+  // Bei SW hängt es davon ab, ob ein Lehrling betroffen ist — beide Positionen
+  // sind zulässig, keine ist für sich zwingend.
+  if (einsZuEins) return einsZuEins.length === 1 ? einsZuEins : [];
+  const zeile = KOMBINATION[vbty];
+  if (!zeile) return [];
+  return Object.entries(zeile)
+    .filter(([, stufe]) => stufe === 'Z')
+    .map(([code]) => code);
+}

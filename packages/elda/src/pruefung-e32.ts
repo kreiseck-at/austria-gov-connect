@@ -1,4 +1,5 @@
 import type { RohSatz } from './bestand';
+import { pruefeAbfolge } from './abfolge-e32';
 
 /**
  * Prüfregeln des mBGM-Pakets aus dem Prüfkatalog der 42. Ergänzung,
@@ -23,7 +24,15 @@ export type Schwere = 'fehler' | 'warnung';
 
 /** Ein Befund mit dem Fehlercode, den ELDA dafür vergibt. */
 export interface Befund {
-  /** Fehlercode laut Prüfkatalog, z. B. `'F9051'`. */
+  /**
+   * Fehlercode laut Prüfkatalog, z. B. `'F9051'`.
+   *
+   * Codes, die **nicht** mit `F` beginnen, stammen nicht aus dem Katalog,
+   * sondern aus dem Fragen-Antworten-Katalog der ÖGK (Präfix `FAK-` samt
+   * Abschnittsnummer). ELDA weist deswegen nichts zurück — sie sind immer
+   * `warnung`. Wer nur auf die Rückweisung durch ELDA prüft, filtert sie
+   * über das Präfix heraus.
+   */
   code: string;
   /** `fehler` weist die Meldung zurück, `warnung` nicht. */
   schwere: Schwere;
@@ -71,6 +80,21 @@ export const BKNR_LAENGE: Readonly<Record<string, readonly number[]>> = {
   'ÖGK-T': [7],
   'ÖGK-V': [6],
   BVAEB: [5, 10],
+};
+
+/**
+ * Beschäftigungsfolge je mBGM-Satzart (E.32.2.2.2): „Regelmäßige Beschäftigung
+ * (Normalfall)", „Fallweise Beschäftigung", „Für kürzer als ein Monat
+ * vereinbarte Beschäftigung". Je Versichertem und Beitragszeitraum ist von
+ * jeder Kategorie nur eine mBGM zulässig.
+ */
+const BESCHAEFTIGUNGSFOLGE: Readonly<Record<string, string>> = {
+  G1: 'regelmäßig',
+  G2: 'regelmäßig',
+  G3: 'fallweise',
+  G4: 'fallweise',
+  G5: 'kürzer als ein Monat vereinbart',
+  G6: 'kürzer als ein Monat vereinbart',
 };
 
 /** Frühester fachlich gültiger Beitragszeitraum (`F9040`): Zeiträume ab 01.01.2019. */
@@ -173,15 +197,29 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
         meldung: `Vorzeichen der Gesamtsumme (GSVZ) ist ungültig: '${gsvz ?? ''}'. Gültig sind '+' und '-'.`,
       });
     }
-    const summeMeldungen = mbgmSaetze.reduce((s, m) => s + (zahl(m.werte.VSUM) || 0), 0);
-    const gsum = zahl(kopf.werte.GSUM) || 0;
+    // Storno-Meldungen werden ABGEZOGEN, nicht addiert. E.32.2.2.2, Grundsätze
+    // für das Storno (Selbstabrechnung), Punkt 4: „Das Datenfeld für die Summe
+    // der Beiträge für einen Versicherten (VSUM) besitzt kein Vorzeichen. […]
+    // Allerdings ist bei der Summierung der mBGM in einem mBGM-Paket (im
+    // Datenfeld GSUM) die VSUM der Storno-mBGM abzuziehen."
+    const summeMeldungen = mbgmSaetze.reduce((s, m) => {
+      const betrag = zahl(m.werte.VSUM) || 0;
+      return m.satzart.startsWith('R') ? s - betrag : s + betrag;
+    }, 0);
+    // GSUM trägt selbst kein Vorzeichen — das steht getrennt in GSVZ. Ein Paket,
+    // das nur Storni enthält, hat deshalb einen positiven GSUM und GSVZ = '-'
+    // (Beispiele 14 bis 17). Ohne diese Umrechnung schlüge F9051 bei jedem
+    // Storno an, obwohl das Paket genau so aussieht, wie das Dokument es
+    // abdruckt.
+    const gsum = (zahl(kopf.werte.GSUM) || 0) * (kopf.werte.GSVZ === '-' ? -1 : 1);
     if (gsum !== summeMeldungen) {
       befunde.push({
         code: 'F9051',
         schwere: 'fehler',
         meldung:
-          `Gesamtsumme der Beiträge im Paket (GSUM=${gsum}) ist ungleich der Summe der ` +
-          `enthaltenen mBGM (${summeMeldungen}).`,
+          `Gesamtsumme der Beiträge im Paket (GSVZ=${kopf.werte.GSVZ ?? ''}, ` +
+          `GSUM=${kopf.werte.GSUM ?? ''}) ist ungleich der Summe der enthaltenen mBGM ` +
+          `(${summeMeldungen}; Storni abgezogen).`,
       });
     }
   }
@@ -225,6 +263,90 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
       if (++positionen > HOECHSTANZAHL.verrechnungsposition) ueberschritten.add('V1/V2');
     }
   }
+  // E.32.2.2.2, Grundsatz 1: „Es ist nur eine mBGM pro Beitragszeitraum und
+  // Beschäftigungsfolge (regelmäßig, fallweise oder kürzer als ein Monat
+  // vereinbart) zulässig. […] Auch wenn z.B. in einem Kalendermonat mehrere
+  // (regelmäßige) Beschäftigungen liegen, ist nur eine mBGM zulässig."
+  //
+  // Ein Paket deckt genau einen Beitragszeitraum ab, deshalb genügt hier der
+  // Vergleich je Versichertem. Storno-Sätze bleiben außen vor: Zu einer
+  // stornierten Meldung darf im selben Paket eine neue folgen — genau das
+  // verlangt Grundsatz 1 der Storno-Regeln bei jeder Änderung.
+  const gesehen = new Map<string, Set<string>>();
+  for (const m of mbgmSaetze) {
+    if (m.satzart.startsWith('R')) continue;
+    const vsnr = m.werte.VSNR?.trim();
+    if (!vsnr) continue;
+    const folge = BESCHAEFTIGUNGSFOLGE[m.satzart];
+    if (!folge) continue;
+    const bisher = gesehen.get(vsnr) ?? new Set<string>();
+    if (bisher.has(folge)) {
+      befunde.push({
+        code: 'F9070',
+        schwere: 'fehler',
+        meldung:
+          `Versicherungsnummer ${vsnr}: mehr als eine mBGM für die Beschäftigungsfolge ` +
+          `„${folge}" im selben Beitragszeitraum. E.32.2.2.2 lässt nur eine zu — mehrere ` +
+          'gleichartige Beschäftigungen in einem Kalendermonat sind in EINE mBGM ' +
+          'zusammenzufassen (dort über mehrere Tarifblöcke).',
+      });
+    }
+    bisher.add(folge);
+    gesehen.set(vsnr, bisher);
+  }
+
+  // Fragen-Antworten-Katalog der ÖGK, Abschnitt 3.1.11 (Stand 01.01.2026):
+  // „Grundsätzlich ist in einer mBGM nur ein Tarifblock zulässig. Mehr als ein
+  // Tarifblock in einer mBGM ist allerdings unter anderem zwingend
+  // erforderlich: Bei regelmäßiger Beschäftigung, wenn mehr als eine
+  // Beschäftigung in einem Beitragszeitraum vorliegt (gilt für zeitlich
+  // hintereinanderliegende Beschäftigungen und auch für parallele
+  // Beschäftigungen […])."
+  //
+  // Nur eine Warnung, und das aus zwei Gründen. „Unter anderem" heißt, dass die
+  // Ausnahmeliste nicht abschließend ist — E.32.2.2.2 nennt fünf Fälle, der FAK
+  // einen, und keine der beiden Aufzählungen beansprucht Vollständigkeit. Und
+  // der Prüfkatalog kennt dafür keinen Fehlercode: ELDA weist ein solches Paket
+  // nicht zurück.
+  //
+  // Nur für die regelmäßige Beschäftigung. Bei fallweiser und bei kürzer als
+  // einem Monat vereinbarter Beschäftigung sind mehrere Tarifblöcke der
+  // Normalfall — FAK 3.2.8: „bei diesen mBGM wird ja pro Beschäftigungszeit je
+  // ein Tarifblock gemeldet".
+  let regelmaessigeMbgm: string | undefined;
+  let regelmaessigeBloecke = 0;
+  const mehrfach = new Set<string>();
+  const merken = () => {
+    if (regelmaessigeMbgm && regelmaessigeBloecke > 1) mehrfach.add(regelmaessigeMbgm);
+  };
+  for (const s of saetze) {
+    if (/^[GR]\d$/.test(s.satzart)) {
+      merken();
+      regelmaessigeMbgm =
+        s.satzart === 'G1' || s.satzart === 'G2' ? s.werte.VSNR?.trim() || s.satzart : undefined;
+      regelmaessigeBloecke = 0;
+    } else if (regelmaessigeMbgm && (s.satzart === 'T1' || s.satzart === 'T4')) {
+      regelmaessigeBloecke++;
+    }
+  }
+  merken();
+  for (const wer of mehrfach) {
+    befunde.push({
+      code: 'FAK-3.1.11',
+      schwere: 'warnung',
+      meldung:
+        `${wer}: mehr als ein Tarifblock in einer mBGM für regelmäßige Beschäftigung. ` +
+        'Grundsätzlich ist nur einer zulässig; mehrere sind es nur, wenn im Beitragszeitraum ' +
+        'mehr als eine Beschäftigung vorliegt — zeitlich hintereinander oder parallel, etwa bei ' +
+        'Aufnahme einer neuen Beschäftigung während laufender Kündigungsentschädigung oder ' +
+        'Urlaubsersatzleistung (ÖGK-FAK 3.1.11).',
+    });
+  }
+
+  // Die eigentliche Strukturregel steht nicht im Prüfkatalog, sondern in
+  // Kapitel E.32.2.2.6 — der Katalog verweist bei F9070 nur darauf.
+  befunde.push(...pruefeAbfolge(saetze));
+
   for (const was of ueberschritten) {
     befunde.push({
       code: 'F9072',

@@ -50,6 +50,9 @@ export {
   type Verfahren,
   type Verrechnungsgrundlage,
   type Beitragsgrundlagenmeldung,
+  type Stornomeldung,
+  type MbgmEintrag,
+  type Beschaeftigungsfolge,
   type Tarifblock,
   type Verrechnungsbasis,
   type Verrechnungsposition,
@@ -81,3 +84,4 @@ export {
   type Befund,
   type Schwere,
 } from './pruefung-e32';
+export { pruefeAbfolge, ABFOLGE } from './abfolge-e32';
