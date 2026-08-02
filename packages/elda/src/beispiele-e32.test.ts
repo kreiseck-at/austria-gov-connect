@@ -431,3 +431,134 @@ test('Beispiel 10: dieselbe Beschaeftigungsfolge zweimal waere unzulaessig', () 
     'zwei fallweise mBGM fuer denselben Versicherten sind unzulaessig — die Tage gehoeren in EINE mBGM, dort als mehrere Tarifbloecke',
   );
 });
+
+test('Beispiel 10: gebaut statt nur geprueft — die Satzfolge des Dokuments Zeichen fuer Zeichen', () => {
+  // Derselbe Fall wie oben, diesmal ueber erstelleMbgmPaket. Erst mit den
+  // Beschaeftigungsfolgen G3/G5 ist das moeglich; vorher liess sich nur die
+  // fertige Folge pruefen. Damit deckt der Test jetzt auch den Bau ab.
+  const saetze = erstelleMbgmPaket(
+    [
+      {
+        referenzwert: 'M1',
+        versicherungsnummer: '1234010180',
+        familienname: 'Muster',
+        vorname: 'Max',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_MIT_ZEIT,
+        folge: 'fallweise',
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B010',
+            beschaeftigungstag: 2,
+            basen: [
+              {
+                typ: 'AB',
+                betragCent: 10_000,
+                positionen: [{ typ: 'T01', prozentsatz: 1.3, betragCent: 130 }],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        referenzwert: 'M2',
+        versicherungsnummer: '1234010180',
+        familienname: 'Muster',
+        vorname: 'Max',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_UND_BV_MIT_ZEIT,
+        folge: 'kuerzerAlsEinMonat',
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B030',
+            ersterTag: 5,
+            letzterTag: 10,
+            basen: [
+              {
+                typ: 'AB',
+                betragCent: 33_333,
+                positionen: [{ typ: 'T01', prozentsatz: 1.3, betragCent: 433 }],
+              },
+              {
+                typ: 'BV',
+                betragCent: 33_333,
+                positionen: [{ typ: 'V01', prozentsatz: 1.53, betragCent: 510 }],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        referenzwert: 'M3',
+        versicherungsnummer: '1234010180',
+        familienname: 'Muster',
+        vorname: 'Max',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_UND_BV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B002',
+            beginnDerVerrechnung: 25,
+            basen: [
+              {
+                typ: 'AB',
+                betragCent: 40_000,
+                positionen: [
+                  { typ: 'T01', prozentsatz: 39.6, betragCent: 15_840 },
+                  { typ: 'A03', prozentsatz: -3, betragCent: -1_200 },
+                ],
+              },
+              {
+                typ: 'BV',
+                betragCent: 40_000,
+                positionen: [{ typ: 'V01', prozentsatz: 1.53, betragCent: 612 }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    { ...BASIS, verfahren: 'selbstabrechnung' },
+  );
+
+  // Die Satzfolge des abgedruckten Diagramms, Position fuer Position.
+  assert.deepEqual(
+    saetze.map((s) => s.satzart),
+    [
+      'PS',
+      'G3',
+      'T2',
+      'BS',
+      'V1',
+      'G5',
+      'T3',
+      'BS',
+      'V1',
+      'BS',
+      'V1',
+      'G1',
+      'T1',
+      'BS',
+      'V1',
+      'V1',
+      'BS',
+      'V1',
+      'PE',
+    ],
+  );
+
+  const [ps] = saetze;
+  assert.equal(ps?.werte.GSUM, '16325', 'GSUM = 163,25');
+  assert.equal(ps?.werte.ANZM, '3');
+  assert.deepEqual(
+    saetze.filter((s) => /^G\d$/.test(s.satzart)).map((s) => s.werte.VSUM),
+    ['130', '943', '15252'],
+  );
+  // Die Zeitfelder je Beschaeftigungsfolge.
+  assert.equal(saetze.find((s) => s.satzart === 'T2')?.werte.FTAG, '2');
+  const t3 = saetze.find((s) => s.satzart === 'T3');
+  assert.equal(t3?.werte.BTAB, '5');
+  assert.equal(t3?.werte.BTBS, '10');
+  assert.equal(saetze.find((s) => s.satzart === 'T1')?.werte.VVON, '25');
+
+  // Und das Ganze ist strukturell zulaessig.
+  assert.deepEqual(pruefeAbfolge(saetze), []);
+  assert.deepEqual(pruefeMbgmPaket(saetze), []);
+});

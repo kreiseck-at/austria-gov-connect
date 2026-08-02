@@ -388,3 +388,187 @@ test('die Hoechstanzahlen werden schon beim Bauen erzwungen', () => {
   };
   assert.throws(() => erstelleMbgmPaket([zuVieleBasen], OPT), /höchstens 10/);
 });
+
+// --- Beschaeftigungsfolgen und Storno --------------------------------------
+
+test('die Beschaeftigungsfolge bestimmt mBGM- UND Tarifblock-Satzart', () => {
+  const bau = (folge: 'regelmaessig' | 'fallweise' | 'kuerzerAlsEinMonat', zeit: object) =>
+    erstelleMbgmPaket(
+      [
+        {
+          ...MELDUNG,
+          folge,
+          tarifbloecke: [
+            {
+              beschaeftigtengruppe: 'B002',
+              ...zeit,
+              basen: [
+                {
+                  typ: 'AB' as const,
+                  betragCent: 10_000,
+                  positionen: [{ typ: 'T01' as const, prozentsatz: 1.3, betragCent: 130 }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      OPT,
+    ).map((s) => s.satzart);
+
+  assert.deepEqual(bau('regelmaessig', { beginnDerVerrechnung: 1 }), ['PS', 'G1', 'T1', 'BS', 'V1', 'PE']);
+  assert.deepEqual(bau('fallweise', { beschaeftigungstag: 2 }), ['PS', 'G3', 'T2', 'BS', 'V1', 'PE']);
+  assert.deepEqual(bau('kuerzerAlsEinMonat', { ersterTag: 5, letzterTag: 10 }), [
+    'PS',
+    'G5',
+    'T3',
+    'BS',
+    'V1',
+    'PE',
+  ]);
+});
+
+test('das Zeitfeld muss zur Beschaeftigungsfolge passen', () => {
+  const mit = (folge: 'regelmaessig' | 'fallweise' | 'kuerzerAlsEinMonat', zeit: object) => () =>
+    erstelleMbgmPaket(
+      [{ ...MELDUNG, folge, tarifbloecke: [{ beschaeftigtengruppe: 'B002', ...zeit, basen: [] }] }],
+      OPT,
+    );
+  // Fehlendes Feld.
+  assert.throws(mit('fallweise', {}), /FTAG/);
+  assert.throws(mit('kuerzerAlsEinMonat', {}), /BTAB\/BTBS/);
+  assert.throws(mit('regelmaessig', {}), /VVON/);
+  // Ueberzaehliges Feld -- landete sonst stillschweigend nirgends.
+  assert.throws(mit('fallweise', { beschaeftigungstag: 2, beginnDerVerrechnung: 1 }), /VVON gehört nicht/);
+  assert.throws(
+    mit('regelmaessig', { beginnDerVerrechnung: 1, beschaeftigungstag: 2 }),
+    /gehören nicht zur regelmäßigen/,
+  );
+  // Verdrehter Zeitraum.
+  assert.throws(mit('kuerzerAlsEinMonat', { ersterTag: 10, letzterTag: 5 }), /liegt vor dem ersten/);
+});
+
+test('ein Storno besteht nur aus dem mBGM-Satz', () => {
+  const saetze = erstelleMbgmPaket(
+    [
+      {
+        referenzwert: 'S-1',
+        referenzUrspruenglicheMeldung: 'M-0001',
+        versicherungsnummer: '1234010180',
+        summeCent: 79_200,
+      },
+    ],
+    OPT,
+  );
+  assert.deepEqual(
+    saetze.map((s) => s.satzart),
+    ['PS', 'R1', 'PE'],
+  );
+  const r1 = saetze[1];
+  assert.equal(r1?.werte.REFU, 'M-0001');
+  assert.equal(r1?.werte.VSNR, '1234010180');
+  assert.equal(r1?.werte.VSUM, '79200');
+  assert.equal(r1?.werte.FANA, undefined, 'Name ist beim Storno gesperrt');
+  assert.equal(r1?.werte.VERG, undefined, 'Verrechnungsgrundlage ebenso');
+});
+
+test('der Storno-Betrag wird von der Gesamtsumme abgezogen', () => {
+  const saetze = erstelleMbgmPaket(
+    [
+      {
+        referenzwert: 'S-1',
+        referenzUrspruenglicheMeldung: 'ALT',
+        versicherungsnummer: '1234010180',
+        summeCent: 50_000,
+      },
+      MELDUNG, // 68.584 Cent (179.777 x 38,15 %)
+    ],
+    OPT,
+  );
+  assert.equal(saetze[0]?.werte.GSUM, String(68_584 - 50_000));
+  assert.equal(saetze[0]?.werte.GSVZ, '+');
+  assert.equal(saetze[0]?.werte.ANZM, '2');
+});
+
+test('ein ueberwiegender Storno kehrt das Vorzeichen der Gesamtsumme um', () => {
+  const saetze = erstelleMbgmPaket(
+    [
+      {
+        referenzwert: 'S-1',
+        referenzUrspruenglicheMeldung: 'ALT',
+        versicherungsnummer: '1234010180',
+        summeCent: 100_000,
+      },
+      MELDUNG,
+    ],
+    OPT,
+  );
+  assert.equal(saetze[0]?.werte.GSVZ, '-');
+  assert.equal(saetze[0]?.werte.GSUM, String(100_000 - 68_584));
+});
+
+test('die Storno-Summe darf nicht negativ sein', () => {
+  // "Durch die vorangehende Festlegung ist damit der Betrag einer Storno mBGM
+  // immer groesser oder gleich 0." Abgezogen wird erst beim Paket.
+  assert.throws(
+    () =>
+      erstelleMbgmPaket(
+        [
+          {
+            referenzwert: 'S',
+            referenzUrspruenglicheMeldung: 'A',
+            versicherungsnummer: '1234010180',
+            summeCent: -1,
+          },
+        ],
+        OPT,
+      ),
+    /größer oder gleich 0/,
+  );
+});
+
+test('beim Storno ist die Versicherungsnummer einzeln zwingend', () => {
+  assert.throws(
+    () =>
+      erstelleMbgmPaket(
+        [{ referenzwert: 'S', referenzUrspruenglicheMeldung: 'A', versicherungsnummer: '', summeCent: 0 }],
+        OPT,
+      ),
+    /einzeln zwingend/,
+  );
+  assert.throws(
+    () =>
+      erstelleMbgmPaket(
+        [
+          {
+            referenzwert: 'S',
+            referenzUrspruenglicheMeldung: '',
+            versicherungsnummer: '1234010180',
+            summeCent: 0,
+          },
+        ],
+        OPT,
+      ),
+    /D\.44/,
+  );
+});
+
+test('im Vorschreibeverfahren gibt es keinen fallweisen Tarifblock ohne Verrechnung', () => {
+  // Die Abfolgetabelle fuehrt zu G4 ausschliesslich T2 (Seite 363).
+  assert.throws(
+    () =>
+      erstelleMbgmPaket(
+        [
+          {
+            ...MELDUNG,
+            folge: 'fallweise',
+            tarifbloecke: [
+              { beschaeftigtengruppe: 'B010', beschaeftigungstag: 2, ohneVerrechnung: true, basen: [] },
+            ],
+          },
+        ],
+        { ...OPT, verfahren: 'vorschreibung' },
+      ),
+    /kein Tarifblock ohne Verrechnung/,
+  );
+});
