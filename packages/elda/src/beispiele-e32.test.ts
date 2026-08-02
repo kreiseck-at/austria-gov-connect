@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { erstelleMbgmPaket, VERRECHNUNGSGRUNDLAGE, type PaketOptionen } from './mbgm';
+import {
+  erstelleMbgmPaket,
+  VERRECHNUNGSGRUNDLAGE,
+  type PaketOptionen,
+  type MbgmEintrag,
+  type Verfahren,
+} from './mbgm';
 import { pruefeAbfolge } from './abfolge-e32';
 import { pruefeMbgmPaket } from './pruefung-e32';
 
@@ -561,4 +567,965 @@ test('Beispiel 10: gebaut statt nur geprueft — die Satzfolge des Dokuments Zei
   // Und das Ganze ist strukturell zulaessig.
   assert.deepEqual(pruefeAbfolge(saetze), []);
   assert.deepEqual(pruefeMbgmPaket(saetze), []);
+});
+
+/*
+ * Die uebrigen Beispiele des Kapitels, tabellengetrieben.
+ *
+ * Oben stehen die Faelle, an denen etwas Eigenes zu zeigen war -- ausfuehrlich,
+ * mit der Rechnung des Dokuments daneben. Was folgt, sind die restlichen
+ * Diagramme: Jedes ist eine geschlossene Aussage darueber, welche Satzfolge und
+ * welche Feldwerte bei einem gegebenen Sachverhalt herauskommen muessen. Der
+ * Wert liegt in der Menge -- 24 unabhaengig entstandene Sollwerte gegen eine
+ * Umsetzung, die aus derselben Lesart entstanden ist wie ihre eigenen Tests.
+ *
+ * `erwartet` bildet die Diagrammkaesten der Reihe nach ab. Geprueft werden nur
+ * die Felder, die das Dokument abdruckt; `undefined` heisst "im Diagramm
+ * ausdruecklich unbelegt".
+ */
+
+/** Ein Diagrammkasten: Satzart und die abgedruckten Felder. */
+type Kasten = { satzart: string } & Record<string, string | undefined>;
+
+interface Beispiel {
+  /** Nummer laut Dokument, zur Wiederauffindbarkeit. */
+  nr: string;
+  /** Kapitel und Seite. */
+  fundstelle: string;
+  /** Sachverhalt, gekuerzt aus dem Wortlaut des Dokuments. */
+  sachverhalt: string;
+  verfahren: Verfahren;
+  eintraege: readonly MbgmEintrag[];
+  erwartet: readonly Kasten[];
+}
+
+/** Versicherter, der in allen folgenden Beispielen derselbe ist. */
+const DN = {
+  versicherungsnummer: '1234010180',
+  familienname: 'Muster',
+  vorname: 'Max',
+} as const;
+
+/** Standard-Tarifgruppenverrechnung mit Prozentsatz und Betrag (Selbstabrechnung). */
+const t01 = (prozentsatz: number, betragCent: number) => ({ typ: 'T01', prozentsatz, betragCent }) as const;
+
+const BEISPIELE: readonly Beispiel[] = [
+  {
+    nr: '01b',
+    fundstelle: 'E.32.2.3.1, Seite 366',
+    sachverhalt:
+      'Arbeiter unter 60 mit beendeter Versicherungszeit SV (ohne BV) und Verrechnung einer Kuendigungsentschaedigung, 2.000,00 EUR',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B001',
+            beginnDerVerrechnung: 1,
+            // Der einzige Unterschied zu 01a: KEUE = J.
+            enthaeltKuendigungsentschaedigungOderUrlaubsersatz: true,
+            basen: [{ typ: 'AB', betragCent: 200_000, positionen: [t01(39.6, 79_200)] }],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PS', GSVZ: '+', GSUM: '79200', ANZM: '1' },
+      { satzart: 'G1', VSUM: '79200' },
+      { satzart: 'T1', BSGR: 'B001', ERGB1: undefined, VVON: '1', KEUE: 'J' },
+      { satzart: 'BS', VBTY: 'AB', VBBT: '200000' },
+      { satzart: 'V1', VPTY: 'T01', VPVZ: '+', VPTA: '39600', RSVZ: '+', RSUM: '79200' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '02',
+    fundstelle: 'E.32.2.3.2, Seite 367',
+    sachverhalt: 'Arbeiter unter 60, SV ohne BV, 1.000,00 EUR mit AV-Reduktion um 3,00 %',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B001',
+            beginnDerVerrechnung: 1,
+            basen: [
+              {
+                typ: 'AB',
+                betragCent: 100_000,
+                // Zwei Positionen zu einer Basis: Verrechnung und Abschlag.
+                positionen: [t01(39.6, 39_600), { typ: 'A03', prozentsatz: -3, betragCent: -3_000 }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PS', GSVZ: '+', GSUM: '36600', ANZM: '1' },
+      { satzart: 'G1', VSUM: '36600' },
+      { satzart: 'T1', BSGR: 'B001', VVON: '1' },
+      { satzart: 'BS', VBTY: 'AB', VBBT: '100000' },
+      { satzart: 'V1', VPTY: 'T01', VPVZ: '+', VPTA: '39600', RSVZ: '+', RSUM: '39600' },
+      { satzart: 'V1', VPTY: 'A03', VPVZ: '-', VPTA: '3000', RSVZ: '-', RSUM: '3000' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '03',
+    fundstelle: 'E.32.2.3.3, Seiten 367-368',
+    sachverhalt: 'Arbeiter ueber 63 (AV+IE Entfall Pensionsanspruch), SV und BV, 2.500,00 EUR',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_UND_BV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B001',
+            beginnDerVerrechnung: 1,
+            basen: [
+              {
+                typ: 'AB',
+                betragCent: 250_000,
+                positionen: [
+                  t01(39.6, 99_000),
+                  { typ: 'A09', prozentsatz: -1.3, betragCent: -3_250 },
+                  { typ: 'A10', prozentsatz: -6.35, betragCent: -15_875 },
+                ],
+              },
+              // Zweite Basis desselben Tarifblocks: die betriebliche Vorsorge.
+              {
+                typ: 'BV',
+                betragCent: 250_000,
+                positionen: [{ typ: 'V01', prozentsatz: 1.53, betragCent: 3_825 }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PS', GSVZ: '+', GSUM: '83700', ANZM: '1' },
+      { satzart: 'G1', VSUM: '83700' },
+      { satzart: 'T1', BSGR: 'B001', VVON: '1' },
+      { satzart: 'BS', VBTY: 'AB', VBBT: '250000' },
+      { satzart: 'V1', VPTY: 'T01', VPTA: '39600', RSUM: '99000' },
+      { satzart: 'V1', VPTY: 'A09', VPVZ: '-', VPTA: '1300', RSVZ: '-', RSUM: '3250' },
+      { satzart: 'V1', VPTY: 'A10', VPVZ: '-', VPTA: '6350', RSVZ: '-', RSUM: '15875' },
+      { satzart: 'BS', VBTY: 'BV', VBBT: '250000' },
+      { satzart: 'V1', VPTY: 'V01', VPTA: '1530', RSUM: '3825' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '04',
+    fundstelle: 'E.32.2.4.1, Seiten 369-370',
+    sachverhalt:
+      'Untermonatiger Wechsel am Fuenfzehnten von Arbeiterlehrling auf Arbeiter, SV und BV, 500,00 + 700,00 EUR',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_UND_BV_MIT_ZEIT,
+        // Zwei Tarifbloecke: "Der untermonatige Wechsel der Beschaeftigtengruppe
+        // wird durch die Angabe des Beginns der Verrechnung im Tarifblock
+        // automatisch in den Versicherungsverlauf uebertragen."
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B045', // Arbeiterlehrling
+            beginnDerVerrechnung: 1,
+            basen: [
+              {
+                typ: 'AB',
+                betragCent: 50_000,
+                positionen: [t01(28.55, 14_275), { typ: 'A04', prozentsatz: -1.2, betragCent: -600 }],
+              },
+              {
+                typ: 'BV',
+                betragCent: 50_000,
+                positionen: [{ typ: 'V01', prozentsatz: 1.53, betragCent: 765 }],
+              },
+            ],
+          },
+          {
+            beschaeftigtengruppe: 'B001', // Arbeiter
+            beginnDerVerrechnung: 15,
+            basen: [
+              {
+                typ: 'AB',
+                betragCent: 70_000,
+                positionen: [t01(39.6, 27_720), { typ: 'A03', prozentsatz: -3, betragCent: -2_100 }],
+              },
+              {
+                typ: 'BV',
+                betragCent: 70_000,
+                positionen: [{ typ: 'V01', prozentsatz: 1.53, betragCent: 1_071 }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PS', GSVZ: '+', GSUM: '41131', ANZM: '1' },
+      { satzart: 'G1', VSUM: '41131' },
+      { satzart: 'T1', BSGR: 'B045', VVON: '1' },
+      { satzart: 'BS', VBTY: 'AB', VBBT: '50000' },
+      { satzart: 'V1', VPTY: 'T01', VPTA: '28550', RSUM: '14275' },
+      { satzart: 'V1', VPTY: 'A04', VPVZ: '-', VPTA: '1200', RSVZ: '-', RSUM: '600' },
+      { satzart: 'BS', VBTY: 'BV', VBBT: '50000' },
+      { satzart: 'V1', VPTY: 'V01', VPTA: '1530', RSUM: '765' },
+      { satzart: 'T1', BSGR: 'B001', VVON: '15' },
+      { satzart: 'BS', VBTY: 'AB', VBBT: '70000' },
+      { satzart: 'V1', VPTY: 'T01', VPTA: '39600', RSUM: '27720' },
+      { satzart: 'V1', VPTY: 'A03', VPVZ: '-', VPTA: '3000', RSVZ: '-', RSUM: '2100' },
+      { satzart: 'BS', VBTY: 'BV', VBBT: '70000' },
+      { satzart: 'V1', VPTY: 'V01', VPTA: '1530', RSUM: '1071' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '05',
+    fundstelle: 'E.32.2.4.2, Seite 371',
+    sachverhalt:
+      'Neuerliche Anmeldung am Vierten waehrend laufender Urlaubsersatzleistung, mit Aufloesungsabgabe 121,00 EUR',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B002', // Angestellter
+            beginnDerVerrechnung: 1,
+            // "Fuer den Tarifblock fuer die bereits beendete Beschaeftigung
+            // (Abrechnung der UE) ist das Kennzeichen KEUE zu belegen."
+            enthaeltKuendigungsentschaedigungOderUrlaubsersatz: true,
+            basen: [
+              { typ: 'AB', betragCent: 300_000, positionen: [t01(39.6, 118_800)] },
+              // Die Aufloesungsabgabe hat eine eigene Basis: AA.
+              {
+                typ: 'AA',
+                betragCent: 12_100,
+                positionen: [{ typ: 'Z03', prozentsatz: 100, betragCent: 12_100 }],
+              },
+            ],
+          },
+          {
+            beschaeftigtengruppe: 'B002',
+            beginnDerVerrechnung: 4,
+            basen: [{ typ: 'AB', betragCent: 400_000, positionen: [t01(39.6, 158_400)] }],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PS', GSVZ: '+', GSUM: '289300', ANZM: '1' },
+      { satzart: 'G1', VSUM: '289300' },
+      { satzart: 'T1', BSGR: 'B002', VVON: '1', KEUE: 'J' },
+      { satzart: 'BS', VBTY: 'AB', VBBT: '300000' },
+      { satzart: 'V1', VPTY: 'T01', VPTA: '39600', RSUM: '118800' },
+      { satzart: 'BS', VBTY: 'AA', VBBT: '12100' },
+      { satzart: 'V1', VPTY: 'Z03', VPTA: '100000', RSUM: '12100' },
+      { satzart: 'T1', BSGR: 'B002', VVON: '4' },
+      { satzart: 'BS', VBTY: 'AB', VBBT: '400000' },
+      { satzart: 'V1', VPTY: 'T01', VPTA: '39600', RSUM: '158400' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '06',
+    fundstelle: 'E.32.2.5.1, Seiten 372-373',
+    sachverhalt: 'Fallweise Beschaeftigung am Zehnten (200,00 EUR) und am Zwanzigsten (150,00 EUR)',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        folge: 'fallweise',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_UND_BV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B010',
+            // Kein VVON: Bei fallweiser Beschaeftigung stellt FTAG den Bezug her.
+            beschaeftigungstag: 10,
+            // "Das Einkommen je Kalendertag ist im Bereich der Selbstabrechnung
+            // mit der taeglichen Hoechstbeitragsgrundlage zu begrenzen" -- aus
+            // 200,00 werden deshalb 162,00.
+            basen: [{ typ: 'AB', betragCent: 16_200, positionen: [t01(1.3, 211)] }],
+          },
+          {
+            beschaeftigtengruppe: 'B010',
+            beschaeftigungstag: 20,
+            basen: [
+              { typ: 'AB', betragCent: 15_000, positionen: [t01(1.3, 195)] },
+              {
+                typ: 'BV',
+                betragCent: 15_000,
+                positionen: [{ typ: 'V01', prozentsatz: 1.53, betragCent: 230 }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PS', GSVZ: '+', GSUM: '636', ANZM: '1' },
+      { satzart: 'G3', VSUM: '636' },
+      { satzart: 'T2', BSGR: 'B010', FTAG: '10', VVON: undefined },
+      { satzart: 'BS', VBTY: 'AB', VBBT: '16200' },
+      { satzart: 'V1', VPTY: 'T01', VPTA: '1300', RSUM: '211' },
+      { satzart: 'T2', BSGR: 'B010', FTAG: '20' },
+      { satzart: 'BS', VBTY: 'AB', VBBT: '15000' },
+      { satzart: 'V1', VPTY: 'T01', VPTA: '1300', RSUM: '195' },
+      { satzart: 'BS', VBTY: 'BV', VBBT: '15000' },
+      { satzart: 'V1', VPTY: 'V01', VPTA: '1530', RSUM: '230' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '07',
+    fundstelle: 'E.32.2.5.2, Seiten 373-375',
+    sachverhalt: 'Fallweise Beschaeftigung am Ersten und Zweiten mit Anfall der Dienstgeberabgabe',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        folge: 'fallweise',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_UND_BV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B010',
+            beschaeftigungstag: 1,
+            basen: [
+              { typ: 'AB', betragCent: 16_200, positionen: [t01(1.3, 211)] },
+              // Die Dienstgeberabgabe laeuft ueber eine eigene Basis (SO) und
+              // ist NICHT gedeckelt: 300,00 statt 162,00.
+              {
+                typ: 'SO',
+                betragCent: 30_000,
+                positionen: [{ typ: 'Z01', prozentsatz: 16.4, betragCent: 4_920 }],
+              },
+            ],
+          },
+          {
+            beschaeftigtengruppe: 'B010',
+            beschaeftigungstag: 2,
+            basen: [
+              { typ: 'AB', betragCent: 10_000, positionen: [t01(1.3, 130)] },
+              {
+                typ: 'SO',
+                betragCent: 10_000,
+                positionen: [{ typ: 'Z01', prozentsatz: 16.4, betragCent: 1_640 }],
+              },
+              {
+                typ: 'BV',
+                betragCent: 10_000,
+                positionen: [{ typ: 'V01', prozentsatz: 1.53, betragCent: 153 }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PS', GSVZ: '+', GSUM: '7054', ANZM: '1' },
+      { satzart: 'G3', VSUM: '7054' },
+      { satzart: 'T2', BSGR: 'B010', FTAG: '1' },
+      { satzart: 'BS', VBTY: 'AB', VBBT: '16200' },
+      { satzart: 'V1', VPTY: 'T01', VPTA: '1300', RSUM: '211' },
+      { satzart: 'BS', VBTY: 'SO', VBBT: '30000' },
+      { satzart: 'V1', VPTY: 'Z01', VPTA: '16400', RSUM: '4920' },
+      { satzart: 'T2', BSGR: 'B010', FTAG: '2' },
+      { satzart: 'BS', VBTY: 'AB', VBBT: '10000' },
+      { satzart: 'V1', VPTY: 'T01', VPTA: '1300', RSUM: '130' },
+      { satzart: 'BS', VBTY: 'SO', VBBT: '10000' },
+      { satzart: 'V1', VPTY: 'Z01', VPTA: '16400', RSUM: '1640' },
+      { satzart: 'BS', VBTY: 'BV', VBBT: '10000' },
+      { satzart: 'V1', VPTY: 'V01', VPTA: '1530', RSUM: '153' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '08',
+    fundstelle: 'E.32.2.6.1, Seite 376',
+    sachverhalt:
+      'Kuerzer als ein Monat vereinbarte Beschaeftigung vom Dritten bis zum Fuenfundzwanzigsten, 400,00 EUR',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        folge: 'kuerzerAlsEinMonat',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B010',
+            // Kein VVON und kein FTAG: hier stellen BTAB und BTBS den Bezug her.
+            ersterTag: 3,
+            letzterTag: 25,
+            basen: [{ typ: 'AB', betragCent: 40_000, positionen: [t01(1.3, 520)] }],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PS', GSVZ: '+', GSUM: '520', ANZM: '1' },
+      { satzart: 'G5', VSUM: '520' },
+      { satzart: 'T3', BSGR: 'B010', BTAB: '3', BTBS: '25', VVON: undefined, FTAG: undefined },
+      { satzart: 'BS', VBTY: 'AB', VBBT: '40000' },
+      { satzart: 'V1', VPTY: 'T01', VPTA: '1300', RSUM: '520' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '09',
+    fundstelle: 'E.32.2.6.2, Seiten 376-377',
+    sachverhalt:
+      'Geringfuegiger Arbeiter ueber 60, kuerzer als ein Monat vom Zwoelften bis Achtzehnten, 350,00 EUR -- Abzug des UV-Beitrags hebt die Verrechnung genau auf',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        folge: 'kuerzerAlsEinMonat',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B010',
+            ersterTag: 12,
+            letzterTag: 18,
+            basen: [
+              {
+                typ: 'AB',
+                betragCent: 35_000,
+                positionen: [t01(1.3, 455), { typ: 'A09', prozentsatz: -1.3, betragCent: -455 }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    // Summe null, Vorzeichen trotzdem '+' -- so steht es im Diagramm.
+    erwartet: [
+      { satzart: 'PS', GSVZ: '+', GSUM: '0', ANZM: '1' },
+      { satzart: 'G5', VSUM: '0' },
+      { satzart: 'T3', BSGR: 'B010', BTAB: '12', BTBS: '18' },
+      { satzart: 'BS', VBTY: 'AB', VBBT: '35000' },
+      { satzart: 'V1', VPTY: 'T01', VPTA: '1300', RSVZ: '+', RSUM: '455' },
+      { satzart: 'V1', VPTY: 'A09', VPVZ: '-', VPTA: '1300', RSVZ: '-', RSUM: '455' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '11',
+    fundstelle: 'E.32.2.7.1, Seiten 379-380',
+    sachverhalt: 'Freier Dienstnehmer, noch keine Honorarnote gelegt -- mBGM ohne Verrechnung',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_UND_BV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B053',
+            beginnDerVerrechnung: 1,
+            // "Angabe der Tarifgruppe ohne Folgedatensaetze zur Verrechnung."
+            ohneVerrechnung: true,
+            basen: [],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PS', GSVZ: '+', GSUM: '0', ANZM: '1' },
+      { satzart: 'G1', VSUM: '0' },
+      { satzart: 'T4', BSGR: 'B053', VVON: '1' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '12',
+    fundstelle: 'E.32.2.7.2, Seite 380',
+    sachverhalt:
+      'Fallweise an drei Tagen, Einkommen steht am Siebenten noch nicht fest -- drei T5 ohne Verrechnung',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        folge: 'fallweise',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_MIT_ZEIT,
+        tarifbloecke: [12, 13, 22].map((tag) => ({
+          beschaeftigtengruppe: 'B030',
+          beschaeftigungstag: tag,
+          ohneVerrechnung: true,
+          basen: [],
+        })),
+      },
+    ],
+    erwartet: [
+      { satzart: 'PS', GSVZ: '+', GSUM: '0', ANZM: '1' },
+      { satzart: 'G3', VSUM: '0' },
+      { satzart: 'T5', BSGR: 'B030', FTAG: '12' },
+      { satzart: 'T5', BSGR: 'B030', FTAG: '13' },
+      { satzart: 'T5', BSGR: 'B030', FTAG: '22' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '13',
+    fundstelle: 'E.32.2.7.3, Seiten 380-381',
+    sachverhalt:
+      'Freier Dienstnehmer, kuerzer als ein Monat ab dem 27. bis zum Monatsletzten, noch keine Honorarnote',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        folge: 'kuerzerAlsEinMonat',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_UND_BV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B053',
+            ersterTag: 27,
+            letzterTag: 31,
+            ohneVerrechnung: true,
+            basen: [],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PS', GSVZ: '+', GSUM: '0', ANZM: '1' },
+      { satzart: 'G5', VSUM: '0' },
+      { satzart: 'T6', BSGR: 'B053', BTAB: '27', BTBS: '31' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '14',
+    fundstelle: 'E.32.2.8.1, Seite 381',
+    sachverhalt: 'Storno fuer die mBGM aus Beispiel 01 -- GSVZ kippt auf Minus',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        referenzwert: 'S-1',
+        referenzUrspruenglicheMeldung: 'M-1',
+        versicherungsnummer: DN.versicherungsnummer,
+        summeCent: 79_200,
+      },
+    ],
+    erwartet: [
+      // Der Betrag steht positiv in VSUM, wird aber von GSUM abgezogen -- ein
+      // reines Stornopaket bekommt daher GSVZ = '-'.
+      { satzart: 'PS', GSVZ: '-', GSUM: '79200', ANZM: '1' },
+      { satzart: 'R1', VSUM: '79200', REFU: 'M-1' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '15',
+    fundstelle: 'E.32.2.8.2, Seiten 381-382',
+    sachverhalt: 'Storno fuer die mBGM aus Beispiel 06 (fallweise)',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        referenzwert: 'S-1',
+        referenzUrspruenglicheMeldung: 'M-1',
+        versicherungsnummer: DN.versicherungsnummer,
+        folge: 'fallweise',
+        summeCent: 636,
+      },
+    ],
+    erwartet: [
+      { satzart: 'PS', GSVZ: '-', GSUM: '636', ANZM: '1' },
+      { satzart: 'R3', VSUM: '636' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '16',
+    fundstelle: 'E.32.2.8.3, Seite 382',
+    sachverhalt: 'Storno fuer die mBGM aus Beispiel 08 (kuerzer als ein Monat)',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        referenzwert: 'S-1',
+        referenzUrspruenglicheMeldung: 'M-1',
+        versicherungsnummer: DN.versicherungsnummer,
+        folge: 'kuerzerAlsEinMonat',
+        summeCent: 520,
+      },
+    ],
+    erwartet: [
+      { satzart: 'PS', GSVZ: '-', GSUM: '520', ANZM: '1' },
+      { satzart: 'R5', VSUM: '520' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '17',
+    fundstelle: 'E.32.2.8.4, Seiten 382-383',
+    sachverhalt:
+      'Storno fuer Beispiel 10, aber nur zwei der drei mBGM -- die regelmaessige Beschaeftigung bleibt bestehen',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        referenzwert: 'S-1',
+        referenzUrspruenglicheMeldung: 'M-1',
+        versicherungsnummer: DN.versicherungsnummer,
+        folge: 'fallweise',
+        summeCent: 130,
+      },
+      {
+        referenzwert: 'S-2',
+        referenzUrspruenglicheMeldung: 'M-2',
+        versicherungsnummer: DN.versicherungsnummer,
+        folge: 'kuerzerAlsEinMonat',
+        summeCent: 943,
+      },
+    ],
+    // 1,30 + 9,43 = 10,73 -- und die dritte mBGM aus Beispiel 10 fehlt hier
+    // absichtlich: Storniert wird je mBGM, nicht je Paket.
+    erwartet: [
+      { satzart: 'PS', GSVZ: '-', GSUM: '1073', ANZM: '2' },
+      { satzart: 'R3', VSUM: '130' },
+      { satzart: 'R5', VSUM: '943' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '18',
+    fundstelle: 'E.32.2.8.5, Seite 383',
+    sachverhalt: 'Storno fuer die mBGM ohne Verrechnung aus Beispiel 11 -- Summe null',
+    verfahren: 'selbstabrechnung',
+    eintraege: [
+      {
+        referenzwert: 'S-1',
+        referenzUrspruenglicheMeldung: 'M-1',
+        versicherungsnummer: DN.versicherungsnummer,
+        summeCent: 0,
+      },
+    ],
+    // Der einzige Storno im Kapitel mit GSVZ = '+': Bei einer Summe von null
+    // gibt es nichts abzuziehen, und -0 ist kein negativer Betrag.
+    erwartet: [
+      { satzart: 'PS', GSVZ: '+', GSUM: '0', ANZM: '1' },
+      { satzart: 'R1', VSUM: '0' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '22',
+    fundstelle: 'E.32.2.9.3, Seiten 386-387',
+    sachverhalt:
+      'Vorschreiber: untermonatiger Wechsel am Dreizehnten von Angestelltenlehrling auf Angestellter',
+    verfahren: 'vorschreibung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_UND_BV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B044',
+            beginnDerVerrechnung: 1,
+            basen: [
+              { typ: 'AB', betragCent: 50_000, positionen: [{ typ: 'T01' }] },
+              { typ: 'BV', betragCent: 50_000, positionen: [{ typ: 'V01' }] },
+            ],
+          },
+          {
+            beschaeftigtengruppe: 'B002',
+            beginnDerVerrechnung: 13,
+            basen: [
+              { typ: 'AB', betragCent: 100_000, positionen: [{ typ: 'T01' }] },
+              { typ: 'BV', betragCent: 100_000, positionen: [{ typ: 'V01' }] },
+            ],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PV', ANZM: '1' },
+      { satzart: 'G2' },
+      { satzart: 'T1', BSGR: 'B044', VVON: '1' },
+      { satzart: 'BV', VBTY: 'AB', VBBT: '50000' },
+      // Beim Vorschreiber bleiben Prozentsatz und Betrag leer -- die OeGK rechnet.
+      { satzart: 'V2', VPTY: 'T01', VPTA: undefined, RSUM: undefined },
+      { satzart: 'BV', VBTY: 'BV', VBBT: '50000' },
+      { satzart: 'V2', VPTY: 'V01' },
+      { satzart: 'T1', BSGR: 'B002', VVON: '13' },
+      { satzart: 'BV', VBTY: 'AB', VBBT: '100000' },
+      { satzart: 'V2', VPTY: 'T01' },
+      { satzart: 'BV', VBTY: 'BV', VBBT: '100000' },
+      { satzart: 'V2', VPTY: 'V01' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '24',
+    fundstelle: 'E.32.2.11.1, Seiten 389-390',
+    sachverhalt: 'Vorschreiber, fallweise am Zweiten (400,00 EUR) und am Zwanzigsten (150,00 EUR)',
+    verfahren: 'vorschreibung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        folge: 'fallweise',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_UND_BV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B010',
+            beschaeftigungstag: 2,
+            // "Das Einkommen je Kalendertag ist im Bereich der Vorschreibung
+            // NICHT mit der taeglichen Hoechstbeitragsgrundlage zu begrenzen" --
+            // deshalb steht hier 400,00 und nicht 162,00 wie in Beispiel 06.
+            basen: [{ typ: 'AB', betragCent: 40_000, positionen: [{ typ: 'T01' }] }],
+          },
+          {
+            beschaeftigtengruppe: 'B010',
+            beschaeftigungstag: 20,
+            basen: [
+              { typ: 'AB', betragCent: 15_000, positionen: [{ typ: 'T01' }] },
+              { typ: 'BV', betragCent: 15_000, positionen: [{ typ: 'V01' }] },
+            ],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PV', ANZM: '1' },
+      { satzart: 'G4' },
+      { satzart: 'T2', BSGR: 'B010', FTAG: '2' },
+      { satzart: 'BV', VBTY: 'AB', VBBT: '40000' },
+      { satzart: 'V2', VPTY: 'T01' },
+      { satzart: 'T2', BSGR: 'B010', FTAG: '20' },
+      { satzart: 'BV', VBTY: 'AB', VBBT: '15000' },
+      { satzart: 'V2', VPTY: 'T01' },
+      { satzart: 'BV', VBTY: 'BV', VBBT: '15000' },
+      { satzart: 'V2', VPTY: 'V01' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '25',
+    fundstelle: 'E.32.2.11.2, Seiten 390-392',
+    sachverhalt: 'Vorschreiber, fallweise am Dreizehnten und Vierzehnten mit Dienstgeberabgabe',
+    verfahren: 'vorschreibung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        folge: 'fallweise',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_UND_BV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B010',
+            beschaeftigungstag: 13,
+            basen: [
+              { typ: 'AB', betragCent: 30_000, positionen: [{ typ: 'T01' }] },
+              { typ: 'SO', betragCent: 30_000, positionen: [{ typ: 'Z01' }] },
+            ],
+          },
+          {
+            beschaeftigtengruppe: 'B010',
+            beschaeftigungstag: 14,
+            basen: [
+              { typ: 'AB', betragCent: 14_000, positionen: [{ typ: 'T01' }] },
+              { typ: 'SO', betragCent: 14_000, positionen: [{ typ: 'Z01' }] },
+              { typ: 'BV', betragCent: 14_000, positionen: [{ typ: 'V01' }] },
+            ],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PV', ANZM: '1' },
+      { satzart: 'G4' },
+      { satzart: 'T2', BSGR: 'B010', FTAG: '13' },
+      { satzart: 'BV', VBTY: 'AB', VBBT: '30000' },
+      { satzart: 'V2', VPTY: 'T01' },
+      { satzart: 'BV', VBTY: 'SO', VBBT: '30000' },
+      { satzart: 'V2', VPTY: 'Z01' },
+      { satzart: 'T2', BSGR: 'B010', FTAG: '14' },
+      { satzart: 'BV', VBTY: 'AB', VBBT: '14000' },
+      { satzart: 'V2', VPTY: 'T01' },
+      { satzart: 'BV', VBTY: 'SO', VBBT: '14000' },
+      { satzart: 'V2', VPTY: 'Z01' },
+      { satzart: 'BV', VBTY: 'BV', VBBT: '14000' },
+      { satzart: 'V2', VPTY: 'V01' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '26',
+    fundstelle: 'E.32.2.12.1, Seite 393',
+    sachverhalt: 'Vorschreiber, kuerzer als ein Monat vom Zweiten bis zum Monatsletzten, 380,00 EUR',
+    verfahren: 'vorschreibung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        folge: 'kuerzerAlsEinMonat',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B010',
+            ersterTag: 2,
+            letzterTag: 31,
+            basen: [{ typ: 'AB', betragCent: 38_000, positionen: [{ typ: 'T01' }] }],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PV', ANZM: '1' },
+      { satzart: 'G6' },
+      { satzart: 'T3', BSGR: 'B010', BTAB: '2', BTBS: '31' },
+      { satzart: 'BV', VBTY: 'AB', VBBT: '38000' },
+      { satzart: 'V2', VPTY: 'T01' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '27',
+    fundstelle: 'E.32.2.12.2, Seiten 393-394',
+    sachverhalt:
+      'Vorschreiber, kuerzer als ein Monat vom Zehnten bis Zwanzigsten mit Neugruendungsfoerderung',
+    verfahren: 'vorschreibung',
+    eintraege: [
+      {
+        ...DN,
+        referenzwert: 'M-1',
+        folge: 'kuerzerAlsEinMonat',
+        verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_MIT_ZEIT,
+        tarifbloecke: [
+          {
+            beschaeftigtengruppe: 'B010',
+            ersterTag: 10,
+            letzterTag: 20,
+            // A08 ist beim Vorschreiber ein blosser "Hinweis" auf die
+            // Neugruendungsfoerderung -- gerechnet wird er von der OeGK.
+            basen: [{ typ: 'AB', betragCent: 39_900, positionen: [{ typ: 'T01' }, { typ: 'A08' }] }],
+          },
+        ],
+      },
+    ],
+    erwartet: [
+      { satzart: 'PV', ANZM: '1' },
+      { satzart: 'G6' },
+      { satzart: 'T3', BSGR: 'B010', BTAB: '10', BTBS: '20' },
+      { satzart: 'BV', VBTY: 'AB', VBBT: '39900' },
+      { satzart: 'V2', VPTY: 'T01' },
+      { satzart: 'V2', VPTY: 'A08' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '28',
+    fundstelle: 'E.32.2.14.1, Seite 395',
+    sachverhalt:
+      'Vorschreiber: Storno fuer die mBGM aus Beispiel 22 -- "Weitere Satzarten sind nicht erforderlich"',
+    verfahren: 'vorschreibung',
+    eintraege: [
+      {
+        referenzwert: 'S-1',
+        referenzUrspruenglicheMeldung: 'M-1',
+        versicherungsnummer: DN.versicherungsnummer,
+        summeCent: 0,
+      },
+    ],
+    // Kein GSVZ und kein GSUM: Beim Vorschreiber traegt das Paket keine Summen.
+    erwartet: [
+      { satzart: 'PV', ANZM: '1', GSUM: undefined, GSVZ: undefined },
+      { satzart: 'R2' },
+      { satzart: 'PE' },
+    ],
+  },
+  {
+    nr: '29',
+    fundstelle: 'E.32.2.14.2, Seite 395',
+    sachverhalt: 'Vorschreiber: Storno fuer die fallweise mBGM aus Beispiel 24',
+    verfahren: 'vorschreibung',
+    eintraege: [
+      {
+        referenzwert: 'S-1',
+        referenzUrspruenglicheMeldung: 'M-1',
+        versicherungsnummer: DN.versicherungsnummer,
+        folge: 'fallweise',
+        summeCent: 0,
+      },
+    ],
+    erwartet: [{ satzart: 'PV', ANZM: '1' }, { satzart: 'R4' }, { satzart: 'PE' }],
+  },
+  {
+    nr: '30',
+    fundstelle: 'E.32.2.14.3, Seite 396',
+    sachverhalt: 'Vorschreiber: Storno fuer die kuerzer als ein Monat vereinbarte mBGM aus Beispiel 26',
+    verfahren: 'vorschreibung',
+    eintraege: [
+      {
+        referenzwert: 'S-1',
+        referenzUrspruenglicheMeldung: 'M-1',
+        versicherungsnummer: DN.versicherungsnummer,
+        folge: 'kuerzerAlsEinMonat',
+        summeCent: 0,
+      },
+    ],
+    erwartet: [{ satzart: 'PV', ANZM: '1' }, { satzart: 'R6' }, { satzart: 'PE' }],
+  },
+];
+
+for (const b of BEISPIELE) {
+  test(`Beispiel ${b.nr} (${b.fundstelle}): ${b.sachverhalt}`, () => {
+    const saetze = erstelleMbgmPaket(b.eintraege, { ...BASIS, verfahren: b.verfahren });
+
+    assert.deepEqual(
+      saetze.map((s) => s.satzart),
+      b.erwartet.map((k) => k.satzart),
+      'Satzfolge weicht vom Diagramm ab',
+    );
+
+    b.erwartet.forEach((kasten, i) => {
+      const satz = saetze[i];
+      for (const [feld, soll] of Object.entries(kasten)) {
+        if (feld === 'satzart') continue;
+        assert.equal(satz?.werte[feld], soll, `Satz ${i + 1} (${kasten.satzart}), Feld ${feld}`);
+      }
+    });
+
+    // Jedes abgedruckte Beispiel muss die eigenen Regeln des Kapitels erfuellen.
+    assert.deepEqual(pruefeAbfolge(saetze), [], 'Abfolge nach E.32.2.2.6');
+    assert.deepEqual(
+      pruefeMbgmPaket(saetze).filter((x) => x.schwere === 'fehler'),
+      [],
+      'Paketpruefungen des Pruefkatalogs',
+    );
+  });
+}
+
+test('alle Beispiele des Kapitels sind kodiert', () => {
+  // 01a, 10, 19, 20, 21 und 23 stehen ausfuehrlich weiter oben, der Rest hier.
+  const ausfuehrlich = ['01a', '10', '19', '20', '21', '23'];
+  const kodiert = new Set([...ausfuehrlich, ...BEISPIELE.map((b) => b.nr)]);
+  const alle = ['01a', '01b', ...Array.from({ length: 29 }, (_, i) => String(i + 2).padStart(2, '0'))];
+  assert.deepEqual(
+    alle.filter((nr) => !kodiert.has(nr)),
+    [],
+    'Es fehlt ein Beispiel aus E.32.2',
+  );
 });

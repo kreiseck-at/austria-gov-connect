@@ -206,14 +206,20 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
       const betrag = zahl(m.werte.VSUM) || 0;
       return m.satzart.startsWith('R') ? s - betrag : s + betrag;
     }, 0);
-    const gsum = zahl(kopf.werte.GSUM) || 0;
+    // GSUM trägt selbst kein Vorzeichen — das steht getrennt in GSVZ. Ein Paket,
+    // das nur Storni enthält, hat deshalb einen positiven GSUM und GSVZ = '-'
+    // (Beispiele 14 bis 17). Ohne diese Umrechnung schlüge F9051 bei jedem
+    // Storno an, obwohl das Paket genau so aussieht, wie das Dokument es
+    // abdruckt.
+    const gsum = (zahl(kopf.werte.GSUM) || 0) * (kopf.werte.GSVZ === '-' ? -1 : 1);
     if (gsum !== summeMeldungen) {
       befunde.push({
         code: 'F9051',
         schwere: 'fehler',
         meldung:
-          `Gesamtsumme der Beiträge im Paket (GSUM=${gsum}) ist ungleich der Summe der ` +
-          `enthaltenen mBGM (${summeMeldungen}).`,
+          `Gesamtsumme der Beiträge im Paket (GSVZ=${kopf.werte.GSVZ ?? ''}, ` +
+          `GSUM=${kopf.werte.GSUM ?? ''}) ist ungleich der Summe der enthaltenen mBGM ` +
+          `(${summeMeldungen}; Storni abgezogen).`,
       });
     }
   }

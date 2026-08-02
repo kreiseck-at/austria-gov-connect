@@ -349,3 +349,30 @@ test('FAK-Befunde sind am Praefix von den Pruefkatalog-Codes unterscheidbar', ()
     assert.equal(b.schwere, 'warnung');
   }
 });
+
+test('F9051 liest das Vorzeichen der Gesamtsumme aus GSVZ, nicht aus GSUM', () => {
+  // GSUM traegt kein Vorzeichen -- das steht getrennt in GSVZ. Ein reines
+  // Stornopaket hat deshalb einen positiven GSUM und GSVZ = '-'. Wer nur GSUM
+  // liest, haelt jedes Storno des Dokuments fuer falsch.
+  const storno = erstelleMbgmPaket(
+    [
+      {
+        referenzwert: 'S-1',
+        referenzUrspruenglicheMeldung: 'M-1',
+        versicherungsnummer: '1234010180',
+        summeCent: 79_200,
+      },
+    ],
+    OPT,
+  );
+  assert.equal(storno[0]?.werte.GSVZ, '-');
+  assert.equal(storno[0]?.werte.GSUM, '79200', 'der Betrag steht ohne Vorzeichen');
+  assert.deepEqual(
+    pruefeMbgmPaket(storno).filter((b) => b.code === 'F9051'),
+    [],
+  );
+
+  // Und andersherum: dasselbe Paket mit '+' ist tatsaechlich falsch.
+  const verdreht = storno.map((s) => (s.satzart === 'PS' ? { ...s, werte: { ...s.werte, GSVZ: '+' } } : s));
+  assert.equal(pruefeMbgmPaket(verdreht).filter((b) => b.code === 'F9051').length, 1);
+});
