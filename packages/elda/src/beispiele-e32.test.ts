@@ -1518,7 +1518,25 @@ for (const b of BEISPIELE) {
   });
 }
 
-test('alle Beispiele des Kapitels sind kodiert', () => {
+/**
+ * Die Beispiele 31 bis 40 aus **E.32.2.15 „Spezialfaelle der Abrechnung"**
+ * sind noch NICHT kodiert.
+ *
+ * Sie behandeln: abweichende Beitragsgrundlage fuer die AV-Minderung,
+ * unbezahlten Urlaub im Beitragszeitraum, mehrere Beschaeftigungen mit
+ * unterschiedlichen Tarifen, Verrechnung ohne Versicherungszeit,
+ * Versicherungszeitunterbrechung, Schlechtwetterentschaedigung bei Kurzarbeit
+ * und Verrechnungen mit einem Betrag von 0,00 Euro.
+ *
+ * Der Test unten prueft deshalb ausdruecklich nur den Bereich E.32.2.3 bis
+ * E.32.2.14. Er hiess einmal "alle Beispiele des Kapitels sind kodiert" und
+ * behauptete damit eine Vollstaendigkeit, die es nie gab -- die Zaehlung
+ * endete bei 30, waehrend das Dokument bis 40 geht. Ein Test, der falsche
+ * Zusicherungen gibt, ist schlechter als keiner.
+ */
+const NICHT_KODIERT_E32_2_15 = ['31', '32', '33', '34', '35', '36', '37', '38', '39', '40'];
+
+test('die Beispiele aus E.32.2.3 bis E.32.2.14 sind vollstaendig kodiert', () => {
   // 01a, 10, 19, 20, 21 und 23 stehen ausfuehrlich weiter oben, der Rest hier.
   const ausfuehrlich = ['01a', '10', '19', '20', '21', '23'];
   const kodiert = new Set([...ausfuehrlich, ...BEISPIELE.map((b) => b.nr)]);
@@ -1526,6 +1544,12 @@ test('alle Beispiele des Kapitels sind kodiert', () => {
   assert.deepEqual(
     alle.filter((nr) => !kodiert.has(nr)),
     [],
-    'Es fehlt ein Beispiel aus E.32.2',
+    'Es fehlt ein Beispiel aus E.32.2.3 bis E.32.2.14',
   );
+
+  // Und die Luecke bleibt sichtbar, statt sich hinter einem gruenen Test zu
+  // verstecken: Wer eines der Spezialfall-Beispiele kodiert, streicht es hier.
+  for (const nr of NICHT_KODIERT_E32_2_15) {
+    assert.equal(kodiert.has(nr), false, `Beispiel ${nr} ist kodiert -- dann hier streichen`);
+  }
 });
