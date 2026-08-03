@@ -21,6 +21,7 @@ import {
   VPTY_CODES,
   erlaubtePositionen,
   zwingendePositionen,
+  genauEinePosition,
   type VbtyCode,
   type VptyCode,
 } from './codes-e32';
@@ -557,8 +558,8 @@ function pruefeMeldung(m: Beitragsgrundlagenmeldung, nr: number, selbst: boolean
         if (!(p.typ in VPTY_CODES)) {
           throw new EldaError(`${woT}: unbekannter Verrechnungspositions-Typ '${p.typ}'.`);
         }
-        // Nur prüfen, wo das Dokument eine Zuordnung führt. Für KE, UH und RP
-        // tut es das nicht — dort wäre eine Ablehnung geraten.
+        // Nur prüfen, wo das Dokument eine Zuordnung führt; sonst wäre eine
+        // Ablehnung geraten.
         if (erlaubt && !erlaubt.has(p.typ)) {
           throw new EldaError(
             `${woT}: Die Verrechnungsposition '${p.typ}' ist zur Verrechnungsbasis '${b.typ}' ` +
@@ -573,6 +574,18 @@ function pruefeMeldung(m: Beitragsgrundlagenmeldung, nr: number, selbst: boolean
               `'${pflicht}' (D.60).`,
           );
         }
+      }
+      // „…immer genau eine Verrechnungsposition…" (D.60, Seite 153). Das
+      // greift auch dort, wo zwei Typen zur Auswahl stehen — bei SW etwa einer
+      // von beiden, nicht beide und nicht keiner. Ohne diese Prüfung ging eine
+      // solche Basis ganz ohne Position durch.
+      if (genauEinePosition(b.typ) && b.positionen.length !== 1) {
+        const erwartet = erlaubtePositionen(b.typ);
+        throw new EldaError(
+          `${woT}: Zur Verrechnungsbasis '${b.typ}' gehört genau EINE Verrechnungsposition ` +
+            `(D.60), übergeben wurden ${b.positionen.length}` +
+            (erwartet ? `. Zulässig: ${[...erwartet].sort().join(' oder ')}.` : '.'),
+        );
       }
     }
   });

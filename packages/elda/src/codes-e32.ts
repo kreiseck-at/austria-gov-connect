@@ -229,7 +229,15 @@ export type VptyCode = keyof typeof VPTY_CODES;
  * Verrechnungsposition von Typ auf der rechten Seite der Liste geben muss."
  *
  * `SW` ist der einzige Basistyp mit zwei zulässigen Positionen — je nachdem, ob
- * die Entschädigung einen Lehrling betrifft.
+ * die Entschädigung einen Lehrling betrifft. „Genau eine" heißt dort: eine der
+ * beiden, nicht beide.
+ *
+ * `KE`, `UH` und `RP` fehlten hier bis zum 04.08.2026, mit der Begründung, das
+ * Dokument führe für sie keine Zuordnung. Das war falsch: Alle drei stehen in
+ * derselben Liste auf Seite 153, in Schwarzdruck, also nicht einmal neu in
+ * dieser Ergänzung. Solange sie fehlten, wurde zu einer Basis dieser Typen
+ * weder die Zulässigkeit der Position geprüft noch die zwingende Position
+ * eingefordert — beides ging kommentarlos durch.
  */
 export const EINS_ZU_EINS: Readonly<Record<string, readonly VptyCode[]>> = {
   BV: ['V01'],
@@ -242,6 +250,30 @@ export const EINS_ZU_EINS: Readonly<Record<string, readonly VptyCode[]>> = {
   PA: ['P01'],
   PS: ['P02'],
   SR: ['A21'],
+  KE: ['Z12'],
+  UH: ['Z13'],
+  RP: ['A22'],
+};
+
+/**
+ * Einschränkungen der Verrechnungsbasis-Typen aus den Fußnoten zu D.58
+ * (Seite 139).
+ *
+ * Bis zum 04.08.2026 waren nur die Einschränkungen der POSITIONS-Typen
+ * hinterlegt. Dass auch Basistypen eingeschränkt sind, ging unter — `PA` und
+ * `PS` waren nur mittelbar gedeckt, weil ihre zwingenden Positionen `P01`/`P02`
+ * ihrerseits auf die BVAEB beschränkt sind. Für `KE`, `UH` und `RP` gab es gar
+ * keine Entsprechung.
+ */
+export const VBTY_EINSCHRAENKUNG: Readonly<Record<string, string>> = {
+  // Fußnote 40
+  PA: 'Nur zu verwenden für die BVAEB',
+  PS: 'Nur zu verwenden für die BVAEB',
+  KE: 'Nur zu verwenden für die BVAEB',
+  UH: 'Nur zu verwenden für die BVAEB',
+  // Fußnote 41 — zeitlich, nicht trägerbezogen: Die Verwendbarkeit wird
+  // gesondert kommuniziert, dann ab Beitragszeitraum 01/2024.
+  RP: 'Verwendbarkeit wird gesondert kommuniziert, dann ab Beitragszeitraum 01/2024',
 };
 
 /**
@@ -357,8 +389,13 @@ for (const eintrag of Object.values(VPTY_CODES)) Object.freeze(eintrag);
  * die Kombinationstabelle der klassischen Beitragsgrundlagen.
  *
  * @returns `undefined`, wenn das Dokument für diesen Basistyp keine Zuordnung
- *   führt. Dann wird **nicht** geprüft — eine Ablehnung wäre geraten. Das
- *   betrifft `KE`, `UH` und `RP`.
+ *   führt. Dann wird **nicht** geprüft — eine Ablehnung wäre geraten.
+ *
+ *   Hier stand einmal, das betreffe `KE`, `UH` und `RP`. Das war falsch: Alle
+ *   drei stehen in der 1:1-Liste auf Seite 153. Seit sie dort eingetragen sind,
+ *   liefert diese Funktion für sie ein Ergebnis, und `undefined` bleibt dem
+ *   Fall vorbehalten, dass ein Basistyp tatsächlich in keiner der beiden
+ *   Tabellen vorkommt.
  */
 export function erlaubtePositionen(vbty: string): ReadonlySet<string> | undefined {
   const einsZuEins = EINS_ZU_EINS[vbty];
@@ -375,11 +412,30 @@ export function erlaubtePositionen(vbty: string): ReadonlySet<string> | undefine
 export function zwingendePositionen(vbty: string): readonly string[] {
   const einsZuEins = EINS_ZU_EINS[vbty];
   // Bei SW hängt es davon ab, ob ein Lehrling betroffen ist — beide Positionen
-  // sind zulässig, keine ist für sich zwingend.
+  // sind zulässig, keine ist für sich zwingend. Dass GENAU EINE davon kommen
+  // muss, trägt deshalb nicht diese Liste, sondern `genauEinePosition`.
   if (einsZuEins) return einsZuEins.length === 1 ? einsZuEins : [];
   const zeile = KOMBINATION[vbty];
   if (!zeile) return [];
   return Object.entries(zeile)
     .filter(([, stufe]) => stufe === 'Z')
     .map(([code]) => code);
+}
+
+/**
+ * Ob zu einer Verrechnungsbasis dieses Typs **genau eine** Position gehören
+ * muss.
+ *
+ * Der Wortlaut auf Seite 153: „Das bedeutet, dass es zu einer
+ * Verrechnungsbasis vom Typ auf der linken Seite der Liste immer genau eine
+ * Verrechnungsposition von Typ auf der rechten Seite der Liste geben muss."
+ *
+ * „Genau eine" gilt auch für `SW`, wo zwei Typen zur Auswahl stehen: einer von
+ * beiden, nicht beide und nicht keiner. Das ließ sich über
+ * {@link zwingendePositionen} nicht ausdrücken — dort ist `SW` leer, weil
+ * keiner der beiden Typen für sich zwingend ist. Die Folge war, dass eine
+ * `SW`-Basis ganz ohne Position durchging.
+ */
+export function genauEinePosition(vbty: string): boolean {
+  return EINS_ZU_EINS[vbty] !== undefined;
 }

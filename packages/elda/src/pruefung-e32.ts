@@ -27,11 +27,15 @@ export interface Befund {
   /**
    * Fehlercode laut Prüfkatalog, z. B. `'F9051'`.
    *
-   * Codes, die **nicht** mit `F` beginnen, stammen nicht aus dem Katalog,
-   * sondern aus dem Fragen-Antworten-Katalog der ÖGK (Präfix `FAK-` samt
-   * Abschnittsnummer). ELDA weist deswegen nichts zurück — sie sind immer
-   * `warnung`. Wer nur auf die Rückweisung durch ELDA prüft, filtert sie
-   * über das Präfix heraus.
+   * Codes, die **nicht** mit `F` beginnen, stammen nicht aus dem Prüfkatalog:
+   *
+   * - `FAK-` samt Abschnittsnummer: aus dem Fragen-Antworten-Katalog der ÖGK.
+   *   ELDA weist deswegen nichts zurück, sie sind immer `warnung`.
+   * - `DM-` samt Kapitelnummer: eine Regel, die das DM-ORG eindeutig aufstellt,
+   *   der der Prüfkatalog aber keinen Fehlercode zuordnet. Die Regel gilt, nur
+   *   ihre Ahndung durch ELDA ist unbelegt.
+   *
+   * Wer wissen will, ob ELDA das Paket zurückweist, filtert über das Präfix.
    */
   code: string;
   /** `fehler` weist die Meldung zurück, `warnung` nicht. */
@@ -80,6 +84,27 @@ export const BKNR_LAENGE: Readonly<Record<string, readonly number[]>> = {
   'ÖGK-T': [7],
   'ÖGK-V': [6],
   BVAEB: [5, 10],
+};
+
+/**
+ * Der Fehlercode je Träger.
+ *
+ * Der Katalog vergibt für jeden Träger einen EIGENEN Code — `F9013` gilt allein
+ * für die ÖGK-W. Bis zum 04.08.2026 meldete diese Datei für jeden Träger
+ * `F9013`; für neun von zehn war das der falsche Code. Wer ihn im
+ * Rücksendungsprotokoll nachschlägt, landet beim falschen Bundesland.
+ */
+const BKNR_CODE: Readonly<Record<string, string>> = {
+  'ÖGK-W': 'F9013',
+  'ÖGK-N': 'F9014',
+  'ÖGK-B': 'F9015',
+  'ÖGK-O': 'F9016',
+  'ÖGK-ST': 'F9017',
+  'ÖGK-K': 'F9018',
+  'ÖGK-S': 'F9019',
+  'ÖGK-T': 'F9080',
+  'ÖGK-V': 'F9081',
+  BVAEB: 'F9082',
 };
 
 /**
@@ -140,8 +165,21 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
 
   const selbstabrechnung = kopf.satzart === 'PS';
 
+  // F9000 gilt laut Katalog für PS, PV UND PE. Der Referenzwert ist auch im
+  // Ende-Satz Pflicht (E.32.1); geprüft wurde bis 04.08.2026 nur der Kopf.
   if (!kopf.werte.REFP?.trim()) {
-    befunde.push({ code: 'F9000', schwere: 'fehler', meldung: 'Paketreferenzwert (REFP) ist leer.' });
+    befunde.push({
+      code: 'F9000',
+      schwere: 'fehler',
+      meldung: 'Paketreferenzwert (REFP) im Kopfsatz ist leer.',
+    });
+  }
+  if (ende.satzart === 'PE' && !ende.werte.REFP?.trim()) {
+    befunde.push({
+      code: 'F9000',
+      schwere: 'fehler',
+      meldung: 'Paketreferenzwert (REFP) im Ende-Satz ist leer.',
+    });
   }
   if (!kopf.werte.BKNR?.trim()) {
     befunde.push({ code: 'F9010', schwere: 'fehler', meldung: 'Beitragskontonummer (BKNR) ist leer.' });
@@ -282,7 +320,12 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
     const bisher = gesehen.get(vsnr) ?? new Set<string>();
     if (bisher.has(folge)) {
       befunde.push({
-        code: 'F9070',
+        // KEIN Katalogcode: Der Prüfkatalog bindet F9070 ausschließlich an den
+        // Aufbau nach E.32.2.2.6. Diese Regel steht in E.32.2.2.2 und ist
+        // eindeutig („ist nur eine mBGM zulässig"), aber mit welchem Code ELDA
+        // sie ahndet — und ob überhaupt — ist unbelegt. Sie deshalb als F9070
+        // auszugeben hiesse, einen Code zu erfinden.
+        code: 'DM-E.32.2.2.2',
         schwere: 'fehler',
         meldung:
           `Versicherungsnummer ${vsnr}: mehr als eine mBGM für die Beschäftigungsfolge ` +
@@ -365,18 +408,38 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
  * Getrennt von {@link pruefeMbgmPaket}, weil der Träger nicht aus der Meldung
  * hervorgeht. Für Salzburg gilt `'ÖGK-S'` mit sieben Stellen.
  *
- * @returns `undefined`, wenn die Länge passt oder der Träger unbekannt ist.
+ * @returns alle Befunde; ein leeres Array heißt: nichts zu beanstanden, oder der
+ *   Träger ist unbekannt.
  */
-export function pruefeBeitragskontonummer(bknr: string, traeger: string): Befund | undefined {
+export function pruefeBeitragskontonummer(bknr: string, traeger: string): Befund[] {
   const erlaubt = BKNR_LAENGE[traeger];
-  if (!erlaubt) return undefined;
+  if (!erlaubt) return [];
+  const befunde: Befund[] = [];
+
+  // F9012 — die einzige trägerbezogene BKNR-Prüfung mit Status `N`: Sie weist
+  // die Meldung zurück, während die Längenprüfungen nur warnen. Der Katalog
+  // wörtlich: „erster Feldwert ein Leerzeichen (gilt nur für Träger 19 -
+  // ÖGK-V)". Geprüft wird deshalb der ROHE Wert, nicht der getrimmte.
+  if (traeger === 'ÖGK-V' && bknr.startsWith(' ')) {
+    befunde.push({
+      code: 'F9012',
+      schwere: 'fehler',
+      meldung:
+        'Die Beitragskontonummer beginnt mit einem Leerzeichen. Bei der ÖGK-V weist ELDA ' +
+        'die Meldung dafür zurück.',
+    });
+  }
+
   const laenge = bknr.trim().length;
-  if (erlaubt.includes(laenge)) return undefined;
-  return {
-    code: 'F9013',
-    schwere: 'warnung',
-    meldung:
-      `Ungültige Beitragskontonummer für ${traeger}: ${laenge} Stellen, ` +
-      `zulässig ${erlaubt.join(' oder ')}.`,
-  };
+  if (!erlaubt.includes(laenge)) {
+    befunde.push({
+      code: BKNR_CODE[traeger] ?? 'F9013',
+      schwere: 'warnung',
+      meldung:
+        `Ungültige Beitragskontonummer für ${traeger}: ${laenge} Stellen, ` +
+        `zulässig ${erlaubt.join(' oder ')}.`,
+    });
+  }
+
+  return befunde;
 }

@@ -345,25 +345,79 @@ test('eine zwingende Verrechnungsposition darf nicht fehlen', () => {
   assert.throws(() => erstelleMbgmPaket([ohneStandard], OPT), /fehlt die zwingende/);
 });
 
-test('fuer Basistypen ohne Zuordnung im Dokument wird nicht geprueft', () => {
-  // KE, UH und RP fuehrt D.60 in keiner der beiden Tabellen. Eine Ablehnung
-  // waere geraten -- also wird dort nichts geprueft.
-  const ke = {
+test('KE, UH und RP haben sehr wohl eine Zuordnung -- und sie wird durchgesetzt', () => {
+  // Dieser Test behauptete einmal das Gegenteil: KE, UH und RP fuehre D.60 in
+  // keiner Tabelle, also werde dort nichts geprueft. Beides war falsch -- alle
+  // drei stehen in der 1:1-Liste auf Seite 153, in Schwarzdruck. Test und Code
+  // waren aus derselben Fehlannahme entstanden, deshalb fiel es keinem von
+  // beiden auf.
+  const mitBasis = (typ: 'KE' | 'UH' | 'RP', position: string) => ({
     ...MELDUNG,
     tarifbloecke: [
       {
         ...MELDUNG.tarifbloecke[0]!,
         basen: [
           {
-            typ: 'KE' as const,
+            typ,
             betragCent: 1000,
-            positionen: [{ typ: 'T01' as const, prozentsatz: 1, betragCent: 10 }],
+            positionen: [{ typ: position as 'T01', prozentsatz: 1, betragCent: 10 }],
           },
         ],
       },
     ],
-  };
-  assert.doesNotThrow(() => erstelleMbgmPaket([ke], OPT));
+  });
+
+  // Die jeweils zwingende Position geht durch...
+  for (const [basis, position] of [
+    ['KE', 'Z12'],
+    ['UH', 'Z13'],
+    ['RP', 'A22'],
+  ] as const) {
+    assert.doesNotThrow(
+      () => erstelleMbgmPaket([mitBasis(basis, position)], OPT),
+      `${basis} mit ${position} muss zulaessig sein`,
+    );
+  }
+
+  // ...eine fremde Position nicht.
+  for (const basis of ['KE', 'UH', 'RP'] as const) {
+    assert.throws(
+      () => erstelleMbgmPaket([mitBasis(basis, 'T01')], OPT),
+      /nicht zulaessig|nicht zulässig/,
+      `${basis} mit T01 muss abgewiesen werden`,
+    );
+  }
+});
+
+test('zu SW gehoert GENAU EINE Position -- keine und beide sind unzulaessig', () => {
+  // SW ist der einzige Basistyp mit zwei zulaessigen Positionen (Z06 fuer
+  // Lehrlinge, Z11 sonst). Weil keine der beiden fuer sich zwingend ist, war
+  // die Basis ganz ohne Position durchgegangen -- obwohl D.60 auf Seite 153
+  // "immer genau eine" verlangt.
+  const mitPositionen = (positionen: readonly string[]) => ({
+    ...MELDUNG,
+    tarifbloecke: [
+      {
+        ...MELDUNG.tarifbloecke[0]!,
+        basen: [
+          {
+            typ: 'SW' as const,
+            betragCent: 1000,
+            positionen: positionen.map((typ) => ({
+              typ: typ as 'Z06',
+              prozentsatz: 1,
+              betragCent: 10,
+            })),
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.doesNotThrow(() => erstelleMbgmPaket([mitPositionen(['Z06'])], OPT));
+  assert.doesNotThrow(() => erstelleMbgmPaket([mitPositionen(['Z11'])], OPT));
+  assert.throws(() => erstelleMbgmPaket([mitPositionen([])], OPT), /genau EINE/);
+  assert.throws(() => erstelleMbgmPaket([mitPositionen(['Z06', 'Z11'])], OPT), /genau EINE/);
 });
 
 test('die Hoechstanzahlen werden schon beim Bauen erzwungen', () => {
