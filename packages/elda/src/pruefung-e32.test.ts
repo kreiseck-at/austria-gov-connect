@@ -127,12 +127,73 @@ test('F9072: die Hoechstanzahl der Verrechnungspositionen ist eine Warnung', () 
 
 test('die Beitragskontonummer wird gegen den Traeger geprueft', () => {
   // Salzburg: sieben Stellen.
-  assert.equal(pruefeBeitragskontonummer('1234567', 'ÖGK-S'), undefined);
+  assert.deepEqual(pruefeBeitragskontonummer('1234567', 'ÖGK-S'), []);
   const b = pruefeBeitragskontonummer('12345678', 'ÖGK-S');
-  assert.equal(b?.schwere, 'warnung', 'eine abweichende Laenge weist ELDA nicht zurueck');
-  assert.match(b?.meldung ?? '', /7/);
+  assert.equal(b[0]?.schwere, 'warnung', 'eine abweichende Laenge weist ELDA nicht zurueck');
+  assert.match(b[0]?.meldung ?? '', /7/);
   // Unbekannter Traeger: keine Aussage statt einer geratenen.
-  assert.equal(pruefeBeitragskontonummer('123', 'IRGENDWER'), undefined);
+  assert.deepEqual(pruefeBeitragskontonummer('123', 'IRGENDWER'), []);
+});
+
+test('jeder Traeger hat seinen EIGENEN Fehlercode', () => {
+  // Der Pruefkatalog vergibt je Traeger einen eigenen Code; F9013 gilt allein
+  // fuer die OeGK-W. Diese Datei meldete bis 04.08.2026 immer F9013 -- fuer
+  // neun von zehn Traegern der falsche. Wer ihn im Ruecksendungsprotokoll
+  // nachschlaegt, landet beim falschen Bundesland.
+  const erwartet: Record<string, string> = {
+    'ÖGK-W': 'F9013',
+    'ÖGK-N': 'F9014',
+    'ÖGK-B': 'F9015',
+    'ÖGK-O': 'F9016',
+    'ÖGK-ST': 'F9017',
+    'ÖGK-K': 'F9018',
+    'ÖGK-S': 'F9019',
+    'ÖGK-T': 'F9080',
+    'ÖGK-V': 'F9081',
+    BVAEB: 'F9082',
+  };
+  for (const [traeger, code] of Object.entries(erwartet)) {
+    // Eine Nummer, die fuer keinen Traeger die richtige Laenge hat.
+    const b = pruefeBeitragskontonummer('123', traeger).filter((x) => x.schwere === 'warnung');
+    assert.equal(b[0]?.code, code, `${traeger} muss ${code} melden`);
+  }
+});
+
+test('F9012: bei der OeGK-V weist ein fuehrendes Leerzeichen die Meldung ZURUECK', () => {
+  // Die einzige traegerbezogene BKNR-Pruefung mit Status N. Geprueft wird der
+  // rohe Wert -- wer vorher trimmt, sieht den Fehler nie.
+  const b = pruefeBeitragskontonummer(' 12345', 'ÖGK-V');
+  const f9012 = b.find((x) => x.code === 'F9012');
+  assert.equal(f9012?.schwere, 'fehler');
+
+  // Ohne Leerzeichen ist dieselbe Nummer in Ordnung (Vorarlberg: sechs Stellen).
+  assert.deepEqual(pruefeBeitragskontonummer('123456', 'ÖGK-V'), []);
+  // Und die Regel gilt NUR fuer die OeGK-V.
+  assert.equal(
+    pruefeBeitragskontonummer(' 234567', 'ÖGK-S').some((x) => x.code === 'F9012'),
+    false,
+  );
+});
+
+test('F9000 gilt auch fuer den Ende-Satz, nicht nur fuer den Kopf', () => {
+  // Der Katalog nennt PS, PV UND PE. Der Referenzwert ist auch im Ende-Satz
+  // Pflicht; geprueft wurde bis 04.08.2026 nur der Kopf.
+  const ohneRefpImEnde = [
+    roh('PS', {
+      REFP: 'P',
+      BKNR: '1',
+      DGNA: 'D',
+      JAGB: 'N',
+      BZRM: '072026',
+      GSVZ: '+',
+      GSUM: '0',
+      ANZM: '0',
+    }),
+    roh('PE', { ANZM: '0' }),
+  ];
+  const f = pruefeMbgmPaket(ohneRefpImEnde).filter((x) => x.code === 'F9000');
+  assert.equal(f.length, 1);
+  assert.match(f[0]?.meldung ?? '', /Ende-Satz/);
 });
 
 // --- Grundsaetze aus E.32.2.2.2 -------------------------------------------
