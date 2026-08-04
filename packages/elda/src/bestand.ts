@@ -58,6 +58,17 @@ export interface BestandOptionen {
   mitteilungsfileVersion?: string;
 }
 
+/**
+ * `BestandOptionen` plus der Bestandsbezeichnung — der internen Sicht auf einen
+ * Bestand. Der Aufrufer sieht sie nicht: Welche Verarbeitung ein Bestand trägt,
+ * folgt aus den Sätzen darin und wird deshalb von der bauenden Funktion gesetzt,
+ * nicht vom Aufrufer angegeben.
+ */
+export interface BestandRahmen extends BestandOptionen {
+  /** Feld BEST im Vorlaufsatz; siehe {@link BEST_VERSICHERTENMELDUNG}, {@link BEST_MBGM}. */
+  bestandsbezeichnung: string;
+}
+
 /** Ein noch nicht umschlossener Satz samt seiner Feldtabelle. */
 export interface RohSatz {
   /** Satzart, geht in den Identifikationsteil (Feld SART) ein. */
@@ -74,8 +85,23 @@ export interface RohSatz {
   satzlaenge: number;
 }
 
-/** Bestandsbezeichnung für Versichertenmeldungen ab 2019 (Kapitel E.2, Feld BEST). */
-const BEST_VERSICHERTENMELDUNG = 'VR';
+/**
+ * Bestandsbezeichnungen laut Kapitel B.3 („Verarbeitungen"). Sie sagen dem
+ * Datensammelsystem, welche Verarbeitung der Bestand trägt — und ein Bestand
+ * trägt laut Kapitel C.1 ausdrücklich Daten „zu EINER Verarbeitung". Ein
+ * falscher Wert liefert die Sätze also nicht bloß mit einer schiefen Aufschrift
+ * ab, er liefert sie an der falschen Verarbeitung ab.
+ *
+ * Deshalb steht der Wert nicht mehr fest im Bestandsbau, sondern kommt von der
+ * Funktion, die die Sätze baut: `erstelleBestand` (Versichertenmeldungen) und
+ * `erstelleMbgmBestand` (monatliche Beitragsgrundlagenmeldung) setzen ihn je
+ * selbst. Ein Aufrufer kann ihn damit weder vergessen noch verwechseln.
+ */
+/** Versichertenmeldung reduziert, ab 01.01.2019 (Kapitel B.3 Punkt 2, E.29). */
+export const BEST_VERSICHERTENMELDUNG = 'VR';
+
+/** Monatliche Beitragsgrundlagenmeldung, für Zeiträume ab 01.01.2019 (Kapitel B.3 Punkt 7, E.32). */
+export const BEST_MBGM = 'MB';
 
 /** Versionsnummer der Satzstrukturen laut Kapitel E.29 (Version 03). */
 const VERSION_SATZSTRUKTUR = '03';
@@ -199,9 +225,16 @@ function schlussFelder(satzlaenge: number): readonly Feld[] {
  * dann die größte im Bestand vorkommende Satzlänge (Kapitel E.2), jeder
  * Datensatz bleibt bei seiner eigenen.
  */
-export function baueBestand(saetze: readonly RohSatz[], opt: BestandOptionen): Buffer {
+export function baueBestand(saetze: readonly RohSatz[], opt: BestandRahmen): Buffer {
   if (saetze.length === 0) {
     throw new EldaError('Ein Datenbestand ohne Meldungssätze ergibt keinen Sinn und wird nicht erzeugt.');
+  }
+  if (!/^[A-Z]{2}$/.test(opt.bestandsbezeichnung)) {
+    throw new EldaError(
+      `Bestandsbezeichnung '${opt.bestandsbezeichnung}' ist unbrauchbar. Kapitel B.3 kennt ` +
+        'ausschließlich zweistellige Großbuchstaben-Codes (VR, MB, LF …); sie benennen die ' +
+        'Verarbeitung, an die der Bestand geliefert wird.',
+    );
   }
   if (Number.isNaN(opt.erstellt.getTime())) {
     throw new EldaError('Erstellungszeitpunkt (opt.erstellt) ist kein gültiges Datum.');
@@ -297,7 +330,7 @@ export function baueBestand(saetze: readonly RohSatz[], opt: BestandOptionen): B
       {
         IDTEIL: baueIdentifikationsteil(SART_VORLAUFSATZ, nummer++, opt),
         PROJ: opt.testdaten ? 'TM' : 'DM',
-        BEST: BEST_VERSICHERTENMELDUNG,
+        BEST: opt.bestandsbezeichnung,
         DTNR: opt.datentraegernummer,
         EDAT: edat,
         EZEI: ezei,

@@ -1,11 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  erstelleMbgmBestand,
   erstelleMbgmPaket,
   VERRECHNUNGSGRUNDLAGE,
   type Beitragsgrundlagenmeldung,
   type PaketOptionen,
 } from './mbgm';
+import { erstelleBestand } from './versichertenmeldung';
+import { anmeldung } from './versichertenmeldung';
+import type { BestandOptionen } from './bestand';
 import { EldaError } from './errors';
 
 const OPT: PaketOptionen = {
@@ -37,6 +41,64 @@ const MELDUNG: Beitragsgrundlagenmeldung = {
     },
   ],
 };
+
+const BESTAND_OPT: BestandOptionen = {
+  seriennummer: '0543594',
+  // Salzburg. Kapitel D.4: maßgeblich ist das Bundesland des BESCHÄFTIGUNGSORTS,
+  // nicht der Sitz des Dienstgebers.
+  versicherungstraeger: '17',
+  datentraegernummer: '000001',
+  erstellt: new Date('2026-08-05T10:00:00+02:00'),
+  testdaten: false,
+  hersteller: {
+    name: 'Musterhersteller',
+    kfz: 'A',
+    plz: '5020',
+    ort: 'Salzburg',
+    strasse: 'Musterstrasse 1',
+    mail: 'test@example.at',
+  },
+};
+
+// Der Bestand ist die Adresse der Meldung. Kapitel B.3 Punkt 7 führt die mBGM
+// als eigene Verarbeitung ('MB – für Zeiträume ab 01.01.2019'), Kapitel C.1
+// zeigt sie im Bild als 'PROJ = DM/MB'. Ginge das Paket im VR-Bestand hinaus,
+// wäre es formal tadellos und an der falschen Stelle abgeliefert.
+test('das mBGM-Paket geht im MB-Bestand hinaus, die Versichertenmeldung im VR-Bestand', () => {
+  const mbgm = erstelleMbgmBestand(erstelleMbgmPaket([MELDUNG], OPT), BESTAND_OPT);
+  assert.equal(mbgm.toString('latin1').slice(22, 24), 'MB');
+
+  const vr = erstelleBestand(
+    [
+      anmeldung({
+        REFW: 'A-0001',
+        BKNR: '1234567890',
+        DGNA: 'Musterbetrieb',
+        VSNR: '1234010180',
+        FANA: 'Musterfrau',
+        VONA: 'Oryna',
+        ADAT: '01072026',
+        BBER: '05',
+        GERF: 'N',
+        FRDV: 'N',
+      }),
+    ],
+    BESTAND_OPT,
+  );
+  assert.equal(vr.toString('latin1').slice(22, 24), 'VR');
+});
+
+test('der mBGM-Bestand trägt Vorlaufsatz, alle Paketsätze und Schlusssatz', () => {
+  const saetze = erstelleMbgmPaket([MELDUNG], OPT);
+  const bestand = erstelleMbgmBestand(saetze, BESTAND_OPT).toString('latin1');
+  // Die Satzlänge des Bestands ist das Maximum über die Sätze (Kapitel E.2);
+  // die Satzarten stehen jeweils an den ersten zwei Stellen ihres Satzes.
+  assert.equal(bestand.slice(0, 2), '00');
+  assert.equal(bestand.slice(20, 22), 'DM');
+  assert.ok(bestand.includes('99'), 'Schlusssatz fehlt');
+  // Der Vorlaufsatz trägt den zuständigen Träger im Identifikationsteil.
+  assert.equal(bestand.slice(18, 20), '17');
+});
 
 test('die Satzfolge steht in der Reihenfolge, die das Dokument verlangt', () => {
   const saetze = erstelleMbgmPaket([MELDUNG], OPT);

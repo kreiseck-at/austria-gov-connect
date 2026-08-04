@@ -1,10 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { baueBestand, baueIdentifikationsteil, type BestandOptionen, type RohSatz } from './bestand';
+import {
+  BEST_MBGM,
+  BEST_VERSICHERTENMELDUNG,
+  baueBestand,
+  baueIdentifikationsteil,
+  type BestandRahmen,
+  type RohSatz,
+} from './bestand';
 import { FELDER_E29, SATZLAENGE_E29 } from './felder-e29';
 import { EldaError } from './errors';
 
-const OPT: BestandOptionen = {
+const OPT: BestandRahmen = {
+  bestandsbezeichnung: BEST_VERSICHERTENMELDUNG,
   seriennummer: '1234567',
   versicherungstraeger: '11',
   datentraegernummer: '000001',
@@ -61,12 +69,33 @@ test('Satznummern beginnen bei 1 und steigen lückenlos', () => {
   );
 });
 
-test('Vorlaufsatz: PROJ folgt dem Testdaten-Kennzeichen, BEST ist VR', () => {
+test('Vorlaufsatz: PROJ folgt dem Testdaten-Kennzeichen, BEST der Verarbeitung', () => {
   const test = baueBestand([satz({ REFW: 'R' })], OPT).toString('latin1');
   assert.equal(test.slice(20, 22), 'TM');
   assert.equal(test.slice(22, 24), 'VR');
   const echt = baueBestand([satz({ REFW: 'R' })], { ...OPT, testdaten: false }).toString('latin1');
   assert.equal(echt.slice(20, 22), 'DM');
+});
+
+// Kapitel B.3 führt jede Verarbeitung mit eigener Bestandsbezeichnung, Kapitel
+// C.1 sagt dazu: Ein Datenbestand enthält Daten „zu EINER Verarbeitung". Die
+// Bezeichnung ist damit keine Aufschrift, sondern die Adresse — sie entscheidet,
+// wo die Sätze landen. Bis 05.08.2026 stand hier fest 'VR', auch für ein
+// mBGM-Paket: Die Meldung wäre bei der Verarbeitung der Versichertenmeldungen
+// abgeliefert worden.
+test('Vorlaufsatz: BEST kommt aus dem Rahmen, nicht aus einer festen Vorgabe', () => {
+  const mbgm = baueBestand([satz({ REFW: 'R' })], { ...OPT, bestandsbezeichnung: BEST_MBGM });
+  assert.equal(mbgm.toString('latin1').slice(22, 24), 'MB');
+});
+
+test('Bestandsbezeichnung: nur zweistellige Codes, sonst Abbruch vor dem Bauen', () => {
+  for (const kaputt of ['', 'M', 'MBX', 'mb', 'M1']) {
+    assert.throws(
+      () => baueBestand([satz({ REFW: 'R' })], { ...OPT, bestandsbezeichnung: kaputt }),
+      EldaError,
+      `sollte abgewiesen werden: '${kaputt}'`,
+    );
+  }
 });
 
 test('Vorlaufsatz: Erstellungsdatum und -zeit', () => {
