@@ -33,6 +33,40 @@ interface EldaAntwort {
  * Parser scheitert dann und `FonProtocolError` trägt den rohen Body — bei
  * `empfangen` ist das die letzte Stelle, an der die Nutzdaten noch existieren.
  */
+/**
+ * Legt die rohe Antwort ab, bevor irgendetwas sie anfasst.
+ *
+ * Sitzt bewusst INNEN, also näher am Netz als das MTOM-Auspacken: Der Haken
+ * sieht damit denselben Körper, den ELDA geschickt hat — mehrteilig, mit allen
+ * Kopfzeilen, auch im Fehlerfall.
+ *
+ * Der Sinn liegt bei `empfangen`. Der Aufruf ist einmalig und unwiderruflich;
+ * misslingt danach das Auswerten, wäre die Zustellung verloren. Mit einem
+ * Mitschnitt ist sie das nicht — der Fehler lässt sich beheben und die Datei
+ * nachträglich lesen.
+ *
+ * Wirft der Haken, bricht der Aufruf ab. Wer mitschneiden will und dabei
+ * scheitert, soll das erfahren, BEVOR eine Zustellung verbraucht ist — ein
+ * stillschweigend übergangener Mitschnitt wäre schlimmer als keiner, weil man
+ * sich auf ihn verlässt.
+ */
+function mitMitschnitt(
+  basis: typeof fetch,
+  operation: string,
+  haken: NonNullable<EldaConfig['mitschnitt']>,
+): typeof fetch {
+  return async (eingabe, init) => {
+    const antwort = await basis(eingabe as Parameters<typeof fetch>[0], init);
+    const roh = Buffer.from(await antwort.clone().arrayBuffer());
+    const kopfzeilen: Record<string, string> = {};
+    antwort.headers.forEach((wert, name) => {
+      kopfzeilen[name.toLowerCase()] = wert;
+    });
+    await haken({ operation, roh, status: antwort.status, kopfzeilen });
+    return antwort;
+  };
+}
+
 function mitMtom(basis: typeof fetch, senke: Map<string, Buffer>): typeof fetch {
   return async (eingabe, init) => {
     const antwort = await basis(eingabe as Parameters<typeof fetch>[0], init);
@@ -498,7 +532,18 @@ export function createEldaTransferRoh(config: EldaConfig): EldaTransferRoh {
           // <methode> does not match an operation." Gegen online-test.elda.at
           // am 31.07.2026 nachgestellt.
           { endpoint, soapAction: '', body },
-          { ...transport, retries: 0, fetchImpl: mitMtom(transport.fetchImpl ?? fetch, anhaenge) },
+          {
+            ...transport,
+            retries: 0,
+            // Reihenfolge: erst mitschneiden, dann auspacken. Der Mitschnitt
+            // liegt innen und sieht deshalb die unveränderte Antwort.
+            fetchImpl: mitMtom(
+              config.mitschnitt
+                ? mitMitschnitt(transport.fetchImpl ?? fetch, methode, config.mitschnitt)
+                : (transport.fetchImpl ?? fetch),
+              anhaenge,
+            ),
+          },
         );
         return { root, anhaenge };
       } catch (err) {

@@ -1119,3 +1119,110 @@ test('MTOM: nicht-mehrteilige Antworten bleiben unangetastet', async () => {
   );
   assert.equal((await elda.ruecksendungenAuflisten()).statusCode, '000');
 });
+
+// ---------------------------------------------------------------------------
+// Mitschnitt der rohen Antwort
+// ---------------------------------------------------------------------------
+
+test('Mitschnitt sieht die ROHE Antwort, vor dem Auspacken', async () => {
+  // Der Sinn liegt bei empfangen: Der Aufruf ist einmalig und unwiderruflich.
+  // Misslingt danach das Auswerten, waere die Zustellung verloren -- mit dem
+  // Mitschnitt ist sie das nicht.
+  const mitgeschnitten: {
+    operation: string;
+    roh: Buffer;
+    status: number;
+    kopfzeilen: Record<string, string>;
+  }[] = [];
+  const envelope = soap(
+    '<ns2:ruecksendungenAuflistenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return>' +
+      '<serviceResult><statusCode>000</statusCode></serviceResult>' +
+      '</return></ns2:ruecksendungenAuflistenResponse>',
+  );
+
+  const elda = createEldaTransferRoh({
+    ...cfg(async () => mtomAntwort(envelope)),
+    mitschnitt: (a) => {
+      mitgeschnitten.push(a);
+    },
+  });
+
+  await elda.ruecksendungenAuflisten();
+
+  assert.equal(mitgeschnitten.length, 1);
+  const a = mitgeschnitten[0]!;
+  assert.equal(a.operation, 'ruecksendungenAuflisten');
+  assert.equal(a.status, 200);
+  // Entscheidend: die MEHRTEILIGE Antwort, nicht die ausgepackte. Genau daran
+  // liess sich im Juli 2026 nachweisen, dass ELDA immer multipart/related
+  // antwortet -- auch bei leerer Liste.
+  // Der Koerper beginnt mit einem Zeilenumbruch, dann der Grenze -- genau so,
+  // wie CXF ihn schickt.
+  assert.match(a.roh.toString('utf8'), /^\r\n--uuid:/);
+  assert.match(a.roh.toString('utf8'), /application\/xop\+xml/);
+  assert.match(a.kopfzeilen['content-type'] ?? '', /multipart\/related/);
+});
+
+test('Mitschnitt greift auch, wenn die Auswertung scheitert', async () => {
+  // Der eigentliche Zweck: Ein kaputter Koerper darf die Nutzdaten nicht
+  // kosten. Der Mitschnitt liegt vor, der Aufruf wirft trotzdem.
+  const mitgeschnitten: Buffer[] = [];
+  const elda = createEldaTransferRoh({
+    ...cfg(
+      async () =>
+        new Response('kein XML, nur Unfug', {
+          status: 200,
+          headers: { 'content-type': 'text/xml' },
+        }),
+    ),
+    mitschnitt: (a) => {
+      mitgeschnitten.push(a.roh);
+    },
+  });
+
+  await assert.rejects(() => elda.ruecksendungenAuflisten());
+  assert.equal(mitgeschnitten.length, 1);
+  assert.equal(mitgeschnitten[0]?.toString('utf8'), 'kein XML, nur Unfug');
+});
+
+test('ein scheiternder Mitschnitt bricht den Aufruf ab, statt ihn stillschweigend fortzusetzen', async () => {
+  // Wer mitschneiden will und dabei scheitert, soll es erfahren, BEVOR eine
+  // Zustellung verbraucht ist. Ein uebergangener Mitschnitt waere schlimmer
+  // als keiner, weil man sich auf ihn verlaesst.
+  const elda = createEldaTransferRoh({
+    ...cfg(
+      async () =>
+        new Response(
+          soap(
+            '<ns2:ruecksendungenAuflistenResponse><return><serviceResult>' +
+              '<statusCode>000</statusCode></serviceResult></return></ns2:ruecksendungenAuflistenResponse>',
+          ),
+          { status: 200, headers: { 'content-type': 'text/xml' } },
+        ),
+    ),
+    mitschnitt: () => {
+      throw new Error('Platte voll');
+    },
+  });
+
+  await assert.rejects(() => elda.ruecksendungenAuflisten(), /Platte voll/);
+});
+
+test('ohne Mitschnitt-Haken bleibt alles wie bisher', async () => {
+  let aufrufe = 0;
+  const elda = createEldaTransferRoh(
+    cfg(async () => {
+      aufrufe++;
+      return new Response(
+        soap(
+          '<ns2:ruecksendungenAuflistenResponse><return><serviceResult>' +
+            '<statusCode>000</statusCode></serviceResult></return></ns2:ruecksendungenAuflistenResponse>',
+        ),
+        { status: 200, headers: { 'content-type': 'text/xml' } },
+      );
+    }),
+  );
+  const r = await elda.ruecksendungenAuflisten();
+  assert.equal(r.ok, true);
+  assert.equal(aufrufe, 1);
+});

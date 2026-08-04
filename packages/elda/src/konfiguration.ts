@@ -35,6 +35,39 @@ type EldaBasisConfig = SecurityQuelle & {
    * des Originals in der Meldung) — ein auswertbarer Zustand, kein Verlust.
    */
   transport?: TransportOptions;
+
+  /**
+   * Mitschnitt der ROHEN Antwort, bevor sie ausgewertet wird.
+   *
+   * Gedacht für `empfangen`: Der Aufruf ist einmalig und unwiderruflich —
+   * ELDA gibt eine abgeholte Rücksendung nicht erneut heraus. Misslingt danach
+   * das Auswerten, wäre der Inhalt endgültig verloren. Mit einem Mitschnitt
+   * liegt er auch dann vor, und der Fehler lässt sich beheben, statt die
+   * Zustellung zu kosten.
+   *
+   * Der Haken sitzt bewusst VOR jeder Auswertung: Er sieht denselben Körper,
+   * den der Parser sieht, einschließlich der MTOM-Struktur und der Kopfzeilen.
+   * Genau daran ließ sich im Juli 2026 nachweisen, dass ELDA ausnahmslos
+   * `multipart/related` antwortet — auch bei einer leeren Liste, auch im
+   * Fehlerfall.
+   *
+   * Wird bei JEDER Operation aufgerufen, auch bei Fehlerantworten. Wirft der
+   * Haken selbst, bricht der Aufruf ab: Wer mitschneiden will und dabei
+   * scheitert, soll das erfahren, bevor eine Zustellung verbraucht ist.
+   *
+   * Der Rohkörper kann Versicherungsnummern und Namen enthalten — er gehört an
+   * einen Ort, der dafür vorgesehen ist.
+   */
+  mitschnitt?: (antwort: {
+    /** Welche Operation — `senden`, `empfangen`, `ruecksendungenAuflisten`. */
+    operation: string;
+    /** Der ungeöffnete Antwortkörper, wie er über die Leitung kam. */
+    roh: Buffer;
+    /** HTTP-Status. */
+    status: number;
+    /** Kopfzeilen der Antwort, Namen kleingeschrieben. */
+    kopfzeilen: Record<string, string>;
+  }) => void | Promise<void>;
 };
 
 /**
