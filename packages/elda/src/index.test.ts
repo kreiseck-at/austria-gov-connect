@@ -46,9 +46,19 @@ test('index exportiert die Meldungs-Builder', () => {
     'stornoAbmeldung',
     'erstelleBestand',
     'wochenarbeitszeit',
+    'erstelleMbgmPaket',
+    'erstelleMbgmBestand',
   ]) {
     assert.equal(typeof (elda as Record<string, unknown>)[name], 'function', name);
   }
+});
+
+// Die Bestandsbezeichnungen sind exportiert, weil ein Aufrufer sie zum Prüfen
+// eines fertigen Bestands braucht — gesetzt werden sie nie von ihm, sondern von
+// erstelleBestand bzw. erstelleMbgmBestand.
+test('index exportiert die Bestandsbezeichnungen aus Kapitel B.3', () => {
+  assert.equal(elda.BEST_VERSICHERTENMELDUNG, 'VR');
+  assert.equal(elda.BEST_MBGM, 'MB');
 });
 
 test('index exportiert die Satzart-Tabellen, aber kein Innenleben der Versichertenmeldung', () => {

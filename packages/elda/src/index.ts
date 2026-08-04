@@ -41,11 +41,18 @@ export {
   type MeldungsFelder,
 } from './versichertenmeldung';
 export { PFLICHT_E29, SATZART_TEXT, ALTERNATIVGRUPPEN, type Satzart, type Pflichtstufe } from './pflicht-e29';
-export type { BestandOptionen, Hersteller, RohSatz } from './bestand';
+export {
+  BEST_VERSICHERTENMELDUNG,
+  BEST_MBGM,
+  type BestandOptionen,
+  type Hersteller,
+  type RohSatz,
+} from './bestand';
 
 // --- Monatliche Beitragsgrundlagenmeldung (Kapitel E.32) -------------------
 export {
   erstelleMbgmPaket,
+  erstelleMbgmBestand,
   VERRECHNUNGSGRUNDLAGE,
   type Verfahren,
   type Verrechnungsgrundlage,

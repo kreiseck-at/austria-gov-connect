@@ -517,9 +517,16 @@ der Organisationsbeschreibung, Satzstruktur-Version 03, zwingend ab
 Ein Builder liefert einen `RohSatz`; `erstelleBestand` klammert beliebig viele
 `RohSatz` zu einem vollständigen, ISO-8859-15-kodierten Datenbestand
 (Vorlaufsatz, Meldungssätze, Schlusssatz), der unverändert als `inhalt` an
-`senden` geht. Andere Meldungsarten (insbesondere die monatliche
-Beitragsgrundlagenmeldung mBGM) sind davon nicht erfasst, siehe „Ausblick"
-unten.
+`senden` geht.
+
+Die monatliche Beitragsgrundlagenmeldung hat dafür eine eigene Funktion:
+`erstelleMbgmPaket` baut die Satzfolge, `erstelleMbgmBestand` klammert sie.
+Beide Klammer-Funktionen setzen die **Bestandsbezeichnung** (Feld `BEST`)
+selbst — `VR` für die Versichertenmeldung, `MB` für die mBGM. Kapitel B.3 führt
+jede Verarbeitung unter eigener Bezeichnung, und Kapitel C.1 hält fest, dass ein
+Datenbestand Daten „zu einer Verarbeitung" enthält: Die Bezeichnung ist keine
+Aufschrift, sondern die Adresse. Sie ist deshalb kein Aufrufer-Parameter, und
+die beiden Meldungsarten lassen sich nicht im selben Bestand mischen.
 
 ### Durchgehendes Beispiel
 
@@ -867,9 +874,10 @@ gedacht.
 
 ## Ausblick
 
-Andere Meldungsarten als die Versichertenmeldung reduziert (Kapitel E.29) —
-insbesondere die monatliche Beitragsgrundlagenmeldung (mBGM) — sind von diesem
-Paket bislang nicht abgedeckt und benötigen ihre eigene Spec-Grundlage.
+Abgedeckt sind die Versichertenmeldung reduziert (Kapitel E.29) und die
+monatliche Beitragsgrundlagenmeldung (Kapitel E.32). Der Lohnzettel Finanz
+(L16, Kapitel E.13/E.14, Bestandsbezeichnung `LF`) ist noch nicht enthalten und
+benötigt seine eigene Spec-Grundlage.
 
 ## Lizenz
 

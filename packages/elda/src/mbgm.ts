@@ -1,5 +1,5 @@
 import { EldaError } from './errors';
-import type { RohSatz } from './bestand';
+import { BEST_MBGM, baueBestand, type BestandOptionen, type RohSatz } from './bestand';
 import {
   FELDER_PAKET,
   FELDER_MBGM,
@@ -820,4 +820,26 @@ export function erstelleMbgmPaket(eintraege: readonly MbgmEintrag[], opt: PaketO
   });
 
   return saetze;
+}
+
+/**
+ * Klammert die Satzfolge eines mBGM-Pakets zu einem übertragbaren Datenbestand.
+ * Das Ergebnis geht unverändert als `inhalt` an `senden`.
+ *
+ * Die Bestandsbezeichnung `MB` setzt diese Funktion selbst. Kapitel B.3 führt
+ * die monatliche Beitragsgrundlagenmeldung als eigene Verarbeitung
+ * („MB – für Zeiträume ab 01.01.2019 – siehe Kapitel E.32"), und Kapitel C.1
+ * zeigt den Aufbau im Bild: `Vorlaufsatz SART = 00, PROJ = DM/MB`. Ein Paket im
+ * `VR`-Bestand der Versichertenmeldungen wäre an der falschen Verarbeitung
+ * abgeliefert — deshalb gibt es dafür eine eigene Funktion und keinen
+ * Schalter an `erstelleBestand`.
+ *
+ * `versicherungstraeger` (Feld VSTR) richtet sich laut Kapitel D.4 nach dem
+ * Bundesland, „in dem der Beschäftigungsort des Versicherten liegt" — Wien 11,
+ * Niederösterreich 12, Burgenland 13, Oberösterreich 14, Steiermark 15,
+ * Kärnten 16, Salzburg 17, Tirol 18, Vorarlberg 19 —, nicht nach dem Sitz des
+ * Dienstgebers.
+ */
+export function erstelleMbgmBestand(saetze: readonly RohSatz[], opt: BestandOptionen): Buffer {
+  return baueBestand(saetze, { ...opt, bestandsbezeichnung: BEST_MBGM });
 }
