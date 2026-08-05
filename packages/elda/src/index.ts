@@ -44,6 +44,9 @@ export { PFLICHT_E29, SATZART_TEXT, ALTERNATIVGRUPPEN, type Satzart, type Pflich
 export {
   BEST_VERSICHERTENMELDUNG,
   BEST_MBGM,
+  VERSION_VERSICHERTENMELDUNG,
+  VERSION_MBGM,
+  UVST_ELDA,
   type BestandOptionen,
   type Hersteller,
   type RohSatz,

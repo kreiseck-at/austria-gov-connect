@@ -1,5 +1,5 @@
 import { EldaError } from './errors';
-import { BEST_MBGM, baueBestand, type BestandOptionen, type RohSatz } from './bestand';
+import { BEST_MBGM, VERSION_MBGM, baueBestand, type BestandOptionen, type RohSatz } from './bestand';
 import {
   FELDER_PAKET,
   FELDER_MBGM,
@@ -841,5 +841,9 @@ export function erstelleMbgmPaket(eintraege: readonly MbgmEintrag[], opt: PaketO
  * Dienstgebers.
  */
 export function erstelleMbgmBestand(saetze: readonly RohSatz[], opt: BestandOptionen): Buffer {
-  return baueBestand(saetze, { ...opt, bestandsbezeichnung: BEST_MBGM });
+  return baueBestand(saetze, {
+    ...opt,
+    bestandsbezeichnung: BEST_MBGM,
+    satzstrukturVersion: VERSION_MBGM,
+  });
 }

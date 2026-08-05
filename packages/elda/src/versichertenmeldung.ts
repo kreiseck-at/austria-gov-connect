@@ -2,7 +2,13 @@ import { EldaError } from './errors';
 import { FELDER_E29, SATZLAENGE_E29 } from './felder-e29';
 import { pruefePflicht, type Satzart } from './pflicht-e29';
 import { pruefeInhalt } from './pruefung-e29';
-import { BEST_VERSICHERTENMELDUNG, baueBestand, type BestandOptionen, type RohSatz } from './bestand';
+import {
+  BEST_VERSICHERTENMELDUNG,
+  VERSION_VERSICHERTENMELDUNG,
+  baueBestand,
+  type BestandOptionen,
+  type RohSatz,
+} from './bestand';
 
 /**
  * Die fachlichen Felder einer Versichertenmeldung, benannt wie in Kapitel E.29.
@@ -195,5 +201,9 @@ export function wochenarbeitszeit(stunden: number, minuten = 0): string {
  * lassen sich nicht im selben Bestand mischen.
  */
 export function erstelleBestand(meldungen: readonly RohSatz[], opt: BestandOptionen): Buffer {
-  return baueBestand(meldungen, { ...opt, bestandsbezeichnung: BEST_VERSICHERTENMELDUNG });
+  return baueBestand(meldungen, {
+    ...opt,
+    bestandsbezeichnung: BEST_VERSICHERTENMELDUNG,
+    satzstrukturVersion: VERSION_VERSICHERTENMELDUNG,
+  });
 }
