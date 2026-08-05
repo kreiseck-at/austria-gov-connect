@@ -9,6 +9,7 @@ import {
 } from './mbgm';
 import { erstelleBestand } from './versichertenmeldung';
 import { anmeldung } from './versichertenmeldung';
+import { SATZTRENNER } from './bestand';
 import type { BestandOptionen } from './bestand';
 import { EldaError } from './errors';
 
@@ -96,9 +97,9 @@ test('der mBGM-Bestand trägt Vorlaufsatz, alle Paketsätze und Schlusssatz', ()
   assert.equal(bestand.slice(0, 2), '00');
   assert.equal(bestand.slice(20, 22), 'DM');
   // Ein Bestand hat EINE Satzlaenge (E.2): sechs Paketsaetze plus Vorlauf- und
-  // Schlusssatz, jeder 326 lang.
-  assert.equal(bestand.length, 326 * (saetze.length + 2));
-  assert.equal(bestand.length % 326, 0);
+  // Schlusssatz, jeder 326 lang, dazwischen je ein Trenner (CRLF).
+  const n = saetze.length + 2;
+  assert.equal(bestand.length, 326 * n + SATZTRENNER.length * (n - 1));
   // Die zwei Werte, an denen ELDA den ersten echten Bestand abgewiesen hat:
   // UVST muss 'ED' sein (D.2), VERS die Version aus dem Kapitelkopf E.32.
   assert.equal(bestand.slice(9, 11), 'ED', 'UVST');
