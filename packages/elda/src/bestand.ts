@@ -160,6 +160,12 @@ function fuelleAuf(satz: Buffer, satzlaenge: number): Buffer {
   return Buffer.concat([satz, Buffer.alloc(satzlaenge - satz.length, 0x20)]);
 }
 
+/**
+ * Trennzeichen zwischen den Sätzen eines Bestands. Begründung an der
+ * Verwendungsstelle in {@link baueBestand}.
+ */
+export const SATZTRENNER = Buffer.from('\r\n', 'latin1');
+
 /** Satzart des Vorlaufsatzes laut Kapitel E.2. */
 const SART_VORLAUFSATZ = '00';
 
@@ -449,5 +455,23 @@ export function baueBestand(saetze: readonly RohSatz[], opt: BestandRahmen): Buf
     ),
   );
 
-  return Buffer.concat(teile);
+  // Sätze durch Zeilenumbrüche getrennt — ELDA liest den Bestand ZEILENWEISE.
+  //
+  // Das Dokument sagt es an keiner Stelle. Der Beleg steht im Fehlerkatalog,
+  // Kapitel H.22: `W4` lautet „Leerzeile gefunden". Eine Leerzeile kann es nur
+  // geben, wenn die Datei in Zeilen zerlegt wird. Dazu die Beobachtung, die
+  // dorthin geführt hat: Ein Bestand ohne Trenner wurde mit `E2` abgewiesen —
+  // „Falsche Satzlaenge! 1747 anstatt 326 Zeichen", wobei 1747 die Länge der
+  // GESAMTEN Datei war. ELDA hatte sie als eine einzige Zeile gelesen.
+  //
+  // CRLF und nicht LF: Welches Zeichen gemeint ist, steht nirgends. Die
+  // erzeugende Seite sind durchweg Windows-Lohnprogramme (die abgelöste
+  // ELDA-Software ist selbst eine `eldawin.exe`), CRLF ist dort die Konvention —
+  // ein Leser, der die real vorkommenden Dateien verarbeitet, muss CRLF können.
+  // Sollte ELDA stattdessen „327 anstatt 326" melden, trennt es nicht sauber ab
+  // und LF ist richtig; die Antwort wäre dann unmissverständlich.
+  //
+  // Kein Trenner NACH dem letzten Satz: Ein Leser, der auf `\n` aufteilt,
+  // bekäme sonst ein leeres letztes Element — und damit ein `W4`.
+  return Buffer.concat(teile.flatMap((satz, i) => (i === 0 ? [satz] : [SATZTRENNER, satz])));
 }

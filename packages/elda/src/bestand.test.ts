@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   BEST_MBGM,
   BEST_VERSICHERTENMELDUNG,
+  SATZTRENNER,
   UVST_ELDA,
   VERSION_MBGM,
   VERSION_VERSICHERTENMELDUNG,
@@ -36,6 +37,17 @@ const OPT: BestandRahmen = {
   },
 };
 
+/**
+ * Abstand von Satzanfang zu Satzanfang: Satzlaenge plus Trenner. Die Saetze
+ * eines Bestands sind seit 0.11.0 durch CRLF getrennt -- ELDA liest ihn
+ * zeilenweise (Fehlerkatalog H.22, W4 201eLeerzeile gefunden201c).
+ */
+const SCHRITT = (satzlaenge: number) => satzlaenge + SATZTRENNER.length;
+
+/** Der i-te Satz eines Bestands mit einheitlicher Satzlaenge. */
+const satzNr = (bestand: Buffer, i: number, satzlaenge: number) =>
+  bestand.subarray(i * SCHRITT(satzlaenge), i * SCHRITT(satzlaenge) + satzlaenge);
+
 const satz = (werte: Record<string, string>): RohSatz => ({
   satzart: 'M3',
   werte,
@@ -54,9 +66,9 @@ test('Identifikationsteil: 20 Zeichen mit Satzart, Nummer, Trägern und Seriennu
 
 test('Bestand: Vorlaufsatz, Datensätze, Schlusssatz — alle gleich lang', () => {
   const bestand = baueBestand([satz({ REFW: 'R1' }), satz({ REFW: 'R2' })], OPT);
-  assert.equal(bestand.length, SATZLAENGE_E29 * 4);
-  const zeile = (i: number) =>
-    bestand.subarray(i * SATZLAENGE_E29, (i + 1) * SATZLAENGE_E29).toString('latin1');
+  // Vier Saetze plus drei Trenner dazwischen.
+  assert.equal(bestand.length, SATZLAENGE_E29 * 4 + SATZTRENNER.length * 3);
+  const zeile = (i: number) => satzNr(bestand, i, SATZLAENGE_E29).toString('latin1');
   assert.equal(zeile(0).slice(0, 2), '00', 'Vorlaufsatz trägt Satzart 00');
   assert.equal(zeile(1).slice(0, 2), 'M3');
   assert.equal(zeile(2).slice(0, 2), 'M3');
@@ -65,8 +77,7 @@ test('Bestand: Vorlaufsatz, Datensätze, Schlusssatz — alle gleich lang', () =
 
 test('Satznummern beginnen bei 1 und steigen lückenlos', () => {
   const bestand = baueBestand([satz({ REFW: 'R1' }), satz({ REFW: 'R2' })], OPT);
-  const nummer = (i: number) =>
-    bestand.subarray(i * SATZLAENGE_E29 + 2, i * SATZLAENGE_E29 + 9).toString('latin1');
+  const nummer = (i: number) => satzNr(bestand, i, SATZLAENGE_E29).subarray(2, 9).toString('latin1');
   assert.deepEqual(
     [nummer(0), nummer(1), nummer(2), nummer(3)],
     ['0000001', '0000002', '0000003', '0000004'],
@@ -198,7 +209,7 @@ test('Vorlaufsatz: VNMF ist über mitteilungsfileVersion ansprechbar', () => {
 // mit der Satznummer des Schlusssatzes selbst übereinstimmt.
 test('Schlusssatz: Satzanzahl zählt alle Sätze inklusive Vorlauf- und Schlusssatz', () => {
   const b = baueBestand([satz({ REFW: 'R1' }), satz({ REFW: 'R2' }), satz({ REFW: 'R3' })], OPT);
-  const schluss = b.subarray(4 * SATZLAENGE_E29).toString('latin1');
+  const schluss = satzNr(b, 4, SATZLAENGE_E29).toString('latin1');
   assert.equal(schluss.slice(20, 26), '000005');
 });
 
@@ -208,8 +219,34 @@ test('Schlusssatz: Satzanzahl zählt alle Sätze inklusive Vorlauf- und Schlusss
 // Seriennummer (OBUS im Identifikationsteil) bekannt ist.
 test('Schlusssatz: ELNR bleibt auf Grundstellung, da SV-intern befüllt', () => {
   const b = baueBestand([satz({ REFW: 'R' })], OPT);
-  const schluss = b.subarray(2 * SATZLAENGE_E29).toString('latin1');
+  const schluss = satzNr(b, 2, SATZLAENGE_E29).toString('latin1');
   assert.equal(schluss.slice(26, 32), '000000');
+});
+
+// ELDA liest den Bestand ZEILENWEISE. Beleg: Fehlerkatalog Kapitel H.22 führt
+// `W4` mit dem Text „Leerzeile gefunden" — eine Leerzeile kann es nur geben,
+// wenn die Datei in Zeilen zerlegt wird. Die Beobachtung dazu: Ein Bestand ohne
+// Trenner wurde mit `E2` abgewiesen, „Falsche Satzlaenge! 1747 anstatt 326
+// Zeichen", wobei 1747 die Länge der GESAMTEN Datei war.
+test('Saetze sind durch CRLF getrennt, ohne Trenner am Ende', () => {
+  const bestand = baueBestand([satz({ REFW: 'R1' }), satz({ REFW: 'R2' })], OPT);
+  const roh = bestand.toString('latin1');
+
+  // Genau drei Trenner bei vier Saetzen — keiner hinter dem letzten. Ein
+  // Trenner am Ende ergaebe bei einem Leser, der auf \n aufteilt, ein leeres
+  // letztes Element und damit ein `W4`.
+  assert.equal(roh.split('\r\n').length - 1, 3);
+  assert.ok(!roh.endsWith('\r\n'), 'kein Trenner nach dem letzten Satz');
+
+  // Jede Zeile ist genau so lang wie die Satzlaenge des Bestands.
+  for (const zeile of roh.split('\r\n')) {
+    assert.equal(zeile.length, SATZLAENGE_E29);
+  }
+  // Und keine Zeile ist leer -- das waere `W4`.
+  assert.ok(
+    roh.split('\r\n').every((z) => z.trim() !== ''),
+    'keine Leerzeile',
+  );
 });
 
 test('leerer Bestand wirft, statt einen sinnlosen Umschlag zu liefern', () => {
@@ -257,36 +294,35 @@ test('E.2: ein Bestand hat EINE Satzlaenge — jeder Satz wird auf das Maximum a
   const lang = eigenerSatz('L1', 500);
   const bestand = baueBestand([kurz, lang], OPT);
 
-  // Vier Saetze zu je 500 — nicht 500 + 300 + 500 + 500.
-  assert.equal(bestand.length, 500 * 4);
-  assert.equal(bestand.length % 500, 0, 'Gesamtlaenge ist ein Vielfaches der Satzlaenge');
+  // Vier Saetze zu je 500, dazwischen drei Trenner.
+  assert.equal(bestand.length, 500 * 4 + SATZTRENNER.length * 3);
 
-  const bei = (i: number) => bestand.subarray(i * 500, i * 500 + 2).toString('latin1');
+  const bei = (i: number) => satzNr(bestand, i, 500).subarray(0, 2).toString('latin1');
   assert.deepEqual([bei(0), bei(1), bei(2), bei(3)], ['00', 'I1', 'L1', '99']);
 
   // Der kurze Satz traegt seinen Inhalt und danach Leerzeichen bis 500.
-  const aufgefuellt = bestand.subarray(500, 1000).toString('latin1');
+  const aufgefuellt = satzNr(bestand, 1, 500).toString('latin1');
   assert.equal(aufgefuellt.length, 500);
   assert.equal(aufgefuellt.slice(300), ' '.repeat(200), 'aufgefuellt mit Leerzeichen');
 });
 
 test('E.2: Satznummern lueckenlos, SANZ zaehlt alle Saetze', () => {
   const bestand = baueBestand([eigenerSatz('I1', 300), eigenerSatz('L1', 500), eigenerSatz('L1', 500)], OPT);
-  const anfaenge = [0, 500, 1000, 1500, 2000];
-  const nummer = (start: number) => bestand.subarray(start + 2, start + 9).toString('latin1');
-  assert.deepEqual(anfaenge.map(nummer), ['0000001', '0000002', '0000003', '0000004', '0000005']);
+  const nummer = (i: number) => satzNr(bestand, i, 500).subarray(2, 9).toString('latin1');
+  assert.deepEqual([0, 1, 2, 3, 4].map(nummer), ['0000001', '0000002', '0000003', '0000004', '0000005']);
   // SANZ steht im Schlusssatz auf Position 21..26 und zaehlt inkl. Vorlauf- und
   // Schlusssatz (Kapitel E.3) — hier 5.
-  assert.equal(bestand.subarray(2000 + 20, 2000 + 26).toString('latin1'), '000005');
+  assert.equal(satzNr(bestand, 4, 500).subarray(20, 26).toString('latin1'), '000005');
 });
 
 test('E.2: das Maximum gilt auch, wenn der laengste Satz nicht der erste ist', () => {
   const vorne = baueBestand([eigenerSatz('L1', 500), eigenerSatz('I1', 300)], OPT);
   const hinten = baueBestand([eigenerSatz('I1', 300), eigenerSatz('L1', 500)], OPT);
-  assert.equal(vorne.length, 2000);
-  assert.equal(hinten.length, 2000);
-  assert.equal(vorne.subarray(500, 502).toString('latin1'), 'L1');
-  assert.equal(hinten.subarray(500, 502).toString('latin1'), 'I1');
+  const erwartet = 500 * 4 + SATZTRENNER.length * 3;
+  assert.equal(vorne.length, erwartet);
+  assert.equal(hinten.length, erwartet);
+  assert.equal(satzNr(vorne, 1, 500).subarray(0, 2).toString('latin1'), 'L1');
+  assert.equal(satzNr(hinten, 1, 500).subarray(0, 2).toString('latin1'), 'I1');
 });
 
 test('ein Bestand aus lauter gleich langen Saetzen bleibt unveraendert', () => {
@@ -295,9 +331,9 @@ test('ein Bestand aus lauter gleich langen Saetzen bleibt unveraendert', () => {
   // schon 246 Zeichen belegt.
   const eigener = eigenerSatz('M3', 300);
   const bestand = baueBestand([eigener, eigener], OPT);
-  assert.equal(bestand.length, 300 * 4);
-  assert.equal(bestand.subarray(0, 2).toString('latin1'), '00');
-  assert.equal(bestand.subarray(900, 902).toString('latin1'), '99');
+  assert.equal(bestand.length, 300 * 4 + SATZTRENNER.length * 3);
+  assert.equal(satzNr(bestand, 0, 300).subarray(0, 2).toString('latin1'), '00');
+  assert.equal(satzNr(bestand, 3, 300).subarray(0, 2).toString('latin1'), '99');
 });
 
 // ---------------------------------------------------------------------------

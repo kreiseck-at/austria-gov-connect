@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FELDER_E29, SATZLAENGE_E29, IDENTIFIKATIONSTEIL, LAENGE_IDENTIFIKATIONSTEIL } from './felder-e29';
+import { SATZTRENNER } from './bestand';
 import { pruefeFeldtabelle } from './festsatz';
 import { erstelleBestand } from './versichertenmeldung';
 import type { BestandOptionen, RohSatz } from './bestand';
@@ -182,8 +183,10 @@ test('C2: jedes der 38 Felder steht an seiner dokumentierten Byteposition', () =
   };
   const bestand = erstelleBestand([satz], OPT);
   // Der Meldungssatz ist der zweite von dreien; 772 ist die Satzlaenge aus Kapitel E.29.
-  assert.equal(bestand.length, 772 * 3);
-  const meldung = bestand.subarray(772, 772 * 2).toString('latin1');
+  // Drei Saetze zu 772, dazwischen zwei Trenner (CRLF).
+  assert.equal(bestand.length, 772 * 3 + SATZTRENNER.length * 2);
+  const schritt = 772 + SATZTRENNER.length;
+  const meldung = bestand.subarray(schritt, schritt + 772).toString('latin1');
   assert.equal(meldung.length, 772);
   // Feld 1, Bytes 0..20: Identifikationsteil laut Kapitel E.1 — SART 'M3', SANR '0000002'
   // (zweiter Satz des Bestands), UVST 'ED', OBUS '1234567', VSTR '11'.
