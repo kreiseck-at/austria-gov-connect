@@ -9,7 +9,6 @@ import {
 } from './mbgm';
 import { erstelleBestand } from './versichertenmeldung';
 import { anmeldung } from './versichertenmeldung';
-import { SATZTRENNER } from './bestand';
 import type { BestandOptionen } from './bestand';
 import { EldaError } from './errors';
 
