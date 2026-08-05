@@ -96,10 +96,20 @@ test('der mBGM-Bestand trägt Vorlaufsatz, alle Paketsätze und Schlusssatz', ()
   // die Satzarten stehen jeweils an den ersten zwei Stellen ihres Satzes.
   assert.equal(bestand.slice(0, 2), '00');
   assert.equal(bestand.slice(20, 22), 'DM');
-  // Ein Bestand hat EINE Satzlaenge (E.2): sechs Paketsaetze plus Vorlauf- und
-  // Schlusssatz, jeder 326 lang, dazwischen je ein Trenner (CRLF).
-  const n = saetze.length + 2;
-  assert.equal(bestand.length, 326 * n + SATZTRENNER.length * (n - 1));
+  // Vorlauf- und Schlusssatz tragen das Maximum (326 = Laenge des mBGM-Satzes),
+  // jeder Datensatz seine eigene Laenge; dazwischen je ein Trenner (CRLF).
+  const zeilen = bestand.split('\r\n');
+  assert.equal(zeilen.length, saetze.length + 2);
+  assert.deepEqual(
+    zeilen.map((z) => z.slice(0, 2)),
+    ['00', 'PS', 'G1', 'T1', 'BS', 'V1', 'PE', '99'],
+  );
+  // Die Laengen sind unterschiedlich -- genau das hat ELDA verlangt.
+  assert.equal(zeilen[0]!.length, 326, 'Vorlaufsatz: Maximum');
+  assert.equal(zeilen[1]!.length, 305, 'PS');
+  assert.equal(zeilen[2]!.length, 326, 'G1');
+  assert.equal(zeilen[3]!.length, 42, 'T1');
+  assert.equal(zeilen[7]!.length, 326, 'Schlusssatz: Maximum');
   // Die zwei Werte, an denen ELDA den ersten echten Bestand abgewiesen hat:
   // UVST muss 'ED' sein (D.2), VERS die Version aus dem Kapitelkopf E.32.
   assert.equal(bestand.slice(9, 11), 'ED', 'UVST');

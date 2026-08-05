@@ -279,50 +279,55 @@ const eigenerSatz = (satzart: string, satzlaenge: number): RohSatz => ({
   satzlaenge,
 });
 
-// Kapitel E.2, erster Satz: „Die Satzlänge des Vorlaufsatzes entspricht der
-// Satzlänge der nachfolgenden Datensätze." Singular — ein Bestand hat EINE
-// Satzlänge. Der Hinweis darunter sagt nur, welche, wenn die Satzarten
-// unterschiedlich definiert sind: die größte im Bestand vorkommende.
+// Umschlag auf dem Maximum, JEDER DATENSATZ bei seiner eigenen Laenge.
 //
-// Bis 05.08.2026 stand hier das Gegenteil: Umschlag auf dem Maximum, jeder
-// Datensatz bei seiner eigenen Länge. ELDA hat einen so gebauten Bestand mit
-// `E2` abgewiesen — „Falsche Satzlaenge! 1747 anstatt 326 Zeichen" (1747 war
-// die Gesamtlänge, 326 die erwartete Satzlänge) — und in der Folge den
-// Schlusssatz nicht gefunden (`E5`).
-test('E.2: ein Bestand hat EINE Satzlaenge — jeder Satz wird auf das Maximum aufgefuellt', () => {
+// Von ELDA am 05.08.2026 Zeile fuer Zeile bestaetigt (Protokoll 18376033): Ein
+// Bestand, in dem alle Saetze auf die groesste Laenge aufgefuellt waren, kam
+// zurueck mit „Falsche Satzlaenge! 326 anstatt 305 Zeichen" fuer den PS-Satz,
+// „326 anstatt 42" fuer T1 und V1 — waehrend Vorlaufsatz, G1 (dessen eigene
+// Laenge 326 ist) und Schlusssatz fehlerfrei blieben.
+test('E.2: Umschlag traegt das Maximum, jeder Datensatz seine eigene Laenge', () => {
   const kurz = eigenerSatz('I1', 300);
   const lang = eigenerSatz('L1', 500);
   const bestand = baueBestand([kurz, lang], OPT);
 
-  // Vier Saetze zu je 500, dazwischen drei Trenner.
-  assert.equal(bestand.length, 500 * 4 + SATZTRENNER.length * 3);
+  // Vorlauf 500 + Trenner + I1 300 + Trenner + L1 500 + Trenner + Schluss 500.
+  assert.equal(bestand.length, 500 + 300 + 500 + 500 + SATZTRENNER.length * 3);
 
-  const bei = (i: number) => satzNr(bestand, i, 500).subarray(0, 2).toString('latin1');
-  assert.deepEqual([bei(0), bei(1), bei(2), bei(3)], ['00', 'I1', 'L1', '99']);
-
-  // Der kurze Satz traegt seinen Inhalt und danach Leerzeichen bis 500.
-  const aufgefuellt = satzNr(bestand, 1, 500).toString('latin1');
-  assert.equal(aufgefuellt.length, 500);
-  assert.equal(aufgefuellt.slice(300), ' '.repeat(200), 'aufgefuellt mit Leerzeichen');
+  const zeilen = bestand.toString('latin1').split('\r\n');
+  assert.deepEqual(
+    zeilen.map((z) => z.slice(0, 2)),
+    ['00', 'I1', 'L1', '99'],
+  );
+  // Jede Zeile traegt die Laenge IHRER Satzart.
+  assert.deepEqual(
+    zeilen.map((z) => z.length),
+    [500, 300, 500, 500],
+  );
 });
 
 test('E.2: Satznummern lueckenlos, SANZ zaehlt alle Saetze', () => {
   const bestand = baueBestand([eigenerSatz('I1', 300), eigenerSatz('L1', 500), eigenerSatz('L1', 500)], OPT);
-  const nummer = (i: number) => satzNr(bestand, i, 500).subarray(2, 9).toString('latin1');
-  assert.deepEqual([0, 1, 2, 3, 4].map(nummer), ['0000001', '0000002', '0000003', '0000004', '0000005']);
+  const zeilen = bestand.toString('latin1').split('\r\n');
+  assert.deepEqual(
+    zeilen.map((z) => z.slice(2, 9)),
+    ['0000001', '0000002', '0000003', '0000004', '0000005'],
+  );
   // SANZ steht im Schlusssatz auf Position 21..26 und zaehlt inkl. Vorlauf- und
-  // Schlusssatz (Kapitel E.3) — hier 5.
-  assert.equal(satzNr(bestand, 4, 500).subarray(20, 26).toString('latin1'), '000005');
+  // Schlusssatz (Kapitel E.3) — hier 5, unabhaengig von den Satzlaengen.
+  assert.equal(zeilen[4]!.slice(20, 26), '000005');
 });
 
 test('E.2: das Maximum gilt auch, wenn der laengste Satz nicht der erste ist', () => {
   const vorne = baueBestand([eigenerSatz('L1', 500), eigenerSatz('I1', 300)], OPT);
   const hinten = baueBestand([eigenerSatz('I1', 300), eigenerSatz('L1', 500)], OPT);
-  const erwartet = 500 * 4 + SATZTRENNER.length * 3;
+  // In beiden Faellen tragen Vorlauf- und Schlusssatz 500, die Datensaetze ihre
+  // eigene Laenge — die Gesamtlaenge ist damit gleich.
+  const erwartet = 500 + 300 + 500 + 500 + SATZTRENNER.length * 3;
   assert.equal(vorne.length, erwartet);
   assert.equal(hinten.length, erwartet);
-  assert.equal(satzNr(vorne, 1, 500).subarray(0, 2).toString('latin1'), 'L1');
-  assert.equal(satzNr(hinten, 1, 500).subarray(0, 2).toString('latin1'), 'I1');
+  assert.equal(vorne.toString('latin1').split('\r\n')[1]!.slice(0, 2), 'L1');
+  assert.equal(hinten.toString('latin1').split('\r\n')[1]!.slice(0, 2), 'I1');
 });
 
 test('ein Bestand aus lauter gleich langen Saetzen bleibt unveraendert', () => {
