@@ -243,7 +243,10 @@ test('Saetze sind durch CRLF getrennt, ohne Trenner am Ende', () => {
     assert.equal(zeile.length, SATZLAENGE_E29);
   }
   // Und keine Zeile ist leer -- das waere `W4`.
-  assert.ok(roh.split('\r\n').every((z) => z.trim() !== ''), 'keine Leerzeile');
+  assert.ok(
+    roh.split('\r\n').every((z) => z.trim() !== ''),
+    'keine Leerzeile',
+  );
 });
 
 test('leerer Bestand wirft, statt einen sinnlosen Umschlag zu liefern', () => {
