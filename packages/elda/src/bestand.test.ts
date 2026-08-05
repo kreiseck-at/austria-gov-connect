@@ -242,43 +242,49 @@ const eigenerSatz = (satzart: string, satzlaenge: number): RohSatz => ({
   satzlaenge,
 });
 
-test('E.2: gemischte Satzlaengen — Umschlag traegt das Maximum, jeder Datensatz seine eigene Laenge', () => {
+// Kapitel E.2, erster Satz: „Die Satzlänge des Vorlaufsatzes entspricht der
+// Satzlänge der nachfolgenden Datensätze." Singular — ein Bestand hat EINE
+// Satzlänge. Der Hinweis darunter sagt nur, welche, wenn die Satzarten
+// unterschiedlich definiert sind: die größte im Bestand vorkommende.
+//
+// Bis 05.08.2026 stand hier das Gegenteil: Umschlag auf dem Maximum, jeder
+// Datensatz bei seiner eigenen Länge. ELDA hat einen so gebauten Bestand mit
+// `E2` abgewiesen — „Falsche Satzlaenge! 1747 anstatt 326 Zeichen" (1747 war
+// die Gesamtlänge, 326 die erwartete Satzlänge) — und in der Folge den
+// Schlusssatz nicht gefunden (`E5`).
+test('E.2: ein Bestand hat EINE Satzlaenge — jeder Satz wird auf das Maximum aufgefuellt', () => {
   const kurz = eigenerSatz('I1', 300);
   const lang = eigenerSatz('L1', 500);
   const bestand = baueBestand([kurz, lang], OPT);
 
-  // Gesamtlaenge = Summe der Teile: Vorlauf 500 + 300 + 500 + Schluss 500.
-  assert.equal(bestand.length, 500 + 300 + 500 + 500);
+  // Vier Saetze zu je 500 — nicht 500 + 300 + 500 + 500.
+  assert.equal(bestand.length, 500 * 4);
+  assert.equal(bestand.length % 500, 0, 'Gesamtlaenge ist ein Vielfaches der Satzlaenge');
 
-  // Vorlaufsatz: Maximum, Satzart 00.
-  assert.equal(bestand.subarray(0, 2).toString('latin1'), '00');
-  // Der kurze Datensatz beginnt unmittelbar nach dem Vorlaufsatz und ist 300 lang.
-  assert.equal(bestand.subarray(500, 502).toString('latin1'), 'I1');
-  // Der lange Datensatz folgt nach 300 Bytes — laege der kurze Satz auf 500,
-  // stuende hier nicht 'L1'.
-  assert.equal(bestand.subarray(800, 802).toString('latin1'), 'L1');
-  // Schlusssatz: wieder das Maximum, Satzart 99.
-  assert.equal(bestand.subarray(1300, 1302).toString('latin1'), '99');
-  assert.equal(bestand.subarray(1300).length, 500);
+  const bei = (i: number) => bestand.subarray(i * 500, i * 500 + 2).toString('latin1');
+  assert.deepEqual([bei(0), bei(1), bei(2), bei(3)], ['00', 'I1', 'L1', '99']);
+
+  // Der kurze Satz traegt seinen Inhalt und danach Leerzeichen bis 500.
+  const aufgefuellt = bestand.subarray(500, 1000).toString('latin1');
+  assert.equal(aufgefuellt.length, 500);
+  assert.equal(aufgefuellt.slice(300), ' '.repeat(200), 'aufgefuellt mit Leerzeichen');
 });
 
-test('E.2: gemischte Satzlaengen — Satznummern lueckenlos, SANZ zaehlt alle Saetze', () => {
+test('E.2: Satznummern lueckenlos, SANZ zaehlt alle Saetze', () => {
   const bestand = baueBestand([eigenerSatz('I1', 300), eigenerSatz('L1', 500), eigenerSatz('L1', 500)], OPT);
-  // Vorlauf 500 + 300 + 500 + 500 + Schluss 500.
-  const anfaenge = [0, 500, 800, 1300, 1800];
+  const anfaenge = [0, 500, 1000, 1500, 2000];
   const nummer = (start: number) => bestand.subarray(start + 2, start + 9).toString('latin1');
   assert.deepEqual(anfaenge.map(nummer), ['0000001', '0000002', '0000003', '0000004', '0000005']);
   // SANZ steht im Schlusssatz auf Position 21..26 und zaehlt inkl. Vorlauf- und
-  // Schlusssatz (Kapitel E.3) — hier 5, unabhaengig von den Satzlaengen.
-  assert.equal(bestand.subarray(1800 + 20, 1800 + 26).toString('latin1'), '000005');
+  // Schlusssatz (Kapitel E.3) — hier 5.
+  assert.equal(bestand.subarray(2000 + 20, 2000 + 26).toString('latin1'), '000005');
 });
 
 test('E.2: das Maximum gilt auch, wenn der laengste Satz nicht der erste ist', () => {
   const vorne = baueBestand([eigenerSatz('L1', 500), eigenerSatz('I1', 300)], OPT);
   const hinten = baueBestand([eigenerSatz('I1', 300), eigenerSatz('L1', 500)], OPT);
-  assert.equal(vorne.length, 1800);
-  assert.equal(hinten.length, 1800);
-  // In beiden Faellen ist der Vorlaufsatz 500 lang: der Datensatz danach beginnt bei 500.
+  assert.equal(vorne.length, 2000);
+  assert.equal(hinten.length, 2000);
   assert.equal(vorne.subarray(500, 502).toString('latin1'), 'L1');
   assert.equal(hinten.subarray(500, 502).toString('latin1'), 'I1');
 });

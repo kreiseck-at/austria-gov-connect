@@ -95,6 +95,10 @@ test('der mBGM-Bestand trägt Vorlaufsatz, alle Paketsätze und Schlusssatz', ()
   // die Satzarten stehen jeweils an den ersten zwei Stellen ihres Satzes.
   assert.equal(bestand.slice(0, 2), '00');
   assert.equal(bestand.slice(20, 22), 'DM');
+  // Ein Bestand hat EINE Satzlaenge (E.2): sechs Paketsaetze plus Vorlauf- und
+  // Schlusssatz, jeder 326 lang.
+  assert.equal(bestand.length, 326 * (saetze.length + 2));
+  assert.equal(bestand.length % 326, 0);
   // Die zwei Werte, an denen ELDA den ersten echten Bestand abgewiesen hat:
   // UVST muss 'ED' sein (D.2), VERS die Version aus dem Kapitelkopf E.32.
   assert.equal(bestand.slice(9, 11), 'ED', 'UVST');

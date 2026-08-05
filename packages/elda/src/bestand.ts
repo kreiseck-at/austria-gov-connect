@@ -148,6 +148,18 @@ export const VERSION_MBGM = '02';
  */
 export const UVST_ELDA = 'ED';
 
+/**
+ * Füllt einen gebauten Satz mit Leerzeichen auf die Satzlänge des Bestands auf.
+ *
+ * Leerzeichen, weil das die Grundstellung alphanumerischer Felder ist (Kapitel
+ * C.1.1: „a/n … linksbündig, Grundstellung blank") — und weil hinter dem
+ * letzten Feld eines Satzes ohnehin nur Reserve steht.
+ */
+function fuelleAuf(satz: Buffer, satzlaenge: number): Buffer {
+  if (satz.length >= satzlaenge) return satz;
+  return Buffer.concat([satz, Buffer.alloc(satzlaenge - satz.length, 0x20)]);
+}
+
 /** Satzart des Vorlaufsatzes laut Kapitel E.2. */
 const SART_VORLAUFSATZ = '00';
 
@@ -391,13 +403,28 @@ export function baueBestand(saetze: readonly RohSatz[], opt: BestandRahmen): Buf
   );
 
   for (const s of saetze) {
-    teile.push(
-      baueSatz(
-        s.felder,
-        { ...s.werte, IDTEIL: baueIdentifikationsteil(s.satzart, nummer++, opt) },
-        s.satzlaenge,
-      ),
+    const gebaut = baueSatz(
+      s.felder,
+      { ...s.werte, IDTEIL: baueIdentifikationsteil(s.satzart, nummer++, opt) },
+      s.satzlaenge,
     );
+    // Jeder Satz wird auf die Satzlänge des Bestands aufgefüllt, auch wenn seine
+    // eigene Feldtabelle kürzer ist. Kapitel E.2, erster Satz: „Die Satzlänge
+    // des Vorlaufsatzes entspricht der Satzlänge der nachfolgenden Datensätze."
+    // Singular — ein Bestand hat EINE Satzlänge, und der Hinweis darunter sagt
+    // welche: die größte im Bestand vorkommende.
+    //
+    // „Die Übermittlung erfolgt in variabler Satzlänge" (C.1) meint damit die
+    // Länge JE BESTAND, nicht je Satz: ein VR-Bestand ist 772 lang, ein
+    // MB-Bestand 326.
+    //
+    // Bis 05.08.2026 behielt jeder Satz seine eigene Länge. ELDA hat den
+    // Bestand deshalb mit `E2` abgewiesen — „Falsche Satzlaenge! 1747 anstatt
+    // 326 Zeichen": 1747 war die Gesamtlänge der Datei, 326 die erwartete
+    // Satzlänge, und 1747 ist kein Vielfaches davon. Anschließend war die
+    // Satzfolge nicht mehr auflösbar und der Schlusssatz nicht auffindbar
+    // (`E5`).
+    teile.push(fuelleAuf(gebaut, satzlaenge));
   }
 
   // SANZ zählt laut Kapitel E.3 ausdrücklich "inkl. Vorlauf- und Schlusssatz" —
