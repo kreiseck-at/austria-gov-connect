@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {
   BEST_MBGM,
   BEST_VERSICHERTENMELDUNG,
+  UVST_ELDA,
+  VERSION_MBGM,
+  VERSION_VERSICHERTENMELDUNG,
   baueBestand,
   baueIdentifikationsteil,
   type BestandRahmen,
@@ -13,6 +16,7 @@ import { EldaError } from './errors';
 
 const OPT: BestandRahmen = {
   bestandsbezeichnung: BEST_VERSICHERTENMELDUNG,
+  satzstrukturVersion: VERSION_VERSICHERTENMELDUNG,
   seriennummer: '1234567',
   versicherungstraeger: '11',
   datentraegernummer: '000001',
@@ -86,6 +90,46 @@ test('Vorlaufsatz: PROJ folgt dem Testdaten-Kennzeichen, BEST der Verarbeitung',
 test('Vorlaufsatz: BEST kommt aus dem Rahmen, nicht aus einer festen Vorgabe', () => {
   const mbgm = baueBestand([satz({ REFW: 'R' })], { ...OPT, bestandsbezeichnung: BEST_MBGM });
   assert.equal(mbgm.toString('latin1').slice(22, 24), 'MB');
+});
+
+// Am 05.08.2026 hat ELDA einen echten mBGM-Bestand mit drei Fehlern abgewiesen
+// (Protokoll 18373113, Status 403, „nicht_uebernommen"). Zwei davon standen
+// hier fest verdrahtet; der dritte war ihre Folge. Die nächsten drei Tests
+// halten jeden davon fest.
+
+test('UVST ist ED — der datenübernehmende Träger, nicht der zuständige', () => {
+  // ELDA: „E6 — Datenuebernehmender Versicherungstraeger (UVST) nicht ED".
+  // Kapitel D.2: „Bei Meldungen an das Datensammelsystem der Sozialversicherung
+  // ist als datenübernehmender Versicherungsträger die Österreichische
+  // Gesundheitskasse - ELDA, UVST = ED, anzugeben." Und ausdrücklich: „Diese
+  // Angabe ist unabhängig davon, an welchen Versicherungsträger die Daten zur
+  // Verarbeitung gerichtet sind."
+  const b = baueBestand([satz({ REFW: 'R' })], OPT).toString('latin1');
+  assert.equal(b.slice(9, 11), UVST_ELDA);
+  assert.equal(b.slice(18, 20), OPT.versicherungstraeger, 'VSTR bleibt der zuständige Träger');
+});
+
+test('UVST lässt sich für Clearingstellen übersteuern', () => {
+  // D.2 kennt daneben nur 1L, 7L, ST (Clearingstellen) und 99 (Dachverband).
+  const b = baueBestand([satz({ REFW: 'R' })], { ...OPT, datenuebernehmer: '7L' }).toString('latin1');
+  assert.equal(b.slice(9, 11), '7L');
+});
+
+test('VERS folgt der Verarbeitung: 03 für VR, 02 für MB', () => {
+  // ELDA: „E31 — Unbekannte Version (03) der Satzstrukturen fuer Projekt DM,
+  // Bestand MB." Kapitel D.26: Die Versionsnummer ist der Überschrift jeder
+  // Datensatzbeschreibung zu entnehmen — E.29 trägt Version 03, E.32 Version 02.
+  const vr = baueBestand([satz({ REFW: 'R' })], OPT).toString('latin1');
+  assert.equal(vr.slice(149, 151), VERSION_VERSICHERTENMELDUNG);
+  assert.equal(VERSION_VERSICHERTENMELDUNG, '03');
+
+  const mb = baueBestand([satz({ REFW: 'R' })], {
+    ...OPT,
+    bestandsbezeichnung: BEST_MBGM,
+    satzstrukturVersion: VERSION_MBGM,
+  }).toString('latin1');
+  assert.equal(mb.slice(149, 151), VERSION_MBGM);
+  assert.equal(VERSION_MBGM, '02');
 });
 
 test('Bestandsbezeichnung: nur zweistellige Codes, sonst Abbruch vor dem Bauen', () => {

@@ -25,7 +25,11 @@ export interface BestandOptionen {
   seriennummer: string;
   /** Zuständiger Versicherungsträger (Feld VSTR). */
   versicherungstraeger: string;
-  /** Datenübernehmender Versicherungsträger (Feld UVST); ohne Angabe gleich `versicherungstraeger`. */
+  /**
+   * Datenübernehmender Versicherungsträger (Feld UVST, Kapitel D.2). Ohne
+   * Angabe `ED` — die ÖGK als Datensammelsystem. Nur für Clearingstellen
+   * (1L, 7L, ST) oder den Dachverband (99) zu setzen.
+   */
   datenuebernehmer?: string;
   /** Datenträgernummer, laufende Nummerierung der übermittelten Bestände. */
   datentraegernummer: string;
@@ -67,6 +71,8 @@ export interface BestandOptionen {
 export interface BestandRahmen extends BestandOptionen {
   /** Feld BEST im Vorlaufsatz; siehe {@link BEST_VERSICHERTENMELDUNG}, {@link BEST_MBGM}. */
   bestandsbezeichnung: string;
+  /** Feld VERS im Vorlaufsatz; siehe {@link VERSION_VERSICHERTENMELDUNG}, {@link VERSION_MBGM}. */
+  satzstrukturVersion: string;
 }
 
 /** Ein noch nicht umschlossener Satz samt seiner Feldtabelle. */
@@ -103,8 +109,44 @@ export const BEST_VERSICHERTENMELDUNG = 'VR';
 /** Monatliche Beitragsgrundlagenmeldung, für Zeiträume ab 01.01.2019 (Kapitel B.3 Punkt 7, E.32). */
 export const BEST_MBGM = 'MB';
 
-/** Versionsnummer der Satzstrukturen laut Kapitel E.29 (Version 03). */
-const VERSION_SATZSTRUKTUR = '03';
+/**
+ * Versionsnummer der Satzstrukturen (Feld VERS, Kapitel D.26).
+ *
+ * D.26: „Die Versionsnummer identifiziert die Satzstruktur der dem Vorlaufsatz
+ * folgenden Datensätze. Die Versionsnummer ist der **Überschrift jeder
+ * Datensatzbeschreibung** zu entnehmen."
+ *
+ * Sie gehört damit zur Verarbeitung, nicht zum Bestandsbau — genau wie die
+ * Bestandsbezeichnung. Ein fester Wert war falsch: ELDA hat einen mBGM-Bestand
+ * mit der Version der Versichertenmeldung mit `E31` abgewiesen
+ * („Unbekannte Version (03) der Satzstrukturen für Projekt DM, Bestand MB.").
+ * Anschließend konnte es die Satzlängen nicht mehr auflösen und meldete
+ * zusätzlich `E5` („Kein Schlusssatz vorhanden!") — der Bestand war strukturell
+ * einwandfrei, nur nicht lesbar.
+ */
+/** Kapitelkopf E.29 „Versichertenmeldung reduziert": Version 03, zwingend ab 01.02.2026. */
+export const VERSION_VERSICHERTENMELDUNG = '03';
+
+/** Kapitelkopf E.32 „Monatliche Beitragsgrundlagenmeldung": Version 02, zwingend ab 01.02.2021. */
+export const VERSION_MBGM = '02';
+
+/**
+ * Datenübernehmender Versicherungsträger (Feld UVST, Kapitel D.2).
+ *
+ * D.2, wörtlich: „Bei Meldungen an das Datensammelsystem der Sozialversicherung
+ * ist als datenübernehmender Versicherungsträger die Österreichische
+ * Gesundheitskasse - ELDA, UVST = ED, anzugeben."
+ *
+ * Das ist NICHT der zuständige Versicherungsträger (VSTR): „Diese Angabe ist
+ * unabhängig davon, an welchen Versicherungsträger die Daten zur Verarbeitung
+ * gerichtet sind." Bis 05.08.2026 stand hier ersatzweise der VSTR — ELDA hat
+ * den Bestand mit `E6` abgewiesen („Datenuebernehmender Versicherungstraeger
+ * (UVST) nicht ED").
+ *
+ * Andere Werte kennt D.2 nur für Clearingstellen (1L, 7L, ST) und den
+ * Dachverband (99); dafür bleibt `datenuebernehmer` als Übersteuerung.
+ */
+export const UVST_ELDA = 'ED';
 
 /** Satzart des Vorlaufsatzes laut Kapitel E.2. */
 const SART_VORLAUFSATZ = '00';
@@ -169,7 +211,7 @@ export function baueIdentifikationsteil(satzart: string, satznummer: number, opt
     {
       SART: satzart,
       SANR: String(satznummer),
-      UVST: opt.datenuebernehmer ?? opt.versicherungstraeger,
+      UVST: opt.datenuebernehmer ?? UVST_ELDA,
       OBUS: opt.seriennummer,
       VSTR: opt.versicherungstraeger,
     },
@@ -339,7 +381,7 @@ export function baueBestand(saetze: readonly RohSatz[], opt: BestandRahmen): Buf
         HPLZ: opt.hersteller.plz,
         HORT: opt.hersteller.ort,
         HSTR: opt.hersteller.strasse,
-        VERS: VERSION_SATZSTRUKTUR,
+        VERS: opt.satzstrukturVersion,
         HTEL: opt.hersteller.telefon,
         SOID: opt.hersteller.softwareId,
         VNMF: opt.mitteilungsfileVersion,

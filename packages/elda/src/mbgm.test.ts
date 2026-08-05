@@ -95,6 +95,10 @@ test('der mBGM-Bestand trägt Vorlaufsatz, alle Paketsätze und Schlusssatz', ()
   // die Satzarten stehen jeweils an den ersten zwei Stellen ihres Satzes.
   assert.equal(bestand.slice(0, 2), '00');
   assert.equal(bestand.slice(20, 22), 'DM');
+  // Die zwei Werte, an denen ELDA den ersten echten Bestand abgewiesen hat:
+  // UVST muss 'ED' sein (D.2), VERS die Version aus dem Kapitelkopf E.32.
+  assert.equal(bestand.slice(9, 11), 'ED', 'UVST');
+  assert.equal(bestand.slice(149, 151), '02', 'VERS');
   assert.ok(bestand.includes('99'), 'Schlusssatz fehlt');
   // Der Vorlaufsatz trägt den zuständigen Träger im Identifikationsteil.
   assert.equal(bestand.slice(18, 20), '17');
