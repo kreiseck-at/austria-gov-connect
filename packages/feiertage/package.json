@@ -1,0 +1,35 @@
+{
+  "name": "@kreiseck/feiertage",
+  "version": "0.1.0",
+  "description": "Österreichische Feiertage (ARG) und Fristenverschiebung (BAO, AVG)",
+  "license": "Apache-2.0",
+  "author": "Kreiseck",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=20.18.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.test.json && node --test $(find test-dist -name '*.test.js')",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^22.0.0"
+  }
+}
