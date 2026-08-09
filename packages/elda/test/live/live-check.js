@@ -24,6 +24,11 @@
 //
 // Weder Passwort noch Digest werden je ausgegeben.
 //
+// Nur für 'sit':
+//   ELDA_SIT_QUELL_IP  erwartete öffentliche Quell-IP. Weicht die tatsächliche
+//                      ab, bricht der Lauf ab, statt in eine irreführende
+//                      Netzwerkabweisung zu laufen (siehe `quellIp`).
+//
 // Standardmäßig läuft NUR `ruecksendungenAuflisten` — es verändert nichts und
 // ist zugleich die Probe auf die Zugangsdaten. Die beiden anderen Methoden sind
 // unwiderruflich und deshalb je hinter einer eigenen Freigabe:
@@ -186,6 +191,68 @@ function fehlertext(err) {
 }
 
 const mitschnittHinweis = () => `Mitschnitt: ${letzter()?.antwortDatei ?? '(keiner)'}`;
+
+/**
+ * Öffentliche Quell-IP dieses Laufs, best effort.
+ *
+ * Der SIT lässt nur freigeschaltete Adressen zu und weist alles andere schon
+ * auf Netzwerkebene ab ("Connection reset by peer"). Das sieht aus wie ein
+ * Serverausfall, liegt aber an der eigenen Adresse — ein eingeschaltetes VPN
+ * oder ein Mobilfunk-Hotspot genügt. Ohne diese Auskunft sucht man den Fehler
+ * bei ELDA statt bei sich.
+ *
+ * Bewusst NICHT über `mitschnittFetch`: der Mitschnitt soll ausschließlich den
+ * ELDA-Verkehr enthalten. Und bewusst fehlertolerant — die Adresse ist eine
+ * Hilfe bei der Fehlersuche, kein Bestandteil des Tests.
+ */
+async function quellIp() {
+  try {
+    const antwort = await fetch('https://api.ipify.org', {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!antwort.ok) return null;
+    const text = (await antwort.text()).trim();
+    return /^[0-9]{1,3}(\.[0-9]{1,3}){3}$/.test(text) ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Prüft vor dem ersten SIT-Aufruf, ob dieser Lauf von der erwarteten Adresse
+ * ausgeht. Liefert `false`, wenn abgebrochen werden soll.
+ *
+ * Der Abbruch ist der eigentliche Zweck: Ein Lauf aus der falschen Adresse
+ * erzeugt lauter Fehlbefunde, die anschließend als vermeintliche Erkenntnisse
+ * über ELDA weiterleben — genau das, was dieses Skript sonst verhindert.
+ */
+async function pruefeQuellIp() {
+  const ip = await quellIp();
+  const erwartet = process.env.ELDA_SIT_QUELL_IP?.trim();
+  console.log(`Quell-IP: ${ip ?? 'nicht ermittelbar'}`);
+  if (!erwartet) {
+    console.log(
+      'Hinweis: Der SIT lässt nur freigeschaltete Quell-IPs zu. Mit ' +
+        'ELDA_SIT_QUELL_IP wird die erwartete Adresse vor dem Lauf geprüft.',
+    );
+    return true;
+  }
+  if (!ip) {
+    console.log(
+      `Abgebrochen: erwartet war ${erwartet}, die tatsächliche Adresse ließ sich ` +
+        'nicht ermitteln. Ohne diese Gewissheit wären alle Befunde wertlos.',
+    );
+    return false;
+  }
+  if (ip !== erwartet) {
+    console.log(
+      `Abgebrochen: erwartet war ${erwartet}. Der SIT weist diese Adresse ab — ` +
+        'läuft ein VPN oder ein Mobilfunk-Hotspot?',
+    );
+    return false;
+  }
+  return true;
+}
 
 // --- Zugangsdaten ----------------------------------------------------------
 
@@ -596,6 +663,11 @@ async function empfangen(elda, gesendet) {
   console.log(`ELDA-Live-Check gegen Umgebung '${config.umgebung}'.`);
   console.log(`Passwortanteil: ${config.kundenpasswortHash ? 'kundenpasswortHash' : 'kundenpasswort (Klartext)'}`);
   console.log(`Mitschnitt: ${path.relative(process.cwd(), MITSCHNITT)} (geschwärzt, 0600)`);
+
+  // Nur beim SIT: dort entscheidet die Quell-IP über Erreichbarkeit überhaupt.
+  // Kundentest und Produktion prüfen sie nicht — belegt am 08.08.2026, beide
+  // liefen aus einem dynamischen Cloud-Adresspool durch.
+  if (config.umgebung === 'sit' && !(await pruefeQuellIp())) return;
 
   let elda;
   try {
