@@ -35,6 +35,56 @@ brechen).
 
 ## @kreiseck/rksv
 
+### 0.10.0 — 2026-08-12
+
+- **Breaking:** `pruefeBelegCode` und die Typen `Pruefergebnis`/`PruefOptionen`
+  liegen nicht mehr unter `@kreiseck/rksv/code`, sondern unter dem neuen Subpath
+  `@kreiseck/rksv/code/signatur`. Die ES256-Prüfung braucht X.509 und damit
+  `node:crypto`; über den bisherigen Export zog jeder Nutzer des Offline-Teils
+  diese Abhängigkeit mit. **Betroffen ist u. a.
+  `functions/test/integration/belegcheck-core.js` im Repository `kasseneck`** —
+  der Zweit-Verifizierer der RKSV-Integrationssuite holt `pruefeBelegCode` heute
+  aus `@kreiseck/rksv/code`. Solange dort `^0.9.0` steht, passiert nichts; wer
+  die Abhängigkeit hebt, muss den Import auf `/code/signatur` umstellen.
+- **Breaking:** `base32Decode` liefert und `base32Encode` nimmt `Uint8Array`
+  statt `Buffer`. In Node ist `Buffer` ein `Uint8Array` — wer nur Bytes liest
+  oder weiterreicht, merkt den Wechsel nicht; wer `.toString('base64')` o. Ä.
+  auf dem Ergebnis von `base32Decode` aufruft, muss umstellen.
+- **Neu:** `@kreiseck/rksv/code` kommt ohne `node:crypto`, ohne `Buffer` und
+  ohne `process` aus und läuft damit unverändert im Browser — gedacht für ein
+  Prüfportal, das die Verkettung einer Belegkette clientseitig prüft. Eine
+  zweite Fassung derselben Logik, die auseinanderlaufen kann, entfällt damit.
+  SHA-256 und die Base64-/Byte-Helfer sind paketintern umgesetzt; die
+  Verkettungswerte sind gegen die vorherige Fassung differenziell verglichen
+  (u. a. der BMF-Vektor `A12347` → `OeSKQjO4zKI=`).
+- **Fix:** Die interne Base64-Dekodierung bricht am ersten Auffüllzeichen `=`
+  ab, wie `Buffer.from(s, 'base64')`. Eine nachsichtige Fassung hätte in einem
+  **verfälschten** Belegcode (`=` mitten im Signatursegment) den Ausfalltext
+  „Sicherheitseinrichtung ausgefallen" erkannt und daraufhin Signaturlänge und
+  Signatur als `NOT_EXECUTED` gemeldet, statt sie fehlschlagen zu lassen. In
+  einem RKSV-konformen Beleg ist der Fall nicht erreichbar; für die Prüfung
+  manipulierter oder beschädigter Codes ist er es sehr wohl.
+- `belegSigningInput` bleibt öffentlich und liegt weiterhin in
+  `@kreiseck/rksv/code` — es hängt an nichts Node-Eigenem mehr.
+
+### 0.9.0 — 2026-07-31
+
+- **Neu:** `vorgangErgebnis(...)` und `vorgangKlasse(...)` samt Typen
+  `VorgangKlasse`, `VorgangUrteil`, `UrteilEingabe` — ein **vorgangsbezogenes**
+  Urteil statt roher Returncodes. `Ergebnis.ok` beantwortet nur „hat der Aufruf
+  funktioniert"; die Frage des Aufrufers ist aber „ist der gewünschte Zustand
+  hergestellt". Beides fällt bei FinanzOnline vorgangsabhängig auseinander:
+  `B6` heißt bei einer Außerbetriebnahme *Ziel erreicht*, bei einer
+  Wiederinbetriebnahme *Ablehnung*, bei `B13` ist es umgekehrt. Daher drei
+  Ausgänge: Ziel erreicht, `statusUnklar`, abgelehnt.
+- **Neu:** `FonStatus` (`AKTIVIERT` | `REGISTRIERT` | `IN_BETRIEB` | `AUSFALL`)
+  als offener Wertebereich in `StatusErgebnis.status` — unbekannte Werte brechen
+  die Auswertung nicht, die bekannten vier werden beim Tippen vorgeschlagen.
+- Dokumentiert: `statusUnklar` verspricht **nicht**, dass eine Statusabfrage die
+  Sache klärt. Am 31.07.2026 am echten Dienst nachgemessen — für abgemeldete
+  Einheiten kommt `B32`/`B33` ohne Status und ohne Datum; „nie registriert" und
+  „bereits abgemeldet" sind über das Webservice nicht zu unterscheiden.
+
 ### 0.8.0 — 2026-07-29
 
 - **Neu:** Begründungscodes für Ausfall und Außerbetriebnahme als Katalog —

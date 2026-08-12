@@ -20,6 +20,9 @@
 // sha256.test.ts vergleichen gegen node:crypto und fallen bei einer
 // veraenderten Rotationsweite.
 
+// Acht Konstanten je Zeile wie in FIPS 180-4, Abschnitt 4.2.2 -- so bleibt die
+// Tabelle Zeile fuer Zeile gegen die Norm vergleichbar.
+// prettier-ignore
 const K = new Uint32Array([
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
   0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -42,6 +45,8 @@ interface Zustand {
 
 function neuerZustand(): Zustand {
   return {
+    // Die acht Anfangswerte aus FIPS 180-4, Abschnitt 5.3.3, in einer Zeile.
+    // prettier-ignore
     h: new Uint32Array([
       0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
       0x5be0cd19,
