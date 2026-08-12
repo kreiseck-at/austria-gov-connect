@@ -12,30 +12,82 @@ Security-Parametern (`securityParameters`, SHA-512-Hash) und Envelope-Bau.
 reduziert** (Kapitel E.29 der Organisationsbeschreibung) — Anmeldung, Abmeldung,
 Änderungsmeldung, Richtigstellungen und Stornos — als fertigen, ISO-8859-15-kodierten
 Datenbestand, siehe „Meldungen erzeugen" unten. Andere Meldungsarten, insbesondere die
-monatliche Beitragsgrundlagenmeldung (mBGM), sind **nicht** enthalten.
+monatliche Beitragsgrundlagenmeldung (mBGM) ist seit 0.6.0 als Satzschicht
+enthalten — Feldtabellen, Pflichtmatrix, Codekataloge und der Zusammenbau für
+beide Verfahren (Selbstabrechnung und Vorschreibung). Der Lohnzettel Finanz
+(L16, Kapitel E.13/E.14) ist **nicht** enthalten.
 
 ## Reifegrad
 
-Dieses Paket ist **noch nie gegen eine echte ELDA-Gegenstelle gelaufen**. Das
-Drahtformat stammt aus der offiziellen Schnittstellenbeschreibung V4; sämtliche
-Tests laufen gegen selbst geschriebene Antwort-Fixtures, die dieselbe Lesart der
-Spezifikation abbilden wie der Code. Eine Fehldeutung der Spezifikation wäre
-folglich in Code und Test gleichermaßen enthalten und bliebe unentdeckt.
+Der **Transport ist seit 0.5.0 gegen die echte Gegenstelle verifiziert**:
+`online-test.elda.at` und `online.elda.at` beantworten einen Aufruf mit
+ungültigem API-Key mit einem sauberen `EldaStatusError 557`. Damit stehen
+Endpunkte, Envelope, `securityParameters`, SOAPAction und das Auspacken der
+Antwort fest.
 
-Ungeklärt, bis ein ELDA-Kundentest-Zugang vorliegt: ob der Payload inline als
-Base64 übertragen wird oder per MTOM/XOP; wie eine leere Rücksendungsliste auf
-dem Draht aussieht; ob `senden` bei Status `000` stets eine Protokollnummer
-mitliefert; ob bei Status `405` die Protokollnummer der Originalsendung in einem
-Feld oder nur im Meldungstext steht; ob `<messages>` mehrfach vorkommen kann; ob
-`datei.dateiTyp` numerisch kommt (so die Tabelle in Abschnitt 4.2) oder als Text
-wie `XML` (so die Beispiel-Ausgabe in Abschnitt 7.4.3.3 desselben Dokuments —
-das Dokument widerspricht sich hier selbst, deshalb reicht dieses Paket den Wert
-unverändert als `string` durch); worüber die in Abschnitt 4.2 gelieferte `md5`
-tatsächlich gebildet wird, sagt die Schnittstellenbeschreibung nicht — dieses
-Paket prüft sie gegen die dekodierten Bytes. Meint ELDA etwas anderes (z. B.
-den Base64-Text), scheitert eine eigentlich intakte Rücksendung mit
-`EldaProtocolError: MD5-Abweichung`; der Inhalt bleibt dabei über `err.ergebnis`
-erreichbar.
+Zwei Annahmen waren dabei falsch und sind korrigiert:
+
+- **SOAPAction ist leer.** Die WSDL gibt bei allen drei Operationen
+  `soapAction=""` vor. Mit dem Methodennamen antwortet ELDA mit einem
+  SOAP-Fault („does not match an operation").
+- **Die Antwort ist immer MTOM** — `multipart/related; type="application/xop+xml"`,
+  auch bei Fehlern und auch ohne Binärdaten. Der ungeöffnete Körper ließ jeden
+  XML-Parser mit „Unterminated element(s) in XML" abbrechen.
+
+**Seit 05.08.2026 ist der gesamte Weg live verifiziert** — eine echte
+monatliche Beitragsgrundlagenmeldung wurde von der ÖGK übernommen (Protokoll
+18395850, `status: uebernommen`, 7 von 7 Sätzen). Vier Anläufe waren nötig; alle
+drei Abweisungen kamen als Status `403` mit `nicht_uebernommen` und haben
+**nichts gebucht**. Beanstandet war nie der Inhalt, sondern immer der Umschlag:
+
+| Code | ELDA-Text | Ursache |
+|------|-----------|---------|
+| `E6` | Datenuebernehmender Versicherungstraeger (UVST) nicht ED | `UVST` trug den zuständigen Träger statt `ED` (D.2) |
+| `E31` | Unbekannte Version (03) der Satzstrukturen für Projekt DM, Bestand MB | `VERS` war die Version aus E.29 statt der aus E.32 |
+| `E2` | Falsche Satzlaenge! 1747 anstatt 326 Zeichen | keine Satztrenner — ELDA las die ganze Datei als **eine** Zeile |
+| `E2` | Falsche Satzlaenge! 326 anstatt 42 Zeichen | alle Sätze auf das Maximum aufgefüllt statt jeder auf seine eigene Länge |
+
+Daraus das **Bestandsformat, wie es tatsächlich erwartet wird**:
+
+- Die Sätze sind durch **CRLF** getrennt, **ohne** Trenner nach dem letzten.
+  Das Dokument sagt es nirgends; der Beleg steht im Fehlerkatalog (Kapitel H.22):
+  `W4` lautet „Leerzeile gefunden" — eine Leerzeile setzt zeilenweises Lesen
+  voraus. Damit ist auch „Die Übermittlung erfolgt in variabler Satzlänge"
+  (C.1) aufgelöst: variabel **innerhalb** eines Bestands.
+- **Vorlauf- und Schlusssatz** tragen die größte im Bestand vorkommende
+  Satzlänge, **jeder Datensatz seine eigene**. ELDA hat das Satz für Satz
+  bestätigt und die erwarteten Längen wörtlich genannt (mBGM: `PS`/`PE` 305,
+  `G1` 326, `T1` 42, `BS` 33, `V1` 42) — sie stimmen mit den Feldtabellen
+  dieses Pakets überein.
+- Encoding **ISO-8859-15**: Kapitel C.2 führt es als Standard für Eingabedaten
+  („Fixlängen-Dateien"). Der Dateiheader (C.1.1) ist damit entbehrlich.
+
+**Kapitel H.22 „ELDA-FC" ist die Fundstelle für alle `E`- und `W`-Codes der
+Datenübernahme** — im DM-ORG selbst stehen sie nicht, sondern in einem eigenen
+PDF (Kapitel H) auf elda.at. Wer eine Abweisung deuten muss, findet dort
+`E1`–`E38` und `W1`–`W13` im Klartext.
+
+Ebenfalls live beantwortet:
+
+- Eine **leere Rücksendungsliste** kommt als leeres Array — kein Sonderfall auf
+  dem Draht.
+- `senden` liefert die **Protokollnummer bei jedem Ausgang** mit, auch bei
+  Status `403`; bei `000` zusätzlich `dateiId` und `eldaZeitstempel`.
+- Zu **einer** angenommenen mBGM stellt ELDA **zwei** Rücksendungen ein: ein
+  `mitteilung_<protokollnummer>.xml` (Status je Satz, Schema
+  `elda_mitteilung-3.0.xsd`) und ein Klartext-Protokoll `mbd_<protokollnummer>_<bknr>`
+  mit Beträgen, Beschäftigtengruppe und Verrechnungsbasis. Wer nach der ersten
+  aufhört, verliert die zweite — beide tragen die Protokollnummer der Sendung im
+  Dateinamen.
+- Die `md5`-Prüfung gegen die **dekodierten Bytes** hält: drei abgeholte
+  Rücksendungen sind ohne `MD5-Abweichung` durchgelaufen.
+
+Offen bleibt: ob `<messages>` mehrfach vorkommen kann; ob `datei.dateiTyp`
+numerisch kommt (so die Tabelle in Abschnitt 4.2) oder als Text wie `XML` (so
+die Beispiel-Ausgabe in Abschnitt 7.4.3.3 desselben Dokuments — das Dokument
+widerspricht sich hier selbst, deshalb reicht dieses Paket den Wert unverändert
+als `string` durch); und ob das Trennzeichen zwingend `CRLF` ist oder `LF`
+genauso angenommen würde — verifiziert ist nur, dass `CRLF` funktioniert.
 
 Status `404` bei `empfangen` ist **keine** offene Frage mehr: Die Status-Tabelle
 in Abschnitt 6 führt den Code für `EmpfangenResult` ausdrücklich als nicht
@@ -484,10 +536,12 @@ verschiedenen Fehlern — je nachdem, wie die Antwort auf der Leitung aussieht:
   Das erkennt `empfangen` und wirft einen **`EldaProtocolError`** — statt still
   eine leere Datei vorzutäuschen.
 
-Ob ELDA im Kundenbetrieb tatsächlich inline-Base64 akzeptiert/liefert oder MTOM
-erzwingt, ist erst mit einem echten ELDA-Kundentest-Zugang endgültig zu klären;
-bis dahin ist die Logik vollständig unit-getestet, aber der Sendepfad noch nicht
-gegen die echte Gegenstelle verifiziert.
+Seit 0.5.0 ist belegt, dass ELDA **immer** MTOM antwortet. Der Client packt die
+mehrteilige Antwort aus (`src/mtom.ts`) und löst `<xop:Include>` gegen den
+zugehörigen Teil auf; inline-Base64 bleibt daneben unterstützt, weil beide
+Formen im selben Feld stehen können. Der Sendepfad selbst — ob ELDA eine
+inline-Base64-Sendung annimmt — ist mangels gültigem Zugang noch nicht gegen die
+echte Gegenstelle verifiziert.
 
 ## Meldungen erzeugen
 
@@ -498,9 +552,16 @@ der Organisationsbeschreibung, Satzstruktur-Version 03, zwingend ab
 Ein Builder liefert einen `RohSatz`; `erstelleBestand` klammert beliebig viele
 `RohSatz` zu einem vollständigen, ISO-8859-15-kodierten Datenbestand
 (Vorlaufsatz, Meldungssätze, Schlusssatz), der unverändert als `inhalt` an
-`senden` geht. Andere Meldungsarten (insbesondere die monatliche
-Beitragsgrundlagenmeldung mBGM) sind davon nicht erfasst, siehe „Ausblick"
-unten.
+`senden` geht.
+
+Die monatliche Beitragsgrundlagenmeldung hat dafür eine eigene Funktion:
+`erstelleMbgmPaket` baut die Satzfolge, `erstelleMbgmBestand` klammert sie.
+Beide Klammer-Funktionen setzen die **Bestandsbezeichnung** (Feld `BEST`)
+selbst — `VR` für die Versichertenmeldung, `MB` für die mBGM. Kapitel B.3 führt
+jede Verarbeitung unter eigener Bezeichnung, und Kapitel C.1 hält fest, dass ein
+Datenbestand Daten „zu einer Verarbeitung" enthält: Die Bezeichnung ist keine
+Aufschrift, sondern die Adresse. Sie ist deshalb kein Aufrufer-Parameter, und
+die beiden Meldungsarten lassen sich nicht im selben Bestand mischen.
 
 ### Durchgehendes Beispiel
 
@@ -848,9 +909,10 @@ gedacht.
 
 ## Ausblick
 
-Andere Meldungsarten als die Versichertenmeldung reduziert (Kapitel E.29) —
-insbesondere die monatliche Beitragsgrundlagenmeldung (mBGM) — sind von diesem
-Paket bislang nicht abgedeckt und benötigen ihre eigene Spec-Grundlage.
+Abgedeckt sind die Versichertenmeldung reduziert (Kapitel E.29) und die
+monatliche Beitragsgrundlagenmeldung (Kapitel E.32). Der Lohnzettel Finanz
+(L16, Kapitel E.13/E.14, Bestandsbezeichnung `LF`) ist noch nicht enthalten und
+benötigt seine eigene Spec-Grundlage.
 
 ## Lizenz
 

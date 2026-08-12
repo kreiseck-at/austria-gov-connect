@@ -10,6 +10,7 @@ import {
   erstelleBestand,
 } from './versichertenmeldung';
 import { FELDER_E29, SATZLAENGE_E29 } from './felder-e29';
+import { SATZTRENNER } from './bestand';
 import type { BestandOptionen } from './bestand';
 
 /**
@@ -104,7 +105,8 @@ test('E.29.2 / M3, Beispiel „Wechsel geringfügige Beschäftigung zu Vollversi
   // VSNR nutzt), Leerzeichen bei einem alphanumerischen Feld (hier REFU, für eine Anmeldung
   // ohnehin gegenstandslos). Die Positionen stammen aus FELDER_E29, nicht von Hand abgeschrieben.
   const bestand = erstelleBestand([satz], OPT);
-  const meldungssatzStart = SATZLAENGE_E29; // Vorlaufsatz ist der erste Satz im Bestand.
+  // Vorlaufsatz ist der erste Satz; danach folgt der Satztrenner (CRLF).
+  const meldungssatzStart = SATZLAENGE_E29 + SATZTRENNER.length;
 
   const gebd = feldPosition('GEBD');
   assert.equal(

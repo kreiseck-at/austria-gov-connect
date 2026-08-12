@@ -14,6 +14,7 @@ import {
 } from './versichertenmeldung';
 import { EldaError } from './errors';
 import { FELDER_E29 } from './felder-e29';
+import { SATZTRENNER } from './bestand';
 import type { BestandOptionen } from './bestand';
 
 const BASIS = { REFW: 'REF-1', BKNR: '1234567', DGNA: 'Muster GmbH', VSNR: '1234010180' };
@@ -211,8 +212,9 @@ test('erstelleBestand: Anmeldung landet vollständig und an der richtigen Bytepo
     VWAZ: wochenarbeitszeit(40),
   });
   const bestand = erstelleBestand([satz], OPT);
-  assert.equal(bestand.length, 772 * 3);
-  const meldungssatzStart = 772;
+  assert.equal(bestand.length, 772 * 3 + SATZTRENNER.length * 2);
+  // Vorlaufsatz, dann der Trenner, dann der Meldungssatz.
+  const meldungssatzStart = 772 + SATZTRENNER.length;
   const vwazStart = meldungssatzStart + (769 - 1);
   assert.equal(bestand.subarray(vwazStart, vwazStart + 4).toString('latin1'), '4000');
 });
@@ -329,7 +331,8 @@ test('C1: ein unvollstaendig formatiertes BVAB faellt jetzt schon im Builder auf
     BVAB: '10032026',
   });
   const bestand = erstelleBestand([richtig], OPT);
-  assert.equal(bestand.subarray(772 + 602, 772 + 610).toString('latin1'), '10032026');
+  const zweiter = 772 + SATZTRENNER.length;
+  assert.equal(bestand.subarray(zweiter + 602, zweiter + 610).toString('latin1'), '10032026');
 });
 
 // ---------------------------------------------------------------------------
@@ -472,7 +475,8 @@ test("VWAZ '0000': Bedeutungsaenderung — Grundstellung statt null Stunden", ()
     VWAZ: '0000',
   });
   const bestand = erstelleBestand([satz], OPT);
-  assert.equal(bestand.subarray(772 + 768, 772 + 772).toString('latin1'), '0000');
+  const start = 772 + SATZTRENNER.length;
+  assert.equal(bestand.subarray(start + 768, start + 772).toString('latin1'), '0000');
 
   // Und dort, wo die Pflichtmatrix VWAZ auf '-' fuehrt (M4), ist '0000' jetzt zulaessig,
   // ein echter Wert dagegen weiterhin nicht.

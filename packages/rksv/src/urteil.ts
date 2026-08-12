@@ -44,11 +44,7 @@ import type { Vorgang } from './vorgaenge';
  * `ausfall_*`-Vorgang steckt — bei ihr bedeuten `B6` und `B13` das Gegenteil
  * dessen, was sie beim Ausfall bedeuten.
  */
-export type VorgangKlasse =
-  | 'registrierung'
-  | 'ausfall'
-  | 'ausserbetriebnahme'
-  | 'wiederinbetriebnahme';
+export type VorgangKlasse = 'registrierung' | 'ausfall' | 'ausserbetriebnahme' | 'wiederinbetriebnahme';
 
 /** Das Nötigste aus einem {@link import('./antwort').Ergebnis} — ein `Ergebnis` passt unverändert. */
 export interface UrteilEingabe {

@@ -25,7 +25,11 @@ export interface BestandOptionen {
   seriennummer: string;
   /** Zuständiger Versicherungsträger (Feld VSTR). */
   versicherungstraeger: string;
-  /** Datenübernehmender Versicherungsträger (Feld UVST); ohne Angabe gleich `versicherungstraeger`. */
+  /**
+   * Datenübernehmender Versicherungsträger (Feld UVST, Kapitel D.2). Ohne
+   * Angabe `ED` — die ÖGK als Datensammelsystem. Nur für Clearingstellen
+   * (1L, 7L, ST) oder den Dachverband (99) zu setzen.
+   */
   datenuebernehmer?: string;
   /** Datenträgernummer, laufende Nummerierung der übermittelten Bestände. */
   datentraegernummer: string;
@@ -58,6 +62,19 @@ export interface BestandOptionen {
   mitteilungsfileVersion?: string;
 }
 
+/**
+ * `BestandOptionen` plus der Bestandsbezeichnung — der internen Sicht auf einen
+ * Bestand. Der Aufrufer sieht sie nicht: Welche Verarbeitung ein Bestand trägt,
+ * folgt aus den Sätzen darin und wird deshalb von der bauenden Funktion gesetzt,
+ * nicht vom Aufrufer angegeben.
+ */
+export interface BestandRahmen extends BestandOptionen {
+  /** Feld BEST im Vorlaufsatz; siehe {@link BEST_VERSICHERTENMELDUNG}, {@link BEST_MBGM}. */
+  bestandsbezeichnung: string;
+  /** Feld VERS im Vorlaufsatz; siehe {@link VERSION_VERSICHERTENMELDUNG}, {@link VERSION_MBGM}. */
+  satzstrukturVersion: string;
+}
+
 /** Ein noch nicht umschlossener Satz samt seiner Feldtabelle. */
 export interface RohSatz {
   /** Satzart, geht in den Identifikationsteil (Feld SART) ein. */
@@ -74,11 +91,68 @@ export interface RohSatz {
   satzlaenge: number;
 }
 
-/** Bestandsbezeichnung für Versichertenmeldungen ab 2019 (Kapitel E.2, Feld BEST). */
-const BEST_VERSICHERTENMELDUNG = 'VR';
+/**
+ * Bestandsbezeichnungen laut Kapitel B.3 („Verarbeitungen"). Sie sagen dem
+ * Datensammelsystem, welche Verarbeitung der Bestand trägt — und ein Bestand
+ * trägt laut Kapitel C.1 ausdrücklich Daten „zu EINER Verarbeitung". Ein
+ * falscher Wert liefert die Sätze also nicht bloß mit einer schiefen Aufschrift
+ * ab, er liefert sie an der falschen Verarbeitung ab.
+ *
+ * Deshalb steht der Wert nicht mehr fest im Bestandsbau, sondern kommt von der
+ * Funktion, die die Sätze baut: `erstelleBestand` (Versichertenmeldungen) und
+ * `erstelleMbgmBestand` (monatliche Beitragsgrundlagenmeldung) setzen ihn je
+ * selbst. Ein Aufrufer kann ihn damit weder vergessen noch verwechseln.
+ */
+/** Versichertenmeldung reduziert, ab 01.01.2019 (Kapitel B.3 Punkt 2, E.29). */
+export const BEST_VERSICHERTENMELDUNG = 'VR';
 
-/** Versionsnummer der Satzstrukturen laut Kapitel E.29 (Version 03). */
-const VERSION_SATZSTRUKTUR = '03';
+/** Monatliche Beitragsgrundlagenmeldung, für Zeiträume ab 01.01.2019 (Kapitel B.3 Punkt 7, E.32). */
+export const BEST_MBGM = 'MB';
+
+/**
+ * Versionsnummer der Satzstrukturen (Feld VERS, Kapitel D.26).
+ *
+ * D.26: „Die Versionsnummer identifiziert die Satzstruktur der dem Vorlaufsatz
+ * folgenden Datensätze. Die Versionsnummer ist der **Überschrift jeder
+ * Datensatzbeschreibung** zu entnehmen."
+ *
+ * Sie gehört damit zur Verarbeitung, nicht zum Bestandsbau — genau wie die
+ * Bestandsbezeichnung. Ein fester Wert war falsch: ELDA hat einen mBGM-Bestand
+ * mit der Version der Versichertenmeldung mit `E31` abgewiesen
+ * („Unbekannte Version (03) der Satzstrukturen für Projekt DM, Bestand MB.").
+ * Anschließend konnte es die Satzlängen nicht mehr auflösen und meldete
+ * zusätzlich `E5` („Kein Schlusssatz vorhanden!") — der Bestand war strukturell
+ * einwandfrei, nur nicht lesbar.
+ */
+/** Kapitelkopf E.29 „Versichertenmeldung reduziert": Version 03, zwingend ab 01.02.2026. */
+export const VERSION_VERSICHERTENMELDUNG = '03';
+
+/** Kapitelkopf E.32 „Monatliche Beitragsgrundlagenmeldung": Version 02, zwingend ab 01.02.2021. */
+export const VERSION_MBGM = '02';
+
+/**
+ * Datenübernehmender Versicherungsträger (Feld UVST, Kapitel D.2).
+ *
+ * D.2, wörtlich: „Bei Meldungen an das Datensammelsystem der Sozialversicherung
+ * ist als datenübernehmender Versicherungsträger die Österreichische
+ * Gesundheitskasse - ELDA, UVST = ED, anzugeben."
+ *
+ * Das ist NICHT der zuständige Versicherungsträger (VSTR): „Diese Angabe ist
+ * unabhängig davon, an welchen Versicherungsträger die Daten zur Verarbeitung
+ * gerichtet sind." Bis 05.08.2026 stand hier ersatzweise der VSTR — ELDA hat
+ * den Bestand mit `E6` abgewiesen („Datenuebernehmender Versicherungstraeger
+ * (UVST) nicht ED").
+ *
+ * Andere Werte kennt D.2 nur für Clearingstellen (1L, 7L, ST) und den
+ * Dachverband (99); dafür bleibt `datenuebernehmer` als Übersteuerung.
+ */
+export const UVST_ELDA = 'ED';
+
+/**
+ * Trennzeichen zwischen den Sätzen eines Bestands. Begründung an der
+ * Verwendungsstelle in {@link baueBestand}.
+ */
+export const SATZTRENNER = Buffer.from('\r\n', 'latin1');
 
 /** Satzart des Vorlaufsatzes laut Kapitel E.2. */
 const SART_VORLAUFSATZ = '00';
@@ -143,7 +217,7 @@ export function baueIdentifikationsteil(satzart: string, satznummer: number, opt
     {
       SART: satzart,
       SANR: String(satznummer),
-      UVST: opt.datenuebernehmer ?? opt.versicherungstraeger,
+      UVST: opt.datenuebernehmer ?? UVST_ELDA,
       OBUS: opt.seriennummer,
       VSTR: opt.versicherungstraeger,
     },
@@ -199,9 +273,16 @@ function schlussFelder(satzlaenge: number): readonly Feld[] {
  * dann die größte im Bestand vorkommende Satzlänge (Kapitel E.2), jeder
  * Datensatz bleibt bei seiner eigenen.
  */
-export function baueBestand(saetze: readonly RohSatz[], opt: BestandOptionen): Buffer {
+export function baueBestand(saetze: readonly RohSatz[], opt: BestandRahmen): Buffer {
   if (saetze.length === 0) {
     throw new EldaError('Ein Datenbestand ohne Meldungssätze ergibt keinen Sinn und wird nicht erzeugt.');
+  }
+  if (!/^[A-Z]{2}$/.test(opt.bestandsbezeichnung)) {
+    throw new EldaError(
+      `Bestandsbezeichnung '${opt.bestandsbezeichnung}' ist unbrauchbar. Kapitel B.3 kennt ` +
+        'ausschließlich zweistellige Großbuchstaben-Codes (VR, MB, LF …); sie benennen die ' +
+        'Verarbeitung, an die der Bestand geliefert wird.',
+    );
   }
   if (Number.isNaN(opt.erstellt.getTime())) {
     throw new EldaError('Erstellungszeitpunkt (opt.erstellt) ist kein gültiges Datum.');
@@ -297,7 +378,7 @@ export function baueBestand(saetze: readonly RohSatz[], opt: BestandOptionen): B
       {
         IDTEIL: baueIdentifikationsteil(SART_VORLAUFSATZ, nummer++, opt),
         PROJ: opt.testdaten ? 'TM' : 'DM',
-        BEST: BEST_VERSICHERTENMELDUNG,
+        BEST: opt.bestandsbezeichnung,
         DTNR: opt.datentraegernummer,
         EDAT: edat,
         EZEI: ezei,
@@ -306,7 +387,7 @@ export function baueBestand(saetze: readonly RohSatz[], opt: BestandOptionen): B
         HPLZ: opt.hersteller.plz,
         HORT: opt.hersteller.ort,
         HSTR: opt.hersteller.strasse,
-        VERS: VERSION_SATZSTRUKTUR,
+        VERS: opt.satzstrukturVersion,
         HTEL: opt.hersteller.telefon,
         SOID: opt.hersteller.softwareId,
         VNMF: opt.mitteilungsfileVersion,
@@ -315,6 +396,24 @@ export function baueBestand(saetze: readonly RohSatz[], opt: BestandOptionen): B
     ),
   );
 
+  // JEDER Datensatz behält seine EIGENE Satzlänge. Nur Vorlauf- und Schlusssatz
+  // tragen das Maximum — sie kündigen die größte im Bestand vorkommende Länge
+  // an (Kapitel E.2, Hinweis).
+  //
+  // Von ELDA am 05.08.2026 Zeile für Zeile bestätigt (Protokoll 18376033).
+  // Ein Bestand, in dem alle Sätze auf 326 aufgefüllt waren, kam zurück mit:
+  //
+  //   Zeile 1 (Vorlaufsatz) kein Fehler   — 326 ist richtig
+  //   Zeile 2 (PS)  „326 anstatt 305 Zeichen"
+  //   Zeile 3 (G1)  kein Fehler           — 326 ist die eigene Länge des Satzes
+  //   Zeile 4 (T1)  „326 anstatt 42 Zeichen"
+  //   Zeile 8 (PE)  „326 anstatt 305 Zeichen"
+  //   Zeile 9 (Schlusssatz) kein Fehler   — 326 ist richtig
+  //
+  // Damit ist auch der Satz aus Kapitel C.1 aufgelöst: „Die Übermittlung
+  // erfolgt in variabler Satzlänge" — variabel INNERHALB eines Bestands, Satz
+  // für Satz. Aufgelöst werden die Längen über die Satzart in den ersten zwei
+  // Stellen (Identifikationsteil, Kapitel E.1) und über die Zeilentrennung.
   for (const s of saetze) {
     teile.push(
       baueSatz(
@@ -347,5 +446,23 @@ export function baueBestand(saetze: readonly RohSatz[], opt: BestandOptionen): B
     ),
   );
 
-  return Buffer.concat(teile);
+  // Sätze durch Zeilenumbrüche getrennt — ELDA liest den Bestand ZEILENWEISE.
+  //
+  // Das Dokument sagt es an keiner Stelle. Der Beleg steht im Fehlerkatalog,
+  // Kapitel H.22: `W4` lautet „Leerzeile gefunden". Eine Leerzeile kann es nur
+  // geben, wenn die Datei in Zeilen zerlegt wird. Dazu die Beobachtung, die
+  // dorthin geführt hat: Ein Bestand ohne Trenner wurde mit `E2` abgewiesen —
+  // „Falsche Satzlaenge! 1747 anstatt 326 Zeichen", wobei 1747 die Länge der
+  // GESAMTEN Datei war. ELDA hatte sie als eine einzige Zeile gelesen.
+  //
+  // CRLF und nicht LF: Welches Zeichen gemeint ist, steht nirgends. Die
+  // erzeugende Seite sind durchweg Windows-Lohnprogramme (die abgelöste
+  // ELDA-Software ist selbst eine `eldawin.exe`), CRLF ist dort die Konvention —
+  // ein Leser, der die real vorkommenden Dateien verarbeitet, muss CRLF können.
+  // Sollte ELDA stattdessen „327 anstatt 326" melden, trennt es nicht sauber ab
+  // und LF ist richtig; die Antwort wäre dann unmissverständlich.
+  //
+  // Kein Trenner NACH dem letzten Satz: Ein Leser, der auf `\n` aufteilt,
+  // bekäme sonst ein leeres letztes Element — und damit ein `W4`.
+  return Buffer.concat(teile.flatMap((satz, i) => (i === 0 ? [satz] : [SATZTRENNER, satz])));
 }

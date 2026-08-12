@@ -2,7 +2,13 @@ import { EldaError } from './errors';
 import { FELDER_E29, SATZLAENGE_E29 } from './felder-e29';
 import { pruefePflicht, type Satzart } from './pflicht-e29';
 import { pruefeInhalt } from './pruefung-e29';
-import { baueBestand, type BestandOptionen, type RohSatz } from './bestand';
+import {
+  BEST_VERSICHERTENMELDUNG,
+  VERSION_VERSICHERTENMELDUNG,
+  baueBestand,
+  type BestandOptionen,
+  type RohSatz,
+} from './bestand';
 
 /**
  * Die fachlichen Felder einer Versichertenmeldung, benannt wie in Kapitel E.29.
@@ -185,9 +191,19 @@ export function wochenarbeitszeit(stunden: number, minuten = 0): string {
 }
 
 /**
- * Klammert Meldungen zu einem übertragbaren Datenbestand. Das Ergebnis geht
- * unverändert als `inhalt` an `senden`.
+ * Klammert Versichertenmeldungen zu einem übertragbaren Datenbestand. Das
+ * Ergebnis geht unverändert als `inhalt` an `senden`.
+ *
+ * Die Bestandsbezeichnung `VR` setzt diese Funktion selbst — ein Bestand trägt
+ * laut Kapitel C.1 Daten zu genau einer Verarbeitung, und welche das ist, folgt
+ * aus den Sätzen darin. Für die monatliche Beitragsgrundlagenmeldung gibt es
+ * deshalb `erstelleMbgmBestand` (Bestandsbezeichnung `MB`); die beiden Arten
+ * lassen sich nicht im selben Bestand mischen.
  */
 export function erstelleBestand(meldungen: readonly RohSatz[], opt: BestandOptionen): Buffer {
-  return baueBestand(meldungen, opt);
+  return baueBestand(meldungen, {
+    ...opt,
+    bestandsbezeichnung: BEST_VERSICHERTENMELDUNG,
+    satzstrukturVersion: VERSION_VERSICHERTENMELDUNG,
+  });
 }

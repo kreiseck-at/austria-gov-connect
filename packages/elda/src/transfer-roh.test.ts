@@ -200,7 +200,11 @@ test('empfangen: fehlender dateiTyp bleibt undefined', async () => {
   assert.equal(r.datei?.dateiTyp, undefined);
 });
 
-test('empfangen: MTOM/XOP-referenzierter Payload wirft statt leeres Buffer zu liefern', async () => {
+// Eine XOP-Referenz OHNE den zugehoerigen Teil: das kommt vor, wenn die Antwort
+// gar nicht mehrteilig war oder der Teil fehlt. Aufgeloest wird dann nichts --
+// aber ein leerer Buffer waere eine Luege ueber eine bereits verbrauchte
+// Zustellung. Der Erfolgsfall steht weiter unten unter "MTOM:".
+test('empfangen: XOP-Referenz ohne den zugehoerigen Teil wirft, statt leeres Buffer zu liefern', async () => {
   const resp = soap(
     '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult><messages>OK</messages><statusCode>000</statusCode></serviceResult><datei><id>1</id><name>x.xml</name><payload><xop:Include xmlns:xop="http://www.w3.org/2004/08/xop/include" href="cid:abc@elda.at"/></payload></datei></return></ns2:empfangenResponse>',
   );
@@ -211,7 +215,7 @@ test('empfangen: MTOM/XOP-referenzierter Payload wirft statt leeres Buffer zu li
   );
 });
 
-test('empfangen: XOP-Referenz — ergebnis trägt Status, Meldung und die bereits gelesenen Datei-Metadaten', async () => {
+test('empfangen: unaufloesbare XOP-Referenz — ergebnis trägt Status, Meldung und Datei-Metadaten', async () => {
   // ELDA hat die einmalige Zustellung zu diesem Zeitpunkt bereits verbraucht — die Bytes sind
   // nicht zu retten, aber statusCode/meldung/id/name/md5 dürfen dem Aufrufer nicht verloren gehen.
   const resp = soap(
@@ -232,7 +236,7 @@ test('empfangen: XOP-Referenz — ergebnis trägt Status, Meldung und die bereit
       assert.equal(ergebnis.datei?.id, '199565708');
       assert.equal(ergebnis.datei?.name, 'mitteilung.xml');
       assert.equal(ergebnis.datei?.md5, 'abc');
-      assert.equal(ergebnis.datei?.inhalt, undefined); // Payload ist nicht referenzierbar — bewusst nicht vorgetäuscht
+      assert.equal(ergebnis.datei?.inhalt, undefined); // Teil fehlt — kein Inhalt vorgetäuscht
       return true;
     },
   );
@@ -468,7 +472,12 @@ test('createEldaTransferRoh wirft beim Bauen, wenn der Passwortanteil nicht eind
   );
 });
 
-test('senden: SOAPAction und Content-Type der Anfrage (Status 559 = unerlaubter Content-Type)', async () => {
+// Die SOAPAction ist LEER, nicht der Methodenname. Die WSDL des Dienstes gibt
+// bei allen drei Operationen `soapAction=""` vor; mit dem Methodennamen
+// antwortet ELDA mit HTTP 500 und dem Fault „The given SOAPAction senden does
+// not match an operation." — nachgestellt gegen online-test.elda.at am
+// 31.07.2026. Dieser Test hielt zuvor die falsche Annahme fest.
+test('senden: SOAPAction ist leer, Content-Type text/xml (Status 559 = unerlaubter Content-Type)', async () => {
   let headers: Record<string, string> = {};
   const elda = createEldaTransferRoh(
     cfg(async (_u: string, init: { headers: Record<string, string> }) => {
@@ -478,7 +487,20 @@ test('senden: SOAPAction und Content-Type der Anfrage (Status 559 = unerlaubter 
   );
   await elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
   assert.equal(headers['Content-Type'], 'text/xml; charset=utf-8');
-  assert.equal(headers['SOAPAction'], '"senden"');
+  assert.equal(headers['SOAPAction'], '""');
+});
+
+test('alle drei Methoden senden eine leere SOAPAction', async () => {
+  const gesehen: string[] = [];
+  const elda = createEldaTransferRoh(
+    cfg(async (_u: string, init: { headers: Record<string, string> }) => {
+      gesehen.push(init.headers['SOAPAction'] ?? '<fehlt>');
+      return new Response(sendenOk(), { status: 200 });
+    }),
+  );
+  await elda.senden({ dateiName: 'm.xml', inhalt: '<x/>' });
+  await elda.ruecksendungenAuflisten();
+  assert.deepEqual(gesehen, ['""', '""']);
 });
 
 // --- I4: Wiederholung mit frischem nonce ----------------------------------
@@ -914,4 +936,293 @@ test('empfangen: numerische Protokollnummer und getrimmter String gehen unverän
   await elda.empfangen('  155764333  ');
   assert.match(bodies[0]!, /<protokollnummer>155764332<\/protokollnummer>/);
   assert.match(bodies[1]!, /<protokollnummer>155764333<\/protokollnummer>/);
+});
+
+// --- MTOM/XOP: das tatsächliche Antwortformat des Dienstes ------------------
+//
+// ELDA (Apache CXF) antwortet IMMER als multipart/related, auch auf Fehler und
+// auch ohne Binärdaten. Bis 0.4.1 gab der Client den Körper ungeöffnet an den
+// Parser: der sah die '--uuid:…'-Grenzzeilen und warf "Unterminated element(s)
+// in XML" — selbst bei einer völlig korrekten Antwort. Genau daran ist der
+// erste Live-Aufruf gescheitert.
+
+const GRENZE = 'uuid:ca65b474-251a-41c5-ae54-629726df1feb';
+const MTOM_CT =
+  `multipart/related; type="application/xop+xml"; boundary="${GRENZE}"; ` +
+  'start="<root.message@cxf.apache.org>"; start-info="text/xml"';
+
+/** Verpackt einen Envelope (und optionale Anhänge) so, wie CXF es tut. */
+function alsMtom(envelope: string, anhaenge: { id: string; daten: Buffer }[] = []): Buffer {
+  const stuecke: Buffer[] = [
+    Buffer.from(
+      `\r\n--${GRENZE}\r\n` +
+        'Content-Type: application/xop+xml; charset=UTF-8; type="text/xml"\r\n' +
+        'Content-Transfer-Encoding: binary\r\n' +
+        'Content-ID: <root.message@cxf.apache.org>\r\n\r\n',
+      'latin1',
+    ),
+    Buffer.from(envelope, 'utf8'),
+  ];
+  for (const a of anhaenge) {
+    stuecke.push(
+      Buffer.from(
+        `\r\n--${GRENZE}\r\n` +
+          'Content-Type: application/octet-stream\r\n' +
+          'Content-Transfer-Encoding: binary\r\n' +
+          `Content-ID: <${a.id}>\r\n\r\n`,
+        'latin1',
+      ),
+      a.daten,
+    );
+  }
+  stuecke.push(Buffer.from(`\r\n--${GRENZE}--\r\n`, 'latin1'));
+  return Buffer.concat(stuecke);
+}
+
+const mtomAntwort = (envelope: string, anhaenge: { id: string; daten: Buffer }[] = [], status = 200) =>
+  new Response(alsMtom(envelope, anhaenge), { status, headers: { 'content-type': MTOM_CT } });
+
+test('MTOM: mehrteilige Antwort wird ausgepackt und ausgewertet', async () => {
+  // Wörtlich die Antwort von online-test.elda.at am 31.07.2026 auf einen
+  // Aufruf mit ungültigem API-Key.
+  const envelope = soap(
+    '<ns2:ruecksendungenAuflistenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return><serviceResult>' +
+      '<messages>API Key ungültig.</messages><statusCode>557</statusCode>' +
+      '</serviceResult></return></ns2:ruecksendungenAuflistenResponse>',
+  );
+  const elda = createEldaTransferRoh(cfg(async () => mtomAntwort(envelope)));
+  const r = await elda.ruecksendungenAuflisten();
+  assert.equal(r.statusCode, '557');
+  assert.equal(r.ok, false);
+  assert.equal(r.meldung, 'API Key ungültig.');
+});
+
+test('MTOM: auch ein SOAP-Fault im Multipart wird erkannt (HTTP 500)', async () => {
+  const fault = soap(
+    '<soap:Fault><faultcode>soap:Server</faultcode>' +
+      '<faultstring>The given SOAPAction x does not match an operation.</faultstring></soap:Fault>',
+  );
+  const elda = createEldaTransferRoh(cfg(async () => mtomAntwort(fault, [], 500)));
+  await assert.rejects(() => elda.ruecksendungenAuflisten(), FonSoapFaultError);
+});
+
+test('MTOM: empfangen löst <xop:Include> gegen den passenden Teil auf', async () => {
+  const inhalt = Buffer.from('R1\r\nR2 mit Umlaut ä\r\n', 'latin1');
+  const envelope = soap(
+    '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return>' +
+      '<serviceResult><statusCode>000</statusCode></serviceResult>' +
+      '<datei><id>7</id><name>prot.txt</name>' +
+      '<payload><xop:Include xmlns:xop="http://www.w3.org/2004/08/xop/include" ' +
+      'href="cid:datei%40elda"/></payload></datei>' +
+      '</return></ns2:empfangenResponse>',
+  );
+  const elda = createEldaTransferRoh(
+    cfg(async () => mtomAntwort(envelope, [{ id: 'datei@elda', daten: inhalt }])),
+  );
+  const r = await elda.empfangen('155764331');
+  assert.equal(r.ok, true);
+  // Der Anhang ist bereits roh — er darf NICHT noch einmal base64-dekodiert werden.
+  assert.deepEqual(r.datei?.inhalt, inhalt);
+  assert.equal(r.datei?.name, 'prot.txt');
+});
+
+test('MTOM: die md5 wird auch auf dem XOP-Weg geprüft', async () => {
+  const inhalt = Buffer.from('nutzdaten');
+  const echt = createHash('md5').update(inhalt).digest('hex');
+  const envelopeMit = (md5: string) =>
+    soap(
+      '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return>' +
+        '<serviceResult><statusCode>000</statusCode></serviceResult>' +
+        `<datei><md5>${md5}</md5>` +
+        '<payload><xop:Include xmlns:xop="http://www.w3.org/2004/08/xop/include" href="cid:a"/></payload>' +
+        '</datei></return></ns2:empfangenResponse>',
+    );
+
+  const gut = createEldaTransferRoh(
+    cfg(async () => mtomAntwort(envelopeMit(echt), [{ id: 'a', daten: inhalt }])),
+  );
+  assert.deepEqual((await gut.empfangen('1')).datei?.inhalt, inhalt);
+
+  const schlecht = createEldaTransferRoh(
+    cfg(async () => mtomAntwort(envelopeMit('0'.repeat(32)), [{ id: 'a', daten: inhalt }])),
+  );
+  await assert.rejects(
+    () => schlecht.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      assert.match(err.message, /MD5-Abweichung/);
+      // Der Inhalt darf nicht verloren gehen, nur weil die Prüfsumme klemmt.
+      const e = err.ergebnis as { datei?: { inhalt?: Buffer } };
+      assert.deepEqual(e.datei?.inhalt, inhalt);
+      return true;
+    },
+  );
+});
+
+test('MTOM: fehlender XOP-Teil wirft, statt eine leere Datei zu melden', async () => {
+  const envelope = soap(
+    '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return>' +
+      '<serviceResult><statusCode>000</statusCode></serviceResult>' +
+      '<datei><id>7</id><payload><xop:Include xmlns:xop="http://www.w3.org/2004/08/xop/include" ' +
+      'href="cid:fehlt"/></payload></datei></return></ns2:empfangenResponse>',
+  );
+  const elda = createEldaTransferRoh(cfg(async () => mtomAntwort(envelope)));
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof EldaProtocolError);
+      assert.match(err.message, /cid:fehlt/);
+      const e = err.ergebnis as { statusCode?: string };
+      assert.equal(e.statusCode, '000');
+      return true;
+    },
+  );
+});
+
+test('MTOM: inline Base64 funktioniert weiterhin, auch im Multipart', async () => {
+  const inhalt = Buffer.from('inline');
+  const envelope = soap(
+    '<ns2:empfangenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return>' +
+      '<serviceResult><statusCode>000</statusCode></serviceResult>' +
+      `<datei><payload>${inhalt.toString('base64')}</payload></datei>` +
+      '</return></ns2:empfangenResponse>',
+  );
+  const elda = createEldaTransferRoh(cfg(async () => mtomAntwort(envelope)));
+  assert.deepEqual((await elda.empfangen('1')).datei?.inhalt, inhalt);
+});
+
+test('MTOM: unauspackbarer Multipart-Körper geht roh weiter (Payload bleibt am Fehler)', async () => {
+  // Ohne boundary ist nichts zu zerlegen. Der rohe Körper muss den Aufrufer
+  // erreichen — bei `empfangen` ist er die letzte Kopie der Nutzdaten.
+  const roh = 'kein gueltiger multipart-koerper';
+  const elda = createEldaTransferRoh(
+    cfg(async () => new Response(roh, { status: 200, headers: { 'content-type': 'multipart/related' } })),
+  );
+  await assert.rejects(
+    () => elda.empfangen('1'),
+    (err: unknown) => {
+      assert.ok(err instanceof FonProtocolError);
+      assert.equal(err.rohantwort, roh);
+      return true;
+    },
+  );
+});
+
+test('MTOM: nicht-mehrteilige Antworten bleiben unangetastet', async () => {
+  const envelope = soap(
+    '<ns2:ruecksendungenAuflistenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return>' +
+      '<serviceResult><statusCode>000</statusCode></serviceResult>' +
+      '</return></ns2:ruecksendungenAuflistenResponse>',
+  );
+  const elda = createEldaTransferRoh(
+    cfg(async () => new Response(envelope, { status: 200, headers: { 'content-type': 'text/xml' } })),
+  );
+  assert.equal((await elda.ruecksendungenAuflisten()).statusCode, '000');
+});
+
+// ---------------------------------------------------------------------------
+// Mitschnitt der rohen Antwort
+// ---------------------------------------------------------------------------
+
+test('Mitschnitt sieht die ROHE Antwort, vor dem Auspacken', async () => {
+  // Der Sinn liegt bei empfangen: Der Aufruf ist einmalig und unwiderruflich.
+  // Misslingt danach das Auswerten, waere die Zustellung verloren -- mit dem
+  // Mitschnitt ist sie das nicht.
+  const mitgeschnitten: {
+    operation: string;
+    roh: Buffer;
+    status: number;
+    kopfzeilen: Record<string, string>;
+  }[] = [];
+  const envelope = soap(
+    '<ns2:ruecksendungenAuflistenResponse xmlns:ns2="http://v4.transfer.ws.elda.at/"><return>' +
+      '<serviceResult><statusCode>000</statusCode></serviceResult>' +
+      '</return></ns2:ruecksendungenAuflistenResponse>',
+  );
+
+  const elda = createEldaTransferRoh({
+    ...cfg(async () => mtomAntwort(envelope)),
+    mitschnitt: (a) => {
+      mitgeschnitten.push(a);
+    },
+  });
+
+  await elda.ruecksendungenAuflisten();
+
+  assert.equal(mitgeschnitten.length, 1);
+  const a = mitgeschnitten[0]!;
+  assert.equal(a.operation, 'ruecksendungenAuflisten');
+  assert.equal(a.status, 200);
+  // Entscheidend: die MEHRTEILIGE Antwort, nicht die ausgepackte. Genau daran
+  // liess sich im Juli 2026 nachweisen, dass ELDA immer multipart/related
+  // antwortet -- auch bei leerer Liste.
+  // Der Koerper beginnt mit einem Zeilenumbruch, dann der Grenze -- genau so,
+  // wie CXF ihn schickt.
+  assert.match(a.roh.toString('utf8'), /^\r\n--uuid:/);
+  assert.match(a.roh.toString('utf8'), /application\/xop\+xml/);
+  assert.match(a.kopfzeilen['content-type'] ?? '', /multipart\/related/);
+});
+
+test('Mitschnitt greift auch, wenn die Auswertung scheitert', async () => {
+  // Der eigentliche Zweck: Ein kaputter Koerper darf die Nutzdaten nicht
+  // kosten. Der Mitschnitt liegt vor, der Aufruf wirft trotzdem.
+  const mitgeschnitten: Buffer[] = [];
+  const elda = createEldaTransferRoh({
+    ...cfg(
+      async () =>
+        new Response('kein XML, nur Unfug', {
+          status: 200,
+          headers: { 'content-type': 'text/xml' },
+        }),
+    ),
+    mitschnitt: (a) => {
+      mitgeschnitten.push(a.roh);
+    },
+  });
+
+  await assert.rejects(() => elda.ruecksendungenAuflisten());
+  assert.equal(mitgeschnitten.length, 1);
+  assert.equal(mitgeschnitten[0]?.toString('utf8'), 'kein XML, nur Unfug');
+});
+
+test('ein scheiternder Mitschnitt bricht den Aufruf ab, statt ihn stillschweigend fortzusetzen', async () => {
+  // Wer mitschneiden will und dabei scheitert, soll es erfahren, BEVOR eine
+  // Zustellung verbraucht ist. Ein uebergangener Mitschnitt waere schlimmer
+  // als keiner, weil man sich auf ihn verlaesst.
+  const elda = createEldaTransferRoh({
+    ...cfg(
+      async () =>
+        new Response(
+          soap(
+            '<ns2:ruecksendungenAuflistenResponse><return><serviceResult>' +
+              '<statusCode>000</statusCode></serviceResult></return></ns2:ruecksendungenAuflistenResponse>',
+          ),
+          { status: 200, headers: { 'content-type': 'text/xml' } },
+        ),
+    ),
+    mitschnitt: () => {
+      throw new Error('Platte voll');
+    },
+  });
+
+  await assert.rejects(() => elda.ruecksendungenAuflisten(), /Platte voll/);
+});
+
+test('ohne Mitschnitt-Haken bleibt alles wie bisher', async () => {
+  let aufrufe = 0;
+  const elda = createEldaTransferRoh(
+    cfg(async () => {
+      aufrufe++;
+      return new Response(
+        soap(
+          '<ns2:ruecksendungenAuflistenResponse><return><serviceResult>' +
+            '<statusCode>000</statusCode></serviceResult></return></ns2:ruecksendungenAuflistenResponse>',
+        ),
+        { status: 200, headers: { 'content-type': 'text/xml' } },
+      );
+    }),
+  );
+  const r = await elda.ruecksendungenAuflisten();
+  assert.equal(r.ok, true);
+  assert.equal(aufrufe, 1);
 });

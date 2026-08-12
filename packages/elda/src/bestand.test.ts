@@ -1,10 +1,23 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { baueBestand, baueIdentifikationsteil, type BestandOptionen, type RohSatz } from './bestand';
+import {
+  BEST_MBGM,
+  BEST_VERSICHERTENMELDUNG,
+  SATZTRENNER,
+  UVST_ELDA,
+  VERSION_MBGM,
+  VERSION_VERSICHERTENMELDUNG,
+  baueBestand,
+  baueIdentifikationsteil,
+  type BestandRahmen,
+  type RohSatz,
+} from './bestand';
 import { FELDER_E29, SATZLAENGE_E29 } from './felder-e29';
 import { EldaError } from './errors';
 
-const OPT: BestandOptionen = {
+const OPT: BestandRahmen = {
+  bestandsbezeichnung: BEST_VERSICHERTENMELDUNG,
+  satzstrukturVersion: VERSION_VERSICHERTENMELDUNG,
   seriennummer: '1234567',
   versicherungstraeger: '11',
   datentraegernummer: '000001',
@@ -24,6 +37,17 @@ const OPT: BestandOptionen = {
   },
 };
 
+/**
+ * Abstand von Satzanfang zu Satzanfang: Satzlaenge plus Trenner. Die Saetze
+ * eines Bestands sind seit 0.11.0 durch CRLF getrennt -- ELDA liest ihn
+ * zeilenweise (Fehlerkatalog H.22, W4 201eLeerzeile gefunden201c).
+ */
+const SCHRITT = (satzlaenge: number) => satzlaenge + SATZTRENNER.length;
+
+/** Der i-te Satz eines Bestands mit einheitlicher Satzlaenge. */
+const satzNr = (bestand: Buffer, i: number, satzlaenge: number) =>
+  bestand.subarray(i * SCHRITT(satzlaenge), i * SCHRITT(satzlaenge) + satzlaenge);
+
 const satz = (werte: Record<string, string>): RohSatz => ({
   satzart: 'M3',
   werte,
@@ -42,9 +66,9 @@ test('Identifikationsteil: 20 Zeichen mit Satzart, Nummer, Trägern und Seriennu
 
 test('Bestand: Vorlaufsatz, Datensätze, Schlusssatz — alle gleich lang', () => {
   const bestand = baueBestand([satz({ REFW: 'R1' }), satz({ REFW: 'R2' })], OPT);
-  assert.equal(bestand.length, SATZLAENGE_E29 * 4);
-  const zeile = (i: number) =>
-    bestand.subarray(i * SATZLAENGE_E29, (i + 1) * SATZLAENGE_E29).toString('latin1');
+  // Vier Saetze plus drei Trenner dazwischen.
+  assert.equal(bestand.length, SATZLAENGE_E29 * 4 + SATZTRENNER.length * 3);
+  const zeile = (i: number) => satzNr(bestand, i, SATZLAENGE_E29).toString('latin1');
   assert.equal(zeile(0).slice(0, 2), '00', 'Vorlaufsatz trägt Satzart 00');
   assert.equal(zeile(1).slice(0, 2), 'M3');
   assert.equal(zeile(2).slice(0, 2), 'M3');
@@ -53,20 +77,80 @@ test('Bestand: Vorlaufsatz, Datensätze, Schlusssatz — alle gleich lang', () =
 
 test('Satznummern beginnen bei 1 und steigen lückenlos', () => {
   const bestand = baueBestand([satz({ REFW: 'R1' }), satz({ REFW: 'R2' })], OPT);
-  const nummer = (i: number) =>
-    bestand.subarray(i * SATZLAENGE_E29 + 2, i * SATZLAENGE_E29 + 9).toString('latin1');
+  const nummer = (i: number) => satzNr(bestand, i, SATZLAENGE_E29).subarray(2, 9).toString('latin1');
   assert.deepEqual(
     [nummer(0), nummer(1), nummer(2), nummer(3)],
     ['0000001', '0000002', '0000003', '0000004'],
   );
 });
 
-test('Vorlaufsatz: PROJ folgt dem Testdaten-Kennzeichen, BEST ist VR', () => {
+test('Vorlaufsatz: PROJ folgt dem Testdaten-Kennzeichen, BEST der Verarbeitung', () => {
   const test = baueBestand([satz({ REFW: 'R' })], OPT).toString('latin1');
   assert.equal(test.slice(20, 22), 'TM');
   assert.equal(test.slice(22, 24), 'VR');
   const echt = baueBestand([satz({ REFW: 'R' })], { ...OPT, testdaten: false }).toString('latin1');
   assert.equal(echt.slice(20, 22), 'DM');
+});
+
+// Kapitel B.3 führt jede Verarbeitung mit eigener Bestandsbezeichnung, Kapitel
+// C.1 sagt dazu: Ein Datenbestand enthält Daten „zu EINER Verarbeitung". Die
+// Bezeichnung ist damit keine Aufschrift, sondern die Adresse — sie entscheidet,
+// wo die Sätze landen. Bis 05.08.2026 stand hier fest 'VR', auch für ein
+// mBGM-Paket: Die Meldung wäre bei der Verarbeitung der Versichertenmeldungen
+// abgeliefert worden.
+test('Vorlaufsatz: BEST kommt aus dem Rahmen, nicht aus einer festen Vorgabe', () => {
+  const mbgm = baueBestand([satz({ REFW: 'R' })], { ...OPT, bestandsbezeichnung: BEST_MBGM });
+  assert.equal(mbgm.toString('latin1').slice(22, 24), 'MB');
+});
+
+// Am 05.08.2026 hat ELDA einen echten mBGM-Bestand mit drei Fehlern abgewiesen
+// (Protokoll 18373113, Status 403, „nicht_uebernommen"). Zwei davon standen
+// hier fest verdrahtet; der dritte war ihre Folge. Die nächsten drei Tests
+// halten jeden davon fest.
+
+test('UVST ist ED — der datenübernehmende Träger, nicht der zuständige', () => {
+  // ELDA: „E6 — Datenuebernehmender Versicherungstraeger (UVST) nicht ED".
+  // Kapitel D.2: „Bei Meldungen an das Datensammelsystem der Sozialversicherung
+  // ist als datenübernehmender Versicherungsträger die Österreichische
+  // Gesundheitskasse - ELDA, UVST = ED, anzugeben." Und ausdrücklich: „Diese
+  // Angabe ist unabhängig davon, an welchen Versicherungsträger die Daten zur
+  // Verarbeitung gerichtet sind."
+  const b = baueBestand([satz({ REFW: 'R' })], OPT).toString('latin1');
+  assert.equal(b.slice(9, 11), UVST_ELDA);
+  assert.equal(b.slice(18, 20), OPT.versicherungstraeger, 'VSTR bleibt der zuständige Träger');
+});
+
+test('UVST lässt sich für Clearingstellen übersteuern', () => {
+  // D.2 kennt daneben nur 1L, 7L, ST (Clearingstellen) und 99 (Dachverband).
+  const b = baueBestand([satz({ REFW: 'R' })], { ...OPT, datenuebernehmer: '7L' }).toString('latin1');
+  assert.equal(b.slice(9, 11), '7L');
+});
+
+test('VERS folgt der Verarbeitung: 03 für VR, 02 für MB', () => {
+  // ELDA: „E31 — Unbekannte Version (03) der Satzstrukturen fuer Projekt DM,
+  // Bestand MB." Kapitel D.26: Die Versionsnummer ist der Überschrift jeder
+  // Datensatzbeschreibung zu entnehmen — E.29 trägt Version 03, E.32 Version 02.
+  const vr = baueBestand([satz({ REFW: 'R' })], OPT).toString('latin1');
+  assert.equal(vr.slice(149, 151), VERSION_VERSICHERTENMELDUNG);
+  assert.equal(VERSION_VERSICHERTENMELDUNG, '03');
+
+  const mb = baueBestand([satz({ REFW: 'R' })], {
+    ...OPT,
+    bestandsbezeichnung: BEST_MBGM,
+    satzstrukturVersion: VERSION_MBGM,
+  }).toString('latin1');
+  assert.equal(mb.slice(149, 151), VERSION_MBGM);
+  assert.equal(VERSION_MBGM, '02');
+});
+
+test('Bestandsbezeichnung: nur zweistellige Codes, sonst Abbruch vor dem Bauen', () => {
+  for (const kaputt of ['', 'M', 'MBX', 'mb', 'M1']) {
+    assert.throws(
+      () => baueBestand([satz({ REFW: 'R' })], { ...OPT, bestandsbezeichnung: kaputt }),
+      EldaError,
+      `sollte abgewiesen werden: '${kaputt}'`,
+    );
+  }
 });
 
 test('Vorlaufsatz: Erstellungsdatum und -zeit', () => {
@@ -125,7 +209,7 @@ test('Vorlaufsatz: VNMF ist über mitteilungsfileVersion ansprechbar', () => {
 // mit der Satznummer des Schlusssatzes selbst übereinstimmt.
 test('Schlusssatz: Satzanzahl zählt alle Sätze inklusive Vorlauf- und Schlusssatz', () => {
   const b = baueBestand([satz({ REFW: 'R1' }), satz({ REFW: 'R2' }), satz({ REFW: 'R3' })], OPT);
-  const schluss = b.subarray(4 * SATZLAENGE_E29).toString('latin1');
+  const schluss = satzNr(b, 4, SATZLAENGE_E29).toString('latin1');
   assert.equal(schluss.slice(20, 26), '000005');
 });
 
@@ -135,8 +219,34 @@ test('Schlusssatz: Satzanzahl zählt alle Sätze inklusive Vorlauf- und Schlusss
 // Seriennummer (OBUS im Identifikationsteil) bekannt ist.
 test('Schlusssatz: ELNR bleibt auf Grundstellung, da SV-intern befüllt', () => {
   const b = baueBestand([satz({ REFW: 'R' })], OPT);
-  const schluss = b.subarray(2 * SATZLAENGE_E29).toString('latin1');
+  const schluss = satzNr(b, 2, SATZLAENGE_E29).toString('latin1');
   assert.equal(schluss.slice(26, 32), '000000');
+});
+
+// ELDA liest den Bestand ZEILENWEISE. Beleg: Fehlerkatalog Kapitel H.22 führt
+// `W4` mit dem Text „Leerzeile gefunden" — eine Leerzeile kann es nur geben,
+// wenn die Datei in Zeilen zerlegt wird. Die Beobachtung dazu: Ein Bestand ohne
+// Trenner wurde mit `E2` abgewiesen, „Falsche Satzlaenge! 1747 anstatt 326
+// Zeichen", wobei 1747 die Länge der GESAMTEN Datei war.
+test('Saetze sind durch CRLF getrennt, ohne Trenner am Ende', () => {
+  const bestand = baueBestand([satz({ REFW: 'R1' }), satz({ REFW: 'R2' })], OPT);
+  const roh = bestand.toString('latin1');
+
+  // Genau drei Trenner bei vier Saetzen — keiner hinter dem letzten. Ein
+  // Trenner am Ende ergaebe bei einem Leser, der auf \n aufteilt, ein leeres
+  // letztes Element und damit ein `W4`.
+  assert.equal(roh.split('\r\n').length - 1, 3);
+  assert.ok(!roh.endsWith('\r\n'), 'kein Trenner nach dem letzten Satz');
+
+  // Jede Zeile ist genau so lang wie die Satzlaenge des Bestands.
+  for (const zeile of roh.split('\r\n')) {
+    assert.equal(zeile.length, SATZLAENGE_E29);
+  }
+  // Und keine Zeile ist leer -- das waere `W4`.
+  assert.ok(
+    roh.split('\r\n').every((z) => z.trim() !== ''),
+    'keine Leerzeile',
+  );
 });
 
 test('leerer Bestand wirft, statt einen sinnlosen Umschlag zu liefern', () => {
@@ -169,45 +279,55 @@ const eigenerSatz = (satzart: string, satzlaenge: number): RohSatz => ({
   satzlaenge,
 });
 
-test('E.2: gemischte Satzlaengen — Umschlag traegt das Maximum, jeder Datensatz seine eigene Laenge', () => {
+// Umschlag auf dem Maximum, JEDER DATENSATZ bei seiner eigenen Laenge.
+//
+// Von ELDA am 05.08.2026 Zeile fuer Zeile bestaetigt (Protokoll 18376033): Ein
+// Bestand, in dem alle Saetze auf die groesste Laenge aufgefuellt waren, kam
+// zurueck mit „Falsche Satzlaenge! 326 anstatt 305 Zeichen" fuer den PS-Satz,
+// „326 anstatt 42" fuer T1 und V1 — waehrend Vorlaufsatz, G1 (dessen eigene
+// Laenge 326 ist) und Schlusssatz fehlerfrei blieben.
+test('E.2: Umschlag traegt das Maximum, jeder Datensatz seine eigene Laenge', () => {
   const kurz = eigenerSatz('I1', 300);
   const lang = eigenerSatz('L1', 500);
   const bestand = baueBestand([kurz, lang], OPT);
 
-  // Gesamtlaenge = Summe der Teile: Vorlauf 500 + 300 + 500 + Schluss 500.
-  assert.equal(bestand.length, 500 + 300 + 500 + 500);
+  // Vorlauf 500 + Trenner + I1 300 + Trenner + L1 500 + Trenner + Schluss 500.
+  assert.equal(bestand.length, 500 + 300 + 500 + 500 + SATZTRENNER.length * 3);
 
-  // Vorlaufsatz: Maximum, Satzart 00.
-  assert.equal(bestand.subarray(0, 2).toString('latin1'), '00');
-  // Der kurze Datensatz beginnt unmittelbar nach dem Vorlaufsatz und ist 300 lang.
-  assert.equal(bestand.subarray(500, 502).toString('latin1'), 'I1');
-  // Der lange Datensatz folgt nach 300 Bytes — laege der kurze Satz auf 500,
-  // stuende hier nicht 'L1'.
-  assert.equal(bestand.subarray(800, 802).toString('latin1'), 'L1');
-  // Schlusssatz: wieder das Maximum, Satzart 99.
-  assert.equal(bestand.subarray(1300, 1302).toString('latin1'), '99');
-  assert.equal(bestand.subarray(1300).length, 500);
+  const zeilen = bestand.toString('latin1').split('\r\n');
+  assert.deepEqual(
+    zeilen.map((z) => z.slice(0, 2)),
+    ['00', 'I1', 'L1', '99'],
+  );
+  // Jede Zeile traegt die Laenge IHRER Satzart.
+  assert.deepEqual(
+    zeilen.map((z) => z.length),
+    [500, 300, 500, 500],
+  );
 });
 
-test('E.2: gemischte Satzlaengen — Satznummern lueckenlos, SANZ zaehlt alle Saetze', () => {
+test('E.2: Satznummern lueckenlos, SANZ zaehlt alle Saetze', () => {
   const bestand = baueBestand([eigenerSatz('I1', 300), eigenerSatz('L1', 500), eigenerSatz('L1', 500)], OPT);
-  // Vorlauf 500 + 300 + 500 + 500 + Schluss 500.
-  const anfaenge = [0, 500, 800, 1300, 1800];
-  const nummer = (start: number) => bestand.subarray(start + 2, start + 9).toString('latin1');
-  assert.deepEqual(anfaenge.map(nummer), ['0000001', '0000002', '0000003', '0000004', '0000005']);
+  const zeilen = bestand.toString('latin1').split('\r\n');
+  assert.deepEqual(
+    zeilen.map((z) => z.slice(2, 9)),
+    ['0000001', '0000002', '0000003', '0000004', '0000005'],
+  );
   // SANZ steht im Schlusssatz auf Position 21..26 und zaehlt inkl. Vorlauf- und
   // Schlusssatz (Kapitel E.3) — hier 5, unabhaengig von den Satzlaengen.
-  assert.equal(bestand.subarray(1800 + 20, 1800 + 26).toString('latin1'), '000005');
+  assert.equal(zeilen[4]!.slice(20, 26), '000005');
 });
 
 test('E.2: das Maximum gilt auch, wenn der laengste Satz nicht der erste ist', () => {
   const vorne = baueBestand([eigenerSatz('L1', 500), eigenerSatz('I1', 300)], OPT);
   const hinten = baueBestand([eigenerSatz('I1', 300), eigenerSatz('L1', 500)], OPT);
-  assert.equal(vorne.length, 1800);
-  assert.equal(hinten.length, 1800);
-  // In beiden Faellen ist der Vorlaufsatz 500 lang: der Datensatz danach beginnt bei 500.
-  assert.equal(vorne.subarray(500, 502).toString('latin1'), 'L1');
-  assert.equal(hinten.subarray(500, 502).toString('latin1'), 'I1');
+  // In beiden Faellen tragen Vorlauf- und Schlusssatz 500, die Datensaetze ihre
+  // eigene Laenge — die Gesamtlaenge ist damit gleich.
+  const erwartet = 500 + 300 + 500 + 500 + SATZTRENNER.length * 3;
+  assert.equal(vorne.length, erwartet);
+  assert.equal(hinten.length, erwartet);
+  assert.equal(vorne.toString('latin1').split('\r\n')[1]!.slice(0, 2), 'L1');
+  assert.equal(hinten.toString('latin1').split('\r\n')[1]!.slice(0, 2), 'I1');
 });
 
 test('ein Bestand aus lauter gleich langen Saetzen bleibt unveraendert', () => {
@@ -216,9 +336,9 @@ test('ein Bestand aus lauter gleich langen Saetzen bleibt unveraendert', () => {
   // schon 246 Zeichen belegt.
   const eigener = eigenerSatz('M3', 300);
   const bestand = baueBestand([eigener, eigener], OPT);
-  assert.equal(bestand.length, 300 * 4);
-  assert.equal(bestand.subarray(0, 2).toString('latin1'), '00');
-  assert.equal(bestand.subarray(900, 902).toString('latin1'), '99');
+  assert.equal(bestand.length, 300 * 4 + SATZTRENNER.length * 3);
+  assert.equal(satzNr(bestand, 0, 300).subarray(0, 2).toString('latin1'), '00');
+  assert.equal(satzNr(bestand, 3, 300).subarray(0, 2).toString('latin1'), '99');
 });
 
 // ---------------------------------------------------------------------------
