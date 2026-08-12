@@ -1,11 +1,11 @@
+// Node-gebundener Teil der Belegpruefung: X.509-Zertifikate und ES256 gibt es
+// nur ueber node:crypto. Erreichbar ueber @kreiseck/rksv/code/signatur, nicht
+// mehr ueber @kreiseck/rksv/code -- sonst zoege jeder Nutzer des Kerns diese
+// Abhaengigkeit mit, und der Kern liefe nicht mehr im Browser.
 import { createPublicKey, verify, X509Certificate, type KeyObject } from 'node:crypto';
 import { type Beleg, toStandardBase64 } from './decode';
-
-export interface Pruefung {
-  name: string;
-  status: 'PASS' | 'FAIL' | 'NOT_EXECUTED';
-  detail?: string;
-}
+import { belegSigningInput } from './signaturbasis';
+import { type Pruefung } from './pruefungstyp';
 
 export interface Pruefergebnis {
   pruefungen: Pruefung[];
@@ -16,15 +16,9 @@ export interface PruefOptionen {
   schluessel?: KeyObject | string | Buffer;
 }
 
-const HEADER = 'eyJhbGciOiJFUzI1NiJ9';
 const RKA = /^R[0-9]+-[A-Z0-9]+$/;
 const DATUM = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 const BETRAG = /^-?\d+,\d{2}$/;
-
-export function belegSigningInput(beleg: Beleg): string {
-  const payload = '_' + beleg.segmente.slice(0, 12).join('_');
-  return HEADER + '.' + Buffer.from(payload, 'utf8').toString('base64url');
-}
 
 function pruefe(name: string, ok: boolean, detail?: string): Pruefung {
   return { name, status: ok ? 'PASS' : 'FAIL', ...(detail ? { detail } : {}) };

@@ -1,4 +1,5 @@
 import { base32Decode } from './base32';
+import { base64ZuBytes, bytesZuBase64, bytesZuUtf8 } from './text';
 
 export class RksvCodeError extends Error {
   constructor(message: string) {
@@ -43,7 +44,7 @@ export function toStandardBase64(s: string): string {
 }
 
 function base32ToBase64(s: string): string {
-  return base32Decode(s).toString('base64');
+  return bytesZuBase64(base32Decode(s));
 }
 
 /**
@@ -88,7 +89,7 @@ export function decodeBelegCode(code: string): Beleg {
   let besonderheit: Besonderheit | undefined;
   if (s10raw === 'TRA') besonderheit = 'trainingsbuchung';
   else if (s10raw === 'STO') besonderheit = 'stornobuchung';
-  else if (Buffer.from(toStandardBase64(signatur), 'base64').toString('utf8') === AUSFALL_TEXT) {
+  else if (bytesZuUtf8(base64ZuBytes(toStandardBase64(signatur))) === AUSFALL_TEXT) {
     besonderheit = 'see-ausfall';
   }
 

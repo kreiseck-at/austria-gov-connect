@@ -101,19 +101,34 @@ in eine Heuristik.
 
 ## Belegcode offline prüfen
 
-Netzfrei, nur `node:crypto`, über den Subpath-Export:
+Netzfrei über den Subpath-Export. `@kreiseck/rksv/code` kommt seit 0.10.0 ohne
+`node:crypto` und ohne `Buffer` aus und läuft damit auch im Browser:
 
 ```ts
-import { decodeBelegCode, pruefeBelegCode, pruefeVerkettung } from '@kreiseck/rksv/code';
+import { decodeBelegCode, pruefeVerkettung } from '@kreiseck/rksv/code';
 
 const beleg = decodeBelegCode('_R1-AT1_KASSE-001_1_2026-07-20T14:23:34_10,00_…');
+pruefeVerkettung(beleg, vorherigerBeleg); // Startbeleg: pruefeVerkettung(beleg)
+```
+
+Die ES256-Signaturprüfung braucht X.509 und liegt deshalb in einem eigenen,
+Node-gebundenen Einstiegspunkt:
+
+```ts
+import { pruefeBelegCode } from '@kreiseck/rksv/code/signatur';
+
 const ergebnis = pruefeBelegCode(beleg, { zertifikat }); // Zertifikat optional
 // ergebnis.pruefungen[]: { name, status: 'PASS'|'FAIL'|'NOT_EXECUTED', detail? }
-pruefeVerkettung(beleg, vorherigerBeleg); // Startbeleg: pruefeVerkettung(beleg)
 ```
 
 Ohne Zertifikat wird die ES256-Signaturprüfung als `NOT_EXECUTED` gemeldet, nicht
 als Fehler.
+
+**Breaking in 0.10.0:** `pruefeBelegCode` und die Typen `Pruefergebnis`/
+`PruefOptionen` sind von `@kreiseck/rksv/code` nach `@kreiseck/rksv/code/signatur`
+gewandert. `base32Decode`/`base32Encode` arbeiten mit `Uint8Array` statt `Buffer`
+— in Node ist `Buffer` ein `Uint8Array`, betroffen ist nur, wer `.toString(…)`
+auf dem Ergebnis aufruft.
 
 ## Lizenz
 
