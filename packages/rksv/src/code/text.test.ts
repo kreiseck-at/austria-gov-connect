@@ -26,6 +26,31 @@ test('base64ZuBytes ist die Umkehrung, auch bei Auffuellzeichen', () => {
   }
 });
 
+test('base64ZuBytes bricht an der Auffuellung ab wie Buffer', () => {
+  // Buffer.from(s, 'base64') hoert am ersten '=' auf zu lesen. Bei wohlgeformtem
+  // Base64 steht '=' nur am Ende, dort sind beide Fassungen ohnehin gleich --
+  // die Abweichung zeigt sich erst bei einem '=' mitten in der Zeichenkette,
+  // also bei manipulierten oder beschaedigten Belegcodes. Genau diese Eingabe
+  // fehlte, deshalb ist die Abweichung niemandem aufgefallen: eine nachsichtige
+  // Fassung liest ueber das '=' hinweg, erkennt dadurch den Ausfalltext in einem
+  // verfaelschten Code und laesst die Signaturpruefungen still aus.
+  const faelle = [
+    'U2ljaGVy=aGVpdHNlaW5yaWNodHVuZyBhdXNnZWZhbGxlbg==',
+    '=',
+    '=QUJD',
+    'QQ==QQ==',
+    'AA=A',
+    'QUJD',
+    'QQ==',
+    'QUJDRA==',
+    'QUJ\nDRA==',
+    'QUJD RA==',
+  ];
+  for (const s of faelle) {
+    assert.deepEqual(base64ZuBytes(s), new Uint8Array(Buffer.from(s, 'base64')), JSON.stringify(s));
+  }
+});
+
 test('base64ZuBytes vertraegt Base64url-Zeichen', () => {
   const b = new Uint8Array([251, 255, 190, 62, 63]);
   const url = bytesZuBase64Url(b);

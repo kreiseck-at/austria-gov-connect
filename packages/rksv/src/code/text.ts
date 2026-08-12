@@ -33,7 +33,16 @@ export function bytesZuBase64Url(b: Uint8Array): string {
 }
 
 export function base64ZuBytes(s: string): Uint8Array {
-  const rein = s.replace(/[^A-Za-z0-9+/]/g, '');
+  // Am ersten Auffuellzeichen ist Schluss -- genau wie Buffer.from(s, 'base64').
+  // Bei wohlgeformtem Base64 steht '=' ohnehin nur am Ende; die Regel greift
+  // erst bei verfaelschter Eingabe. Dort ist Nachsicht die falsche Richtung:
+  // wer ueber ein '=' mitten im Segment hinwegliest, erkennt in einem
+  // manipulierten Belegcode den Ausfalltext und laesst die Signaturpruefungen
+  // stillschweigend aus. Sonstiger Unrat (Zeilenumbrueche, Fremdzeichen) wird
+  // wie bei Buffer uebergangen.
+  const auffuellung = s.indexOf('=');
+  const roh = auffuellung === -1 ? s : s.slice(0, auffuellung);
+  const rein = roh.replace(/[^A-Za-z0-9+/]/g, '');
   const out = new Uint8Array((rein.length * 3) >> 2);
   let bits = 0;
   let sammler = 0;
