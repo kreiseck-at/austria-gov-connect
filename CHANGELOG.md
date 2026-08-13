@@ -35,6 +35,41 @@ brechen).
 
 ## @kreiseck/rksv
 
+### 0.11.0 — 2026-08-13
+
+Nicht 0.10.1: `Beleg.seeAusfall` ist ein Pflichtfeld auf einer oeffentlichen
+Schnittstelle. Wer einen `Beleg` selbst zusammenbaut, muss es setzen -- das ist
+nach SemVer keine Fehlerbehebung, auch wenn der Anlass eine war.
+
+- **Fix:** `decodeBelegCode` erkennt Trainings- und Stornobuchungen (§ 10 Abs. 3
+  RKSV) jetzt auch an der base64-Form des Markers im Umsatzzähler-Feld:
+  `VFJB` = base64(`TRA`), `U1RP` = base64(`STO`). Bisher wurde nur das literale
+  `TRA`/`STO` verglichen — genau das, was in echten Daten **nicht** vorkommt. In
+  Szenario 1 der offiziellen BMF-Prüfwerkzeug-Testsuite steht 17-mal `VFJB` und
+  17-mal `U1RP`, kein einziges Mal das literale Kürzel; alle 34 Buchungen galten
+  bis 0.10.0 als gewöhnliche Belege, gingen also in Umsatzsummen ein und
+  entzogen sich den Regeln, die nur für sie gelten. Die literale Schreibweise
+  wird weiterhin akzeptiert. Der Fehler ist älter als 0.10.0 — er fiel nur nie
+  auf, weil die Dekodierung nie gegen echte BMF-Daten lief.
+- **Fix:** Der OCR-Beleg (Anlage Z 14) trägt den Marker base32-kodiert
+  (`KRJEC===` / `KNKE6===`). Das Feld wird jetzt auch dann nach base64
+  umkodiert, wenn es den Marker trägt — QR- und OCR-Fassung desselben Belegs
+  liefern denselben `umsatzzaehler`. Nur die literale Schreibweise bleibt
+  unangetastet, sie ist kein kodierter Wert.
+- **Neu:** `Beleg.seeAusfall` sagt unabhängig von `besonderheit`, ob der
+  Signaturwert den Ausfalltext trägt. Nötig, weil beides zugleich vorkommt: 16
+  der 34 Buchungen in Szenario 1 sind Trainings- oder Stornobuchungen
+  **während** eines Ausfalls der Signatureinheit. `besonderheit` führt in diesem
+  Fall die Belegart; `pruefeBelegCode` meldet Signaturlänge und Signatur
+  weiterhin als `NOT_EXECUTED`, richtet sich dafür aber nach `seeAusfall`. Wer
+  bisher `besonderheit === 'see-ausfall'` abfragt, stellt auf `seeAusfall` um.
+- **Neu:** Einstiegspunkt `@kreiseck/rksv/code/sha256`. Die paketinterne,
+  synchrone SHA-256 lag zwar in `dist`, war über die `exports`-Karte aber nicht
+  erreichbar (`ERR_PACKAGE_PATH_NOT_EXPORTED`).
+- Regressionstests gegen die echten Belegcodes aus Szenario 1 der
+  BMF-Testsuite — 81 Belege in QR- und in OCR-Fassung, die erwarteten Belegarten
+  aus der Szenariodatei des BMF-Werkzeugs selbst.
+
 ### 0.10.0 — 2026-08-12
 
 - **Breaking:** `pruefeBelegCode` und die Typen `Pruefergebnis`/`PruefOptionen`

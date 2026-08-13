@@ -48,7 +48,12 @@ export function pruefeBelegCode(beleg: Beleg, opts?: PruefOptionen): Pruefergebn
   );
   pruefungen.push(pruefe('Betragsformate', betraegeOk));
 
-  if (beleg.besonderheit === 'see-ausfall') {
+  // Bewusst `seeAusfall` und nicht `besonderheit`: bei einer Trainings- oder
+  // Stornobuchung waehrend eines Ausfalls fuehrt `besonderheit` die Belegart,
+  // pruefbar ist die Signatur trotzdem nicht. Der Zusatz auf `besonderheit` gilt
+  // von Hand gebauten Belegen, die das juengere Feld noch nicht setzen -- fuer
+  // die soll die Signaturpruefung nicht ploetzlich anspringen.
+  if (beleg.seeAusfall || beleg.besonderheit === 'see-ausfall') {
     pruefungen.push({
       name: 'Signaturlaenge',
       status: 'NOT_EXECUTED',

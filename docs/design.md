@@ -231,7 +231,7 @@ also exakt 13 durch `_` getrennte Segmente mit führendem `_`.
 | 7 | Betrag-Satz-Ermaessigt-2 | wie oben |
 | 8 | Betrag-Satz-Null | wie oben |
 | 9 | Betrag-Satz-Besonders | wie oben |
-| 10 | Stand-Umsatz-Zaehler-AES256-ICM | Standard-Base64 (nicht URL-safe), 8 Byte; **`TRA`** bei Trainings-, **`STO`** bei Stornobuchung statt des Werts |
+| 10 | Stand-Umsatz-Zaehler-AES256-ICM | Standard-Base64 (nicht URL-safe), 8 Byte; bei Trainings-/Stornobuchung steht statt des Werts das Kürzel `TRA`/`STO`, in der Praxis base64-kodiert als **`VFJB`**/**`U1RP`** |
 | 11 | Zertifikat-Seriennummer | UTF-8-String |
 | 12 | Sig-Voriger-Beleg | Base64, SHA-256 des Vorbelegs, Bytes 0–7 (Eingang: siehe unten) |
 | 13 | Signaturwert | Base64, aus Base64-URL rückkodiert |
@@ -266,9 +266,17 @@ Weitere Regeln:
   Stand-Umsatz-Zaehler — sind Base32 statt Base64. Für die Signaturprüfung wird
   zuerst in die kanonische Base64-Form normalisiert.
 - **Trainings-/Stornobuchung**: Kennzeichnung im Feld Stand-Umsatz-Zaehler
-  (Segment 10) durch den Literalwert `TRA` bzw. `STO` statt des verschlüsselten
+  (Segment 10) durch das Kürzel `TRA` bzw. `STO` statt des verschlüsselten
   Umsatzzählers (§2.5.1: bei diesen Belegtypen wird der Umsatzzähler nicht
-  beeinflusst).
+  beeinflusst). Erzeuger schreiben das Kürzel dort **base64-kodiert** wie den
+  Zähler selbst: `VFJB` = base64(`TRA`), `U1RP` = base64(`STO`); in der
+  OCR-Variante entsprechend base32 (`KRJEC===` / `KNKE6===`). In Szenario 1 der
+  BMF-Prüfwerkzeug-Testsuite kommt ausschließlich diese Form vor. Der Decoder
+  akzeptiert zusätzlich die literale Schreibweise.
+- Trainings-/Stornobuchung und **Ausfall der Signatureinheit schließen einander
+  nicht aus** — in Szenario 1 fallen sie bei 16 von 34 dieser Buchungen
+  zusammen. Deshalb führt `Beleg.besonderheit` die Belegart, und `Beleg.seeAusfall`
+  sagt unabhängig davon, ob die Signatur prüfbar ist.
 
 ## 3. Architektur
 
@@ -468,6 +476,8 @@ import { decodeBelegCode, pruefeBelegCode, pruefeVerkettung } from '@kreiseck/rk
 const beleg = decodeBelegCode('_R1-AT1_KASSE-001_1_2026-07-20T14:23:34_…');
 // beleg.rka.zda === 'AT1', beleg.betraege.normal === '10,00', …
 // beleg.besonderheit → 'see-ausfall' | 'trainingsbuchung' | 'stornobuchung' | undefined
+// beleg.seeAusfall   → true, wenn der Signaturwert den Ausfalltext trägt (auch
+//                      bei Trainings-/Stornobuchung, wo besonderheit die Belegart führt)
 
 const ergebnis = pruefeBelegCode(beleg, { zertifikat });  // Zertifikat optional
 // ergebnis.pruefungen[] → { name, status: 'PASS' | 'FAIL' | 'NOT_EXECUTED', detail? }

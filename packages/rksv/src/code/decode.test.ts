@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { decodeBelegCode, RksvCodeError, toStandardBase64 } from './decode';
+import { buchungsmarker, decodeBelegCode, RksvCodeError, toStandardBase64 } from './decode';
 import { base32Encode } from './base32';
 
 const SIG_B64 = Buffer.alloc(64, 7).toString('base64'); // 64 Byte, enthält Kleinbuchstaben/+//
@@ -58,6 +58,61 @@ test('Trainingsbuchung: Segment 10 = TRA', () => {
 
 test('Stornobuchung: Segment 10 = STO', () => {
   assert.equal(decodeBelegCode(code({ 10: 'STO' })).besonderheit, 'stornobuchung');
+});
+
+test('Trainingsbuchung: Segment 10 = VFJB (base64 von TRA)', () => {
+  const b = decodeBelegCode(code({ 10: 'VFJB' }));
+  assert.equal(b.besonderheit, 'trainingsbuchung');
+  assert.equal(b.umsatzzaehler, 'VFJB');
+});
+
+test('Stornobuchung: Segment 10 = U1RP (base64 von STO)', () => {
+  const b = decodeBelegCode(code({ 10: 'U1RP' }));
+  assert.equal(b.besonderheit, 'stornobuchung');
+  assert.equal(b.umsatzzaehler, 'U1RP');
+});
+
+test('buchungsmarker kennt beide Schreibweisen und sonst nichts', () => {
+  assert.equal(buchungsmarker('VFJB'), 'trainingsbuchung');
+  assert.equal(buchungsmarker('TRA'), 'trainingsbuchung');
+  assert.equal(buchungsmarker('U1RP'), 'stornobuchung');
+  assert.equal(buchungsmarker('STO'), 'stornobuchung');
+  assert.equal(buchungsmarker(UMS_B64), undefined);
+  assert.equal(buchungsmarker(''), undefined);
+  // Nicht die base32-Form: die wird vor der Erkennung nach base64 umkodiert.
+  assert.equal(buchungsmarker('KRJEC==='), undefined);
+});
+
+test('OCR-Variante: der base32-Marker wird als Buchung erkannt', () => {
+  // base32('TRA') = KRJEC===, base32('STO') = KNKE6=== -- genau das, was in der
+  // OCR-Fassung der BMF-Testsuite steht.
+  const ocr = (feld: string) =>
+    decodeBelegCode(
+      code({ 10: feld, 12: base32Encode(Buffer.alloc(8, 1)), 13: base32Encode(Buffer.alloc(64, 7)) }),
+    );
+
+  assert.equal(base32Encode(Buffer.from('TRA', 'utf8')), 'KRJEC===');
+  assert.equal(base32Encode(Buffer.from('STO', 'utf8')), 'KNKE6===');
+
+  const t = ocr('KRJEC===');
+  assert.equal(t.ocr, true);
+  assert.equal(t.besonderheit, 'trainingsbuchung');
+  assert.equal(t.umsatzzaehler, 'VFJB');
+
+  const s = ocr('KNKE6===');
+  assert.equal(s.besonderheit, 'stornobuchung');
+  assert.equal(s.umsatzzaehler, 'U1RP');
+});
+
+test('OCR-Variante: literales TRA bleibt unangetastet und wird erkannt', () => {
+  // Ein Erzeuger, der das Kuerzel literal schreibt, meint keine base32-Daten:
+  // Dekodieren machte aus "TRA" ein sinnloses Byte. Deshalb durchgereicht.
+  const b = decodeBelegCode(
+    code({ 10: 'TRA', 12: base32Encode(Buffer.alloc(8, 1)), 13: base32Encode(Buffer.alloc(64, 7)) }),
+  );
+  assert.equal(b.ocr, true);
+  assert.equal(b.besonderheit, 'trainingsbuchung');
+  assert.equal(b.umsatzzaehler, 'TRA');
 });
 
 test('SEE-Ausfall: Segment 13 dekodiert zur Ausfall-Zeichenkette', () => {

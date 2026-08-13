@@ -124,6 +124,20 @@ const ergebnis = pruefeBelegCode(beleg, { zertifikat }); // Zertifikat optional
 Ohne Zertifikat wird die ES256-Signaturprüfung als `NOT_EXECUTED` gemeldet, nicht
 als Fehler.
 
+`beleg.besonderheit` sagt, ob der Beleg eine Trainings- oder Stornobuchung ist
+(Marker im Umsatzzähler-Feld, § 10 Abs. 3 RKSV — in der Praxis base64-kodiert als
+`VFJB`/`U1RP`, in der OCR-Variante base32). Ob die Signatureinheit ausgefallen
+war, steht unabhängig davon in `beleg.seeAusfall`: beides zugleich kommt vor, und
+dann führt `besonderheit` die Belegart.
+
+Die paketinterne, synchrone SHA-256 (ohne `node:crypto`, ohne Web Crypto) liegt
+seit 0.10.1 unter einem eigenen Einstiegspunkt — gedacht für Nutzer, die ihre
+eigene Implementierung dagegen halten wollen:
+
+```ts
+import { sha256 } from '@kreiseck/rksv/code/sha256';
+```
+
 **Breaking in 0.10.0:** `pruefeBelegCode` und die Typen `Pruefergebnis`/
 `PruefOptionen` sind von `@kreiseck/rksv/code` nach `@kreiseck/rksv/code/signatur`
 gewandert. `base32Decode`/`base32Encode` arbeiten mit `Uint8Array` statt `Buffer`
