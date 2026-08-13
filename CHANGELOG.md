@@ -35,7 +35,11 @@ brechen).
 
 ## @kreiseck/rksv
 
-### 0.10.1 — 2026-08-13
+### 0.11.0 — 2026-08-13
+
+Nicht 0.10.1: `Beleg.seeAusfall` ist ein Pflichtfeld auf einer oeffentlichen
+Schnittstelle. Wer einen `Beleg` selbst zusammenbaut, muss es setzen -- das ist
+nach SemVer keine Fehlerbehebung, auch wenn der Anlass eine war.
 
 - **Fix:** `decodeBelegCode` erkennt Trainings- und Stornobuchungen (§ 10 Abs. 3
   RKSV) jetzt auch an der base64-Form des Markers im Umsatzzähler-Feld:
