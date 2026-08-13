@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { decodeBelegCode } from './decode';
-import { pruefeBelegCode, belegSigningInput } from './pruefe';
+import { pruefeBelegCode } from './pruefe';
+import { belegSigningInput } from './signaturbasis';
 
 const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
 

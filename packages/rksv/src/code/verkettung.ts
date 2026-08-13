@@ -1,15 +1,16 @@
-import { createHash } from 'node:crypto';
 import { type Beleg, toStandardBase64 } from './decode';
-import { belegSigningInput, type Pruefung } from './pruefe';
+import { belegSigningInput } from './signaturbasis';
+import { type Pruefung } from './pruefungstyp';
+import { utf8Bytes, bytesZuBase64, bytesZuBase64Url, base64ZuBytes } from './text';
+import { sha256 } from './sha256';
 
 export function kompakteJws(beleg: Beleg): string {
-  const sigB64url = Buffer.from(toStandardBase64(beleg.signatur), 'base64').toString('base64url');
-  return belegSigningInput(beleg) + '.' + sigB64url;
+  return belegSigningInput(beleg) + '.' + bytesZuBase64Url(base64ZuBytes(toStandardBase64(beleg.signatur)));
 }
 
 export function verkettungswert(input: string | Beleg): string {
   const daten = typeof input === 'string' ? input : kompakteJws(input);
-  return createHash('sha256').update(Buffer.from(daten, 'utf8')).digest().subarray(0, 8).toString('base64');
+  return bytesZuBase64(sha256(utf8Bytes(daten)).subarray(0, 8));
 }
 
 export function pruefeVerkettung(beleg: Beleg, vorheriger?: Beleg): Pruefung {

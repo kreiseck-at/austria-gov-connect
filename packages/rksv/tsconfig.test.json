@@ -4,7 +4,8 @@
     "rootDir": "src",
     "outDir": "test-dist",
     "declaration": false,
-    "declarationMap": false
+    "declarationMap": false,
+    "removeComments": true
   },
   "include": ["src/**/*.ts"]
 }

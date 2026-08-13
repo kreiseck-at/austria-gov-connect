@@ -1,6 +1,6 @@
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
-export function base32Decode(input: string): Buffer {
+export function base32Decode(input: string): Uint8Array {
   const clean = input.replace(/=+$/, '').toUpperCase();
   const out: number[] = [];
   let bits = 0;
@@ -15,10 +15,10 @@ export function base32Decode(input: string): Buffer {
       out.push((value >> bits) & 0xff);
     }
   }
-  return Buffer.from(out);
+  return Uint8Array.from(out);
 }
 
-export function base32Encode(buf: Buffer): string {
+export function base32Encode(buf: Uint8Array): string {
   let out = '';
   let bits = 0;
   let value = 0;
