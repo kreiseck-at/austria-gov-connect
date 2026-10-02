@@ -25,7 +25,7 @@ const MELDUNG: Beitragsgrundlagenmeldung = {
   referenzwert: 'M-0001',
   versicherungsnummer: '1234010180',
   familienname: 'Musterfrau',
-  vorname: 'Oryna',
+  vorname: 'Maria',
   verrechnungsgrundlage: VERRECHNUNGSGRUNDLAGE.SV_UND_BV_MIT_ZEIT,
   tarifbloecke: [
     {
@@ -43,7 +43,7 @@ const MELDUNG: Beitragsgrundlagenmeldung = {
 };
 
 const BESTAND_OPT: BestandOptionen = {
-  seriennummer: '0543594',
+  seriennummer: '1234567',
   // Salzburg. Kapitel D.4: maßgeblich ist das Bundesland des BESCHÄFTIGUNGSORTS,
   // nicht der Sitz des Dienstgebers.
   versicherungstraeger: '17',
@@ -76,7 +76,7 @@ test('das mBGM-Paket geht im MB-Bestand hinaus, die Versichertenmeldung im VR-Be
         DGNA: 'Musterbetrieb',
         VSNR: '1234010180',
         FANA: 'Musterfrau',
-        VONA: 'Oryna',
+        VONA: 'Maria',
         ADAT: '01072026',
         BBER: '05',
         GERF: 'N',

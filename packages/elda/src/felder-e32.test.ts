@@ -151,7 +151,7 @@ test('ein gebauter Satz trägt jeden Wert an der Stelle, die das Dokument nennt'
       REFW: 'REF-2026-07-0001',
       VSNR: '1234010180',
       FANA: 'Musterfrau',
-      VONA: 'Oryna',
+      VONA: 'Maria',
       VSUM: '53993',
       VERG: 'J',
     },
@@ -164,7 +164,7 @@ test('ein gebauter Satz trägt jeden Wert an der Stelle, die das Dokument nennt'
   assert.equal(stueck(61, 40), ' '.repeat(40), 'REFU muss Grundstellung blank sein');
   assert.equal(stueck(141, 10), '1234010180', 'VSNR an Position 141');
   assert.equal(stueck(151, 10), 'Musterfrau', 'FANA an Position 151');
-  assert.equal(stueck(221, 5), 'Oryna', 'VONA an Position 221');
+  assert.equal(stueck(221, 5), 'Maria', 'VONA an Position 221');
   assert.equal(stueck(291, 11), '00000053993', 'VSUM rechtsbündig mit führenden Nullen');
   assert.equal(stueck(302, 1), 'J');
 });
