@@ -282,8 +282,8 @@ Beispielen aus E.29.2 – bei M8/M9/S3/S4 Namen in Grundstellung, Verweis auf di
 ### Aufgabe 11: `sit.js`
 
 - [ ] Kommandos laut Interfaces; jedes Netz-Kommando prüft vorher: Fenster aktiv (oder Abbruch), `--fenster` passt
-      zum aktiven, Quell-IP, Zugangsdaten vollständig (`ELDA_SIT_KUNDENPASSWORT`, `ELDA_API_KEY`; Seriennummer aus
-      den Testdaten), Abhängigkeiten gelaufen. `senden`/`abholen` ohne `--ja` = Trockenlauf. `abholen --ja`: erst
+      zum aktiven, Quell-IP, Zugangsdaten vollständig (`ELDA_SIT_KUNDENPASSWORT`, `ELDA_API_KEY`,
+      `ELDA_SIT_SERIENNUMMER`), Abhängigkeiten gelaufen. `senden`/`abholen` ohne `--ja` = Trockenlauf. `abholen --ja`: erst
       `empfangen` → Bytes sichern → Ereignis → danach Klassifikation nach Dateinamenmuster.
       HTTP 403 mit „Wartung" wird als „SIT in Wartung" gemeldet.
 - [ ] Ohne Netz prüfbar: `plan`, `zeigen`, `katalog`, `protokoll`, `urteil` – jeweils einmal gegen eine Temp-Ablage
@@ -307,3 +307,9 @@ dem eigenen Fenster (`ctx.zr`) und dem tatsächlichen Lauf der Ursprungsmeldung 
 Ausgabe, Fehler nur geschwärzt, Trockenlauf ohne Netz, abhängige Fälle werden übersprungen statt den Lauf abzubrechen,
 erneutes Senden nur mit `--nochmal`, Läufe ohne Antwort zählen nicht, Ablage und Testdaten für Netzbefehle Pflicht
 und außerhalb des Repos, Generalprobe räumt auf.
+
+**Danach ergänzt – Seriennummer maskiert:** Sie kommt aus dem Schlüsselbund (`ELDA_SIT_SERIENNUMMER`), nicht mehr aus
+den Testdaten, und steht in keiner Datei und keiner Ausgabe im Klartext: OBUS in `bestand.dat` maskiert (`ctx.bestandVon`
+setzt sie für T02 wieder ein), der Payload fehlt im Anfrage-Mitschnitt, Rücksendungen und die Dateinamen von ELDA sind
+maskiert – auch in Base64-Payloads. Die Schwärzung ersetzt längere Geheimnisse zuerst. Ein Durchlauf gegen einen
+nachgebauten SIT prüft jede Datei der Ablage und jede Ausgabe.

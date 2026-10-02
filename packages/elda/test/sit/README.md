@@ -17,21 +17,20 @@ auch mit falschen Anfragen, und lückenlos protokolliert. Nicht Teil von `npm te
 - **Zugangsdaten** (Kundenpasswort, Hash, API-Key) kommen aus dem Schlüsselbund in die Umgebung und erscheinen nie in
   Ausgabe oder Dateien; Mitschnitte werden geschwärzt, sonst nicht geschrieben. Fehler werden nur mit Name und
   geschwärzter Meldung ausgegeben.
+- **Die Seriennummer** kommt ebenfalls aus dem Schlüsselbund (`ELDA_SIT_SERIENNUMMER`), nicht aus den Testdaten, und
+  steht in keiner Datei und keiner Ausgabe im Klartext (siehe Ablage). Gesendet wird sie vollständig.
 - **Keine Kennungen im Repo.** Testdaten und Läufe liegen außerhalb des Repos (siehe Einrichten).
 
-Zwei bewusste Ausnahmen:
-
-- Die Quell-IP fragt das Werkzeug bei `api.ipify.org` ab – die einzige Anfrage außerhalb des SIT, nicht im Trockenlauf.
-- Die **Seriennummer** ist ein Bezeichner, kein Zugangsdatum. In der lokalen Ablage steht sie im Klartext: in
-  `bestand.dat` (byte-genau, das Duplikat T02 braucht genau diese Bytes) und in Rücksendungen. In Ausgaben erscheint
-  sie nie.
+Eine bewusste Ausnahme: Die Quell-IP fragt das Werkzeug bei `api.ipify.org` ab – die einzige Anfrage außerhalb des SIT,
+nicht im Trockenlauf.
 
 ## Einrichten
 
 1. Testdaten und Ablage **außerhalb jedes Checkouts** anlegen – ein entfernter Worktree nimmt gitignorierte Dateien
    kommentarlos mit, und das Laufprotokoll muss die ganze Kampagne überleben. Die Testdaten nach dem Muster von
    `testdaten.beispiel.json` aus dem Stammdaten-Basispaket (Rollen → Testpersonen, Dienstgeber mit Konten je Träger).
-2. Kundenpasswort und API-Key im Schlüsselbund ablegen (`elda-sit-kundenpasswort`, `elda-sit-api-key`).
+2. Kundenpasswort, API-Key und Seriennummer im Schlüsselbund ablegen (`elda-sit-kundenpasswort`, `elda-sit-api-key`,
+   `elda-sit-seriennummer`).
 3. Paket bauen: `npm run build -w @kreiseck/finanzonline-core && npm run build -w @kreiseck/elda`.
 
 Aufruf (aus `packages/elda`); `SIT_ABLAGE` und `SIT_TESTDATEN` sind für Netzbefehle Pflicht:
@@ -42,6 +41,7 @@ export SIT_TESTDATEN=<Ordner außerhalb des Repos>/testdaten.local.json
 export SIT_ABLAGE=<Ordner außerhalb des Repos>/ablage
 ELDA_SIT_KUNDENPASSWORT="$(security find-generic-password -a "$USER" -s elda-sit-kundenpasswort -w)" \
 ELDA_API_KEY="$(security find-generic-password -a "$USER" -s elda-sit-api-key -w)" \
+ELDA_SIT_SERIENNUMMER="$(security find-generic-password -a "$USER" -s elda-sit-seriennummer -w)" \
 node test/sit/sit.js pruefen
 ```
 
@@ -88,6 +88,19 @@ echte Zeit.
 - `laeufe/<Zeit>_<Fall>/` – Bestand, geschwärzte Anfrage und Antwort.
 - `ruecksendungen/` – abgeholte Rücksendungen, sobald die Antwort ausgepackt ist. Scheitert das Auspacken, liegen der
   geschwärzte Mitschnitt und – soweit am Fehler vorhanden – Datei, roher Payload und rohe Antwort in der Ablage.
+
+Wo die Seriennummer stünde und was dort steht:
+
+| Wo | Was |
+|---|---|
+| `bestand.dat` | OBUS jedes Satzes als `*******`. Für das Duplikat T02 setzt `ctx.bestandVon` die Nummer beim Lesen wieder ein – gesendet wird byte-gleich. |
+| Mitschnitte | Seriennummer, Zugangsdaten und Hash geschwärzt (`***seriennummer***`); der Payload der Anfrage fehlt (er liegt als `bestand.dat` daneben), eine inline (Base64) gelieferte Rücksendung ist maskiert. |
+| Rücksendungen | Inhalt und Dateiname mit Sternen gleicher Länge, auch im Base64-Payload einer rohen Antwort; `seriennummerMaskiert` im Laufprotokoll zählt die Treffer. |
+| Laufprotokoll, Ausgabe | Meldungen geschwärzt, Dateinamen von ELDA maskiert. |
+
+Grenzen: Gesucht wird nach der Ziffernfolge – als OBUS (sieben Stellen) und wie vergeben. Eine andere Nummer, die sie
+zufällig enthält, wird mitmaskiert; die Anzahl zeigt es. Was eine Rücksendung gepackt oder anders kodiert trägt (etwa
+Base64 im Clearing-Datensatz), erreicht die Maskierung nicht.
 
 ## Fälle ergänzen
 
