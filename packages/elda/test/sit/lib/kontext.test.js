@@ -33,6 +33,7 @@ const kontext = (ablage, jetzt = DI_0745) =>
     elda,
     ablage,
     softwareId: 'X 1.0',
+    seriennummer: '9876543',
   });
 
 test('Datum, Erstellungszeitpunkt und Dateiname folgen dem Fenster', () => {

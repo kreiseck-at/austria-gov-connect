@@ -11,7 +11,7 @@ const roh = () => JSON.parse(fs.readFileSync(BEISPIEL, 'utf8'));
 
 test('die Vorlage ist gültig und enthält alle Rollen', () => {
   const td = ladeTestdaten(BEISPIEL);
-  assert.equal(td.seriennummer, '9876543');
+  assert.equal(td.seriennummer, undefined);
   for (const r of ROLLEN) assert.ok(td.rolle(r).vsnr, r);
 });
 
@@ -57,8 +57,8 @@ test('fehlerhafte Testdaten werden mit Ort und Grund abgelehnt', () => {
   assert.throws(() => pruefeTestdaten(geb), /geburtsdatum/);
 
   const sn = roh();
-  sn.seriennummer = 'ABC';
-  assert.throws(() => pruefeTestdaten(sn), /seriennummer/);
+  sn.seriennummer = '123456';
+  assert.throws(() => pruefeTestdaten(sn), /gehört nicht in die Testdaten/);
 
   const konto = roh();
   konto.dienstgeber.A.konten[0].freieDN = 'nein';

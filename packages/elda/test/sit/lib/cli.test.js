@@ -10,6 +10,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 
 // Alle Temp-Ordner dieser Datei liegen unter einer Wurzel, die am Ende gelöscht wird.
 const WURZEL = fs.mkdtempSync(path.join(os.tmpdir(), 'sit-test-'));
@@ -22,16 +23,19 @@ const ABLAGE = fs.mkdtempSync(path.join(WURZEL, 'sit-cli-'));
 const OHNE_NETZ = path.join(ABLAGE, 'ohne-netz.js');
 fs.writeFileSync(OHNE_NETZ, "globalThis.fetch = () => { throw new Error('NETZ IM TEST'); };\n");
 
-function sit(...args) {
-  const env = {
-    PATH: process.env.PATH,
-    SIT_ABLAGE: ABLAGE,
-    SIT_TESTDATEN: path.join(__dirname, '..', 'testdaten.beispiel.json'),
-    SIT_JETZT: '2026-10-05T05:30:00Z', // Mo 07:30 Wien – gilt nur für Kommandos ohne Netz
-  };
+const UMGEBUNG = {
+  PATH: process.env.PATH,
+  SIT_ABLAGE: ABLAGE,
+  SIT_TESTDATEN: path.join(__dirname, '..', 'testdaten.beispiel.json'),
+  SIT_JETZT: '2026-10-05T05:30:00Z', // Mo 07:30 Wien – gilt nur für Kommandos ohne Netz
+  ELDA_SIT_SERIENNUMMER: '9876543',
+};
+
+function sitMit(env, ...args) {
   const r = spawnSync(process.execPath, ['--require', OHNE_NETZ, SIT, ...args], { env, encoding: 'utf8' });
   return { code: r.status, out: r.stdout, err: r.stderr };
 }
+const sit = (...args) => sitMit(UMGEBUNG, ...args);
 
 test('katalog listet alle Fälle als Markdown', () => {
   const r = sit('katalog');
@@ -67,6 +71,21 @@ test('zeigen baut den Fall und sendet nichts', () => {
   // OBUS ist die Seriennummer – sie darf nicht in der Ausgabe stehen.
   assert.match(r.out, /OBUS \*{7}/);
   assert.ok(!r.out.includes('9876543'), 'Seriennummer in der Ausgabe');
+});
+
+test('zeigen geht ohne Seriennummer, eine falsch geformte bricht ab', () => {
+  const { ELDA_SIT_SERIENNUMMER: _, ...ohne } = UMGEBUNG;
+  assert.equal(sitMit(ohne, 'zeigen', 'V01', '--fenster', 'mo-vm').code, 0);
+  const falsch = sitMit(
+    { ...UMGEBUNG, ELDA_SIT_SERIENNUMMER: '98765' },
+    'zeigen',
+    'V01',
+    '--fenster',
+    'mo-vm',
+  );
+  assert.equal(falsch.code, 1);
+  assert.match(falsch.err, /ELDA_SIT_SERIENNUMMER muss 6 oder 7 Ziffern haben/);
+  assert.ok(!falsch.err.includes('98765'));
 });
 
 test('zeigen verweigert ein Fenster, in dem der Fall nicht läuft', () => {
@@ -108,10 +127,9 @@ test('lauf lehnt doppelte Fälle im selben Aufruf ab', () => {
 });
 
 test('Netzbefehle verlangen ausdrücklich gesetzte Ablage und Testdaten', () => {
-  const env = { PATH: process.env.PATH };
-  const r = spawnSync(process.execPath, ['--require', OHNE_NETZ, SIT, 'abholen'], { env, encoding: 'utf8' });
-  assert.equal(r.status, 1);
-  assert.match(r.stderr, /Es fehlt: SIT_ABLAGE, SIT_TESTDATEN/);
+  const r = sitMit({ PATH: process.env.PATH }, 'abholen');
+  assert.equal(r.code, 1);
+  assert.match(r.err, /Es fehlt: SIT_ABLAGE, SIT_TESTDATEN/);
 });
 
 test('unbekannter Befehl und unbekannte Option', () => {
@@ -129,4 +147,72 @@ test('generalprobe baut die ganze Woche ohne Netz und ohne die echte Ablage', ()
   assert.match(r.out, /Alle Fälle bauen\./);
   assert.deepEqual(fs.readdirSync(ABLAGE).sort(), vorher);
   assert.equal(proben(), probenVorher, 'die Wegwerf-Ablage ist gelöscht');
+});
+
+test('lauf und abholen gegen einen nachgebauten SIT: die Seriennummer steht in keiner Datei und keiner Ausgabe', () => {
+  const ablage = fs.mkdtempSync(path.join(WURZEL, 'sit-attrappe-'));
+  const env = {
+    PATH: process.env.PATH,
+    SIT_ABLAGE: ablage,
+    SIT_TESTDATEN: path.join(__dirname, '..', 'testdaten.beispiel.json'),
+    ATTRAPPE_JETZT: '2026-10-05T05:30:00Z', // Mo 07:30 Wien, mo-vm offen
+    ELDA_SIT_SERIENNUMMER: '987654',
+    ELDA_SIT_KUNDENPASSWORT: 'Kennwort-nur-zum-Testen',
+    ELDA_API_KEY: 'API-KEY-NUR-ZUM-TESTEN',
+    ELDA_SIT_QUELL_IP: '192.0.2.10',
+  };
+  const ruf = (...args) =>
+    spawnSync(process.execPath, ['--require', path.join(__dirname, 'attrappe.js'), SIT, ...args], {
+      env,
+      encoding: 'utf8',
+    });
+
+  const lauf = ruf('lauf', 'Z01', 'V01', '--ja');
+  assert.equal(lauf.status, 0, lauf.stderr);
+  // 000 heißt hier auch: Die Attrappe hat die echte Seriennummer in SOAP und OBUS gesehen.
+  assert.match(lauf.stdout, /Z01 auflisten → 000/);
+  assert.match(
+    lauf.stdout,
+    /V01 senden → 000 Protokollnummer 18000001 „Bestand von \*\*\*seriennummer\*\*\* übernommen"/,
+  );
+  const abholen = ruf('abholen', '--ja');
+  assert.equal(abholen.status, 0, abholen.stderr);
+  assert.match(abholen.stdout, /18000002 {2}VR_\*{6}_18000001\.txt {2}\(Fall V01\)/);
+
+  const hash = createHash('sha512').update(env.ELDA_SIT_KUNDENPASSWORT, 'utf8').digest('hex');
+  const geheim = ['987654', env.ELDA_SIT_KUNDENPASSWORT, env.ELDA_API_KEY, hash];
+  const ausgaben = [lauf.stdout, lauf.stderr, abholen.stdout, abholen.stderr].join('\n');
+  for (const g of geheim) assert.ok(!ausgaben.includes(g), `Ausgabe enthält ${g.slice(0, 4)}…`);
+  const dateien = fs
+    .readdirSync(ablage, { recursive: true })
+    .map((d) => path.join(ablage, d))
+    .filter((d) => fs.statSync(d).isFile());
+  assert.ok(dateien.length >= 8, `nur ${dateien.length} Dateien`);
+  for (const d of dateien) {
+    const inhalt = fs.readFileSync(d, 'latin1');
+    for (const g of [...geheim, Buffer.from('987654').toString('base64')]) {
+      assert.ok(
+        !inhalt.includes(g) && !d.includes(g),
+        `${path.relative(ablage, d)} enthält ${g.slice(0, 4)}…`,
+      );
+    }
+  }
+
+  // Gespeichert ist trotzdem alles: der Bestand mit maskiertem OBUS, die Rücksendung in voller Länge.
+  const bestand = fs.readFileSync(
+    dateien.find((d) => d.endsWith('bestand.dat')),
+    'latin1',
+  );
+  for (const satz of bestand.split('\r\n')) assert.equal(satz.slice(11, 18), '*******');
+  const ruecksendung = dateien.find((d) => path.basename(path.dirname(d)) === 'ruecksendungen');
+  assert.equal(fs.readFileSync(ruecksendung, 'latin1'), 'Seriennummer ******\r\nOBUS *******\r\n');
+  const ereignisse = fs
+    .readFileSync(path.join(ablage, 'laufprotokoll.jsonl'), 'utf8')
+    .trim()
+    .split('\n')
+    .map((z) => JSON.parse(z));
+  const gesichert = ereignisse.find((e) => e.art === 'ruecksendung');
+  assert.equal(gesichert.dateiName, 'VR_******_18000001.txt');
+  assert.equal(gesichert.seriennummerMaskiert, 2);
+  assert.deepEqual(ereignisse.find((e) => e.fall === 'Z01').ruecksendungen, ['VR_******_18000001.txt']);
 });

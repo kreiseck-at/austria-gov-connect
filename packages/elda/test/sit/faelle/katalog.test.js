@@ -16,6 +16,7 @@ const { ladeTestdaten } = require('../lib/testdaten');
 const { erstelleAblage } = require('../lib/ablage');
 const { baueKontext } = require('../lib/kontext');
 const { elementWert } = require('../lib/manipulation');
+const { maskiereObus } = require('../lib/maskierung');
 const { ttmmjjjj, zrDatum, wienerZeit } = require('../lib/fenster');
 
 // Alle Temp-Ordner dieser Datei liegen unter einer Wurzel, die am Ende gelöscht wird.
@@ -24,6 +25,8 @@ after(() => fs.rmSync(WURZEL, { recursive: true, force: true }));
 
 const KATALOG = ladeKatalog(__dirname);
 const TESTDATEN = ladeTestdaten(path.join(__dirname, '..', 'testdaten.beispiel.json'));
+// Sechsstellig wie die echte – OBUS füllt sie auf sieben Stellen auf.
+const SERIENNUMMER = '765432';
 
 /** Ein Zeitpunkt mitten im jeweiligen Fenster, KW41 2026 (Sommerzeit). */
 const IM_FENSTER = {
@@ -60,9 +63,14 @@ const REFU_AUS = { V09: 'V02', V11: 'V05', V19: 'V15', V20: 'V12' };
 
 const ersterFenster = (fall) => (fall.fenster === 'jedes' ? 'mo-vm' : fall.fenster[0]);
 
-/** Baut alle Fälle in Abhängigkeitsreihenfolge und tut so, als sei jeder Sendefall angenommen worden. */
-function baueAlle() {
-  const ablage = erstelleAblage(fs.mkdtempSync(path.join(WURZEL, 'sit-faelle-')));
+const ABLAGE = erstelleAblage(fs.mkdtempSync(path.join(WURZEL, 'sit-faelle-')));
+
+/**
+ * Baut alle Fälle in Abhängigkeitsreihenfolge und tut so, als sei jeder
+ * Sendefall angenommen worden. Gespeichert wird wie in `sit.js lauf`: der
+ * Bestand mit maskiertem OBUS.
+ */
+function baueAlle(ablage) {
   const gebaut = new Map();
   let protokollnummer = 18_000_000;
   const besucht = new Set();
@@ -82,12 +90,13 @@ function baueAlle() {
       jetzt,
       elda,
       ablage,
+      seriennummer: SERIENNUMMER,
     });
     const ergebnis = fall.baue(ctx);
     gebaut.set(fall.id, { ergebnis, ctx });
     if (fall.aktion === 'senden') {
       const lauf = ablage.neuerLauf(fall.id);
-      ablage.schreibe(lauf.ordner, 'bestand.dat', ergebnis.inhalt);
+      ablage.schreibe(lauf.ordner, 'bestand.dat', maskiereObus(ergebnis.inhalt, SERIENNUMMER));
       protokollnummer += 1;
       ablage.protokolliere({
         art: 'lauf',
@@ -107,7 +116,7 @@ function baueAlle() {
   return gebaut;
 }
 
-const GEBAUT = baueAlle();
+const GEBAUT = baueAlle(ABLAGE);
 
 const saetze = (inhalt, trenner = '\r\n') => inhalt.toString('latin1').split(trenner);
 const feld = (satz, pos, laenge) => satz.slice(pos - 1, pos - 1 + laenge);
@@ -128,7 +137,7 @@ test('jeder Sendefall: drei Sätze, VR, TM, simuliertes Erstellungsdatum, Serien
     const erwartetesDatum = id === 'B12' ? ttmmjjjj(wienerZeit(ctx.jetzt).datum) : ttmmjjjj(ctx.zr);
     if (id !== 'T02') assert.equal(feld(vorlauf, 31, 8), erwartetesDatum, `${id}: EDAT`);
     for (const satz of s) {
-      assert.equal(feld(satz, 12, 7), TESTDATEN.seriennummer.padStart(7, '0'), `${id}: OBUS`);
+      assert.equal(feld(satz, 12, 7), '0765432', `${id}: OBUS`);
       assert.equal(feld(satz, 19, 2), VSTR[id] ?? '14', `${id}: VSTR`);
     }
     assert.equal(feld(meldungssatz, 1, 2), SART[id], `${id}: Satzart`);
@@ -140,12 +149,21 @@ test('B03 trennt mit LF, alle anderen mit CRLF', () => {
   assert.ok(GEBAUT.get('V01').ergebnis.inhalt.includes('\r\n'));
 });
 
-test('T02 ist byte-gleich mit V01, samt Dateiname', () => {
+test('T02 ist byte-gleich mit V01, samt Dateiname – obwohl V01 maskiert in der Ablage liegt', () => {
   const v01 = GEBAUT.get('V01').ergebnis;
   const t02 = GEBAUT.get('T02').ergebnis;
   assert.ok(t02.inhalt.equals(v01.inhalt));
   assert.equal(t02.dateiName, v01.dateiName);
   assert.deepEqual(t02.referenzwerte, []);
+});
+
+test('in der Ablage steht die Seriennummer nirgends', () => {
+  const dateien = fs.readdirSync(ABLAGE.basis, { recursive: true }).map((d) => path.join(ABLAGE.basis, d));
+  const bestaende = dateien.filter((d) => d.endsWith('bestand.dat'));
+  assert.ok(bestaende.length >= 10, `nur ${bestaende.length} Bestände gespeichert`);
+  for (const datei of dateien.filter((d) => fs.statSync(d).isFile())) {
+    assert.ok(!fs.readFileSync(datei, 'latin1').includes(SERIENNUMMER), path.relative(ABLAGE.basis, datei));
+  }
 });
 
 test('Richtigstellungen und Stornos verweisen über REFU auf die Ursprungsmeldung', () => {

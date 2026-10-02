@@ -11,11 +11,13 @@
 //      schwärzen, wird sie auch nicht gesendet.
 //   4. Senden, Antwort als Bytes lesen und geschwärzt mitschreiben – VOR dem
 //      Parsen durch den Client, damit bei einem Absturz nichts verloren ist.
+//      Eine inline (Base64) gelieferte Rücksendung wird darin vorher maskiert.
 //   5. Die Antwort byte-gleich neu verpackt zurückgeben.
 
 const { redigiereGeheimnisse } = require('../../../dist/redigieren.js');
 const { pruefeZiel } = require('./sicherheit');
 const { aktivesFenster } = require('./fenster');
+const { maskierePayloads } = require('./maskierung');
 
 /**
  * Jedes Geheimnis zusätzlich in der Form, in der seine UTF-8-Bytes nach einer
@@ -52,7 +54,9 @@ function erstelleSitFetch({
   function schreibeGeschwaerzt(name, kopf, koerper) {
     // latin1 bildet jedes Byte umkehrbar auf ein Zeichen ab: MTOM-Antworten
     // bleiben byte-treu, auch wenn Teile binär sind.
-    const roh = Buffer.concat([Buffer.from(kopf, 'latin1'), koerper]).toString('latin1');
+    let roh = Buffer.concat([Buffer.from(kopf, 'latin1'), koerper]).toString('latin1');
+    // Die Schwärzung sucht nach Wert und sähe die Seriennummer in Base64 nicht.
+    if (geheimnisse.seriennummer) roh = maskierePayloads(roh, geheimnisse.seriennummer).text;
     ablage.schreibe(lauf.ordner, name, Buffer.from(redigiereGeheimnisse(roh, schwarz), 'latin1'));
   }
 
@@ -69,10 +73,16 @@ function erstelleSitFetch({
     if (manipulation) anfrage = manipulation(anfrage);
     const methode = /<v4:(\w+)/.exec(anfrage.body)?.[1] ?? 'unbekannt';
 
+    // Der Payload ist der Bestand in Base64 – samt Seriennummer, an der die
+    // wertbasierte Schwärzung vorbeiginge. Er liegt maskiert als bestand.dat daneben.
+    const ohnePayload = anfrage.body.replace(
+      /<payload>[\s\S]*?<\/payload>/,
+      '<payload>***payload: maskierter Bestand in bestand.dat***</payload>',
+    );
     schreibeGeschwaerzt(
       `${nn}-${methode}-anfrage.txt`,
       kopfzeilen(`POST ${url}`, Object.entries(anfrage.headers)),
-      Buffer.from(anfrage.body, 'utf8'),
+      Buffer.from(ohnePayload, 'utf8'),
     );
 
     let res;

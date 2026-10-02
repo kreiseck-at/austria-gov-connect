@@ -147,3 +147,31 @@ test('ein Geheimnis mit Umlaut wird auch in der Byte-Sicht geschwärzt', async (
     .join('\n');
   assert.ok(!alles.includes('Schlüssel-Ä1'), alles);
 });
+
+test('der Payload steht nie im Mitschnitt', async () => {
+  const { ablage, lauf, gesehen, echterFetch } = aufbau();
+  const f = erstelleSitFetch({ ablage, lauf, geheimnisse: GEHEIM, echterFetch, ...offen });
+  const payload = Buffer.from('OBUS 0654321').toString('base64');
+  await f(SIT, { body: `${BODY}<payload>${payload}</payload>`, headers: {} });
+  assert.match(gesehen[0].init.body, new RegExp(payload), 'gesendet wird der echte Payload');
+  const mitschnitt = fs.readFileSync(
+    path.join(lauf.ordner, '01-ruecksendungenAuflisten-anfrage.txt'),
+    'latin1',
+  );
+  assert.ok(!mitschnitt.includes(payload));
+  assert.match(mitschnitt, /\*\*\*payload: maskierter Bestand in bestand\.dat\*\*\*/);
+});
+
+test('eine inline gelieferte Rücksendung steht im Antwort-Mitschnitt nur maskiert', async () => {
+  // Base64 im <payload> statt MTOM-Anhang: Die Seriennummer stünde kodiert im
+  // Mitschnitt, wo die Schwärzung nach Wert sie nicht findet.
+  const inhalt = Buffer.from('M3 OBUS 7654321 Ende', 'latin1');
+  const antwort = `<return><datei><payload>${inhalt.toString('base64')}</payload></datei></return>`;
+  const { ablage, lauf, echterFetch } = aufbau({ status: 200, body: antwort });
+  const f = erstelleSitFetch({ ablage, lauf, geheimnisse: GEHEIM, echterFetch, ...offen });
+  const res = await f(SIT, { body: BODY, headers: {} });
+  assert.equal(await res.text(), antwort, 'der Client bekommt die Antwort unverändert');
+  const mitschnitt = lies(lauf.ordner, '01-ruecksendungenAuflisten-antwort.txt');
+  const b64 = /<payload>([^<]*)<\/payload>/.exec(mitschnitt)[1];
+  assert.equal(Buffer.from(b64, 'base64').toString('latin1'), 'M3 OBUS ******* Ende');
+});

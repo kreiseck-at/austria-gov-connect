@@ -38,6 +38,7 @@ const { ladeTestdaten } = require('./lib/testdaten');
 const { ladeKatalog, planFuer, alsMarkdown, fehlendeVorlaeufe } = require('./lib/katalog');
 const { statusJeFall, gelaufenInWoche, enthaeltNummer, URTEILE } = require('./lib/status');
 const { baueKontext } = require('./lib/kontext');
+const { maskiereObus, maskiereText, ohneSeriennummer, formenDerSeriennummer } = require('./lib/maskierung');
 
 const VERSION = require('../../package.json').version;
 const SOFTWARE_ID = `Kreiseck @kreiseck/elda SIT-Werkzeug ${VERSION}`;
@@ -49,6 +50,22 @@ class Abbruch extends Error {}
 const abbruch = (text) => {
   throw new Abbruch(text);
 };
+
+/**
+ * Seriennummer aus dem Schlüsselbund (über ELDA_SIT_SERIENNUMMER) – sie steht in
+ * keiner Datei. Für Befehle ohne Netz genügt ein Platzhalter: Dort wird nichts
+ * gesendet, und in der Ausgabe ist OBUS ohnehin maskiert.
+ */
+const PLATZHALTER_SERIENNUMMER = '0000000';
+function seriennummer({ pflicht }) {
+  const wert = process.env.ELDA_SIT_SERIENNUMMER?.trim();
+  if (!wert) {
+    if (pflicht) abbruch('Es fehlt: ELDA_SIT_SERIENNUMMER.');
+    return PLATZHALTER_SERIENNUMMER;
+  }
+  if (!/^\d{6,7}$/.test(wert)) abbruch('ELDA_SIT_SERIENNUMMER muss 6 oder 7 Ziffern haben.');
+  return wert;
+}
 
 /** Alle Geheimnisse dieses Prozesses – auch die letzte Fehlerausgabe wird damit geschwärzt. */
 const geheimnisse = {};
@@ -124,7 +141,8 @@ function netzFenster(optionen) {
   return fenster;
 }
 
-function zugangsdaten(testdaten) {
+function zugangsdaten() {
+  const sn = seriennummer({ pflicht: true });
   const kundenpasswort = process.env.ELDA_SIT_KUNDENPASSWORT;
   const hash = process.env.ELDA_SIT_KUNDENPASSWORT_HASH?.trim();
   const apiKey = process.env.ELDA_API_KEY;
@@ -139,14 +157,17 @@ function zugangsdaten(testdaten) {
   if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0')
     abbruch('NODE_TLS_REJECT_UNAUTHORIZED=0 ist gesetzt – so nicht.');
   const kundenpasswortHash = hash || elda.hashKundenpasswort(kundenpasswort);
+  // Die Seriennummer in beiden Formen: wie vergeben (SOAP) und als OBUS (Bestand, Rücksendungen).
+  const [obus, vergeben = obus] = formenDerSeriennummer(sn);
   Object.assign(geheimnisse, {
     apiKey,
-    seriennummer: testdaten.seriennummer,
     kundenpasswortHash,
     kundenpasswort,
+    seriennummer: vergeben,
+    seriennummerObus: obus,
   });
   return {
-    seriennummer: testdaten.seriennummer,
+    seriennummer: sn,
     ...(hash ? { kundenpasswortHash: hash } : { kundenpasswort }),
     apiKey,
   };
@@ -172,7 +193,7 @@ async function eigeneQuellIp() {
 
 async function netzZugang(testdatenPfad) {
   const testdaten = ladeTestdaten(testdatenPfad);
-  const config = zugangsdaten(testdaten);
+  const config = zugangsdaten();
   pruefeQuellIp(await eigeneQuellIp(), process.env.ELDA_SIT_QUELL_IP);
   return { testdaten, config };
 }
@@ -190,16 +211,26 @@ function transferFuer(config, ablage, lauf, fenster, manipulation) {
 
 // --- Sichern ------------------------------------------------------------------
 
-function sichereRuecksendung(ablage, protokollnummer, name, bytes, mehr = {}) {
+function sichereRuecksendung(ablage, protokollnummer, name, roh, mehr = {}) {
+  const sn = seriennummer({ pflicht: true });
   const ordner = ablage.ruecksendungsOrdner();
-  const ziel = ablage.schreibe(ordner, `${protokollnummer}__${sichererName(name ?? 'ohne-namen')}`, bytes);
+  // Die Seriennummer wird mit gleicher Länge maskiert – im Inhalt und im Namen,
+  // den ELDA vergibt; alles andere bleibt byte-gleich.
+  const { bytes, anzahl } = maskiereText(roh, sn);
+  const dateiName = name == null ? name : ohneSeriennummer(name, sn);
+  const ziel = ablage.schreibe(
+    ordner,
+    `${protokollnummer}__${sichererName(dateiName ?? 'ohne-namen')}`,
+    bytes,
+  );
   ablage.protokolliere({
     art: 'ruecksendung',
     protokollnummer: String(protokollnummer),
-    dateiName: name,
+    dateiName,
     datei: path.relative(ablage.basis, ziel),
     bytes: bytes.length,
     sha256: createHash('sha256').update(bytes).digest('hex'),
+    seriennummerMaskiert: anzahl,
     ...mehr,
   });
   return ziel;
@@ -347,7 +378,16 @@ function befehlZeigen(positionen, optionen) {
     abbruch(`${fall.id} läuft nicht in ${fenster}, nur in ${fall.fenster.join(', ')}.`);
   const testdaten = ladeTestdaten(testdatenPfad);
   const ereignisse = ablage.ereignisse();
-  const ctx = baueKontext({ fenster, testdaten, ereignisse, jetzt, elda, ablage, softwareId: SOFTWARE_ID });
+  const ctx = baueKontext({
+    fenster,
+    testdaten,
+    ereignisse,
+    jetzt,
+    elda,
+    ablage,
+    softwareId: SOFTWARE_ID,
+    seriennummer: seriennummer({ pflicht: false }),
+  });
   console.log(`Trockenlauf in ${fenster} (simuliert ${zrDatum(fenster)}) – es wird nichts gesendet.`);
   const fehlt = fehlendeVorlaeufe(fall, gelaufenInWoche(ereignisse, wocheVon(jetzt)));
   if (fehlt.length)
@@ -375,6 +415,7 @@ function befehlGeneralprobe() {
   const { katalog, testdatenPfad } = grundlagen();
   const testdaten = ladeTestdaten(testdatenPfad);
   const ordner = fs.mkdtempSync(path.join(os.tmpdir(), 'sit-generalprobe-'));
+  const sn = seriennummer({ pflicht: false });
   try {
     const probe = erstelleAblage(ordner);
     const heute = wienerZeit(offlineJetzt());
@@ -403,11 +444,12 @@ function befehlGeneralprobe() {
           jetzt,
           elda,
           ablage: probe,
+          seriennummer: sn,
         });
         const e = fall.baue(ctx);
         if (fall.aktion === 'senden') {
           const lauf = probe.neuerLauf(fall.id);
-          probe.schreibe(lauf.ordner, 'bestand.dat', e.inhalt);
+          probe.schreibe(lauf.ordner, 'bestand.dat', maskiereObus(e.inhalt, sn));
           nummer += 1;
           probe.protokolliere({
             art: 'lauf',
@@ -482,6 +524,7 @@ async function befehlLauf(positionen, optionen) {
           elda,
           ablage,
           softwareId: SOFTWARE_ID,
+          seriennummer: seriennummer({ pflicht: false }),
         });
         zeigeGebaut(fall, fall.baue(ctx));
       } catch (err) {
@@ -521,6 +564,7 @@ async function befehlLauf(positionen, optionen) {
         elda,
         ablage,
         softwareId: SOFTWARE_ID,
+        seriennummer: config.seriennummer,
       });
       ergebnis = fall.baue(ctx);
     } catch (err) {
@@ -530,7 +574,10 @@ async function befehlLauf(positionen, optionen) {
     }
 
     const lauf = ablage.neuerLauf(fall.id);
-    if (ergebnis.inhalt) ablage.schreibe(lauf.ordner, 'bestand.dat', ergebnis.inhalt);
+    // Gespeichert mit maskiertem OBUS; gesendet wird der vollständige Bestand.
+    if (ergebnis.inhalt) {
+      ablage.schreibe(lauf.ordner, 'bestand.dat', maskiereObus(ergebnis.inhalt, config.seriennummer));
+    }
     const transfer = transferFuer(config, ablage, lauf, fenster, ergebnis.manipulation);
 
     for (let aufruf = 1; aufruf <= (fall.aufrufe ?? 1); aufruf += 1) {
@@ -565,7 +612,7 @@ async function befehlLauf(positionen, optionen) {
         dateiId: r.dateiId,
         eldaZeitstempel: r.eldaZeitstempel,
         anzahl: r.ruecksendungen?.length,
-        ruecksendungen: r.ruecksendungen?.map((x) => x.dateiName),
+        ruecksendungen: r.ruecksendungen?.map((x) => ohneSeriennummer(x.dateiName, config.seriennummer)),
         dateiName: ergebnis.dateiName,
         referenzwerte: ergebnis.referenzwerte,
         fehler: r.fehler,
@@ -612,7 +659,9 @@ async function befehlAbholen(optionen) {
   const zuFall = (dateiName) => laeufe.find((l) => enthaeltNummer(dateiName, l.protokollnummer))?.fall ?? '–';
   console.log(`${liste.ruecksendungen.length} Rücksendung(en) offen:`);
   for (const r of liste.ruecksendungen)
-    console.log(`  ${r.protokollnummer}  ${r.dateiName}  (Fall ${zuFall(r.dateiName)})`);
+    console.log(
+      `  ${r.protokollnummer}  ${ohneSeriennummer(r.dateiName, config.seriennummer)}  (Fall ${zuFall(r.dateiName)})`,
+    );
   if (!optionen.ja) {
     console.log('Mit --ja werden alle abgeholt – auf der SIT gehört die Outbox nur uns.');
     return;

@@ -8,6 +8,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { zrDatum, ttmmjjjj, simuliertesErstellt, wienerZeit, wocheVon } = require('./fenster');
+const { setzeObusEin } = require('./maskierung');
 
 /** JJMMTTHHMMSS nach Wiener Uhr – kurz genug für Referenzwerte und Dateinamen. */
 function stempelVon(jetzt) {
@@ -15,7 +16,20 @@ function stempelVon(jetzt) {
   return (w.datum.slice(2) + w.zeit).replace(/[-:]/g, '');
 }
 
-function baueKontext({ fenster, testdaten, ereignisse, jetzt = new Date(), elda, ablage, softwareId }) {
+/**
+ * @param a.seriennummer Seriennummer zum Datensammelsystem (OBUS) – aus dem
+ *   Schlüsselbund, nie aus einer Datei. Ohne sie lässt sich kein Bestand bauen.
+ */
+function baueKontext({
+  fenster,
+  testdaten,
+  ereignisse,
+  jetzt = new Date(),
+  elda,
+  ablage,
+  softwareId,
+  seriennummer,
+}) {
   const zr = zrDatum(fenster);
   const woche = wocheVon(jetzt);
   const stempel = stempelVon(jetzt);
@@ -69,13 +83,15 @@ function baueKontext({ fenster, testdaten, ereignisse, jetzt = new Date(), elda,
     bestandVon(fallId) {
       const lauf = letzterErfolg(fallId);
       const datei = path.join(ablage.basis, 'laeufe', lauf.ordner, 'bestand.dat');
-      return { dateiName: lauf.dateiName, inhalt: fs.readFileSync(datei) };
+      // Gespeichert ist der Bestand mit maskiertem OBUS – für ein Duplikat wieder byte-gleich machen.
+      return { dateiName: lauf.dateiName, inhalt: setzeObusEin(fs.readFileSync(datei), seriennummer) };
     },
 
     bestandOptionen({ dg, traeger, testdaten: alsTest = true, erstellt: anderer } = {}) {
+      if (!seriennummer) throw new Error('Seriennummer fehlt – ELDA_SIT_SERIENNUMMER setzen.');
       datentraeger += 1;
       return {
-        seriennummer: testdaten.seriennummer,
+        seriennummer,
         versicherungstraeger: traeger,
         datentraegernummer: String(datentraeger).padStart(6, '0'),
         erstellt: anderer ?? erstellt,

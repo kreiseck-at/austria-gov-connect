@@ -28,7 +28,10 @@ const nichtLeer = (w) => typeof w === 'string' && w.trim() !== '';
 
 function pruefeTestdaten(roh) {
   verlange(roh && typeof roh === 'object', 'kein Objekt');
-  verlange(/^\d{6,7}$/.test(roh.seriennummer ?? ''), 'seriennummer muss 6 oder 7 Ziffern haben');
+  verlange(
+    roh.seriennummer === undefined,
+    'die Seriennummer gehört nicht in die Testdaten, sondern in den Schlüsselbund (ELDA_SIT_SERIENNUMMER)',
+  );
   verlange(nichtLeer(roh.kontaktMail), 'kontaktMail fehlt');
   verlange(roh.dienstgeber && Object.keys(roh.dienstgeber).length > 0, 'dienstgeber fehlen');
 
@@ -71,7 +74,6 @@ function pruefeTestdaten(roh) {
   }
 
   return Object.freeze({
-    seriennummer: roh.seriennummer,
     dienstgeber,
     rolle(name) {
       const p = roh.rollen?.[name];

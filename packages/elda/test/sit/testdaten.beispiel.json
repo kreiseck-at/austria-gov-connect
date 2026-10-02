@@ -1,22 +1,47 @@
 {
   "_hinweis": "Vorlage mit erfundenen Werten. Die echten Testdaten der SIT-Plattform gehören nur in testdaten.local.json (gitignoriert). Der Vorlaufsatz nennt die übermittelnde Stelle – hier den jeweiligen Dienstgeber, wie kasseneck es in der Produktion macht.",
-  "seriennummer": "9876543",
   "kontaktMail": "test@example.at",
   "dienstgeber": {
     "A": {
       "name": "Musterbetrieb A",
-      "anschrift": { "kfz": "A", "plz": "1010", "ort": "Wien", "strasse": "Musterstraße 1" },
+      "anschrift": {
+        "kfz": "A",
+        "plz": "1010",
+        "ort": "Wien",
+        "strasse": "Musterstraße 1"
+      },
       "konten": [
-        { "traeger": "14", "bknr": "12345678", "freieDN": false },
-        { "traeger": "15", "bknr": "1234567", "freieDN": false }
+        {
+          "traeger": "14",
+          "bknr": "12345678",
+          "freieDN": false
+        },
+        {
+          "traeger": "15",
+          "bknr": "1234567",
+          "freieDN": false
+        }
       ]
     },
     "B": {
       "name": "Musterbetrieb B",
-      "anschrift": { "kfz": "A", "plz": "8010", "ort": "Graz", "strasse": "Musterplatz 2" },
+      "anschrift": {
+        "kfz": "A",
+        "plz": "8010",
+        "ort": "Graz",
+        "strasse": "Musterplatz 2"
+      },
       "konten": [
-        { "traeger": "15", "bknr": "2345678", "freieDN": false },
-        { "traeger": "15", "bknr": "3456789", "freieDN": true }
+        {
+          "traeger": "15",
+          "bknr": "2345678",
+          "freieDN": false
+        },
+        {
+          "traeger": "15",
+          "bknr": "3456789",
+          "freieDN": true
+        }
       ]
     }
   },
