@@ -82,6 +82,16 @@ test('Schwärzung findet ein Geheimnis auch in XML-escapter Form', () => {
   );
 });
 
+test('Schwärzung ersetzt längere Geheimnisse zuerst – ein kürzeres darin zerstückelt sie nicht', () => {
+  // Steht die Seriennummer zufällig im Hash, darf ihre Ersetzung den Hash nicht
+  // in Bruchstücke zerlegen, die dann keiner mehr findet.
+  const lang = 'ab1234cd';
+  const text = `<h>${lang}</h><s>1234</s>`;
+  const erwartet = '<h>***hash***</h><s>***seriennummer***</s>';
+  assert.equal(redigiereGeheimnisse(text, { seriennummer: '1234', hash: lang }), erwartet);
+  assert.equal(redigiereGeheimnisse(text, { hash: lang, seriennummer: '1234' }), erwartet);
+});
+
 test('Schwärzung übergeht leere und fehlende Werte, statt alles zu ersetzen', () => {
   const text = '<a>x</a>';
   assert.equal(redigiereGeheimnisse(text, { apiKey: '', kundenpasswortHash: undefined }), text);

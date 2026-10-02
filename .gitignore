@@ -11,3 +11,8 @@ test-dist/
 # Mitschnitte der Live-Checks: echte Requests und Antworten, also Zugangsdaten
 # und personenbezogene Daten. Gehören nie ins Repository.
 packages/*/test/live/mitschnitt/
+
+# SIT-Werkzeug: echte Testdaten der SIT-Plattform und die Ablage der Läufe
+# (Mitschnitte, Bestände, Rücksendungen). Gehören nie ins Repository.
+packages/*/test/sit/ablage/
+packages/*/test/sit/*.local.json

@@ -1,0 +1,113 @@
+{
+  "_hinweis": "Vorlage mit erfundenen Werten. Die echten Testdaten der SIT-Plattform gehören nur in testdaten.local.json (gitignoriert). Der Vorlaufsatz nennt die übermittelnde Stelle – hier den jeweiligen Dienstgeber, wie kasseneck es in der Produktion macht.",
+  "kontaktMail": "test@example.at",
+  "dienstgeber": {
+    "A": {
+      "name": "Musterbetrieb A",
+      "anschrift": {
+        "kfz": "A",
+        "plz": "1010",
+        "ort": "Wien",
+        "strasse": "Musterstraße 1"
+      },
+      "konten": [
+        {
+          "traeger": "14",
+          "bknr": "12345678",
+          "freieDN": false
+        },
+        {
+          "traeger": "15",
+          "bknr": "1234567",
+          "freieDN": false
+        }
+      ]
+    },
+    "B": {
+      "name": "Musterbetrieb B",
+      "anschrift": {
+        "kfz": "A",
+        "plz": "8010",
+        "ort": "Graz",
+        "strasse": "Musterplatz 2"
+      },
+      "konten": [
+        {
+          "traeger": "15",
+          "bknr": "2345678",
+          "freieDN": false
+        },
+        {
+          "traeger": "15",
+          "bknr": "3456789",
+          "freieDN": true
+        }
+      ]
+    }
+  },
+  "rollen": {
+    "arbeiter": {
+      "familienname": "Muster",
+      "vorname": "Max",
+      "geburtsdatum": "01011980",
+      "geschlecht": "m",
+      "vsnr": "1234010180"
+    },
+    "angestellte": {
+      "familienname": "Muster",
+      "vorname": "Maria",
+      "geburtsdatum": "02021985",
+      "geschlecht": "w",
+      "vsnr": "2345020285"
+    },
+    "arbeiterlehrling": {
+      "familienname": "Muster",
+      "vorname": "Lukas",
+      "geburtsdatum": "03032005",
+      "geschlecht": "m",
+      "vsnr": "3456030305"
+    },
+    "angestelltenlehrling": {
+      "familienname": "Muster",
+      "vorname": "Lea",
+      "geburtsdatum": "04042005",
+      "geschlecht": "w",
+      "vsnr": "4567040405"
+    },
+    "geringfuegig": {
+      "familienname": "Muster",
+      "vorname": "Gerda",
+      "geburtsdatum": "05051990",
+      "geschlecht": "w",
+      "vsnr": "5678050590"
+    },
+    "freier_dn": {
+      "familienname": "Muster",
+      "vorname": "Felix",
+      "geburtsdatum": "06061975",
+      "geschlecht": "m",
+      "vsnr": "6789060675"
+    },
+    "reserve_1": {
+      "familienname": "Muster",
+      "vorname": "Rita",
+      "geburtsdatum": "07071970",
+      "geschlecht": "w",
+      "vsnr": "7890070770"
+    },
+    "reserve_2": {
+      "familienname": "Muster",
+      "vorname": "Rudi",
+      "geburtsdatum": "08081965",
+      "geschlecht": "m",
+      "vsnr": "8901080865"
+    },
+    "reserve_3": {
+      "familienname": "Muster",
+      "vorname": "Rosa",
+      "geburtsdatum": "09091960",
+      "geschlecht": "w",
+      "vsnr": "9012090960"
+    }
+  }
+}
