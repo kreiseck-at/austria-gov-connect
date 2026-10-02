@@ -36,12 +36,16 @@ export function redigiereGeheimnisse(
 ): string {
   const formen = (wert: string): string[] => [...new Set([wert, escapeXmlText(wert)])];
 
+  // Längste Form zuerst: Steckt ein kurzes Geheimnis (etwa die Seriennummer)
+  // zufällig in einem langen (etwa dem Hash), zerlegte seine Ersetzung das lange
+  // in Bruchstücke, die danach niemand mehr findet – auch die Prüfung unten nicht.
+  const ersetzungen = Object.entries(geheimnisse)
+    .flatMap(([name, wert]) => (wert ? formen(wert).map((form) => ({ name, form })) : []))
+    .sort((a, b) => b.form.length - a.form.length);
+
   let out = text;
-  for (const [name, wert] of Object.entries(geheimnisse)) {
-    if (!wert) continue;
-    for (const form of formen(wert)) {
-      out = out.split(form).join(`***${name}***`);
-    }
+  for (const { name, form } of ersetzungen) {
+    out = out.split(form).join(`***${name}***`);
   }
 
   for (const [name, wert] of Object.entries(geheimnisse)) {
