@@ -35,8 +35,8 @@ Zwei Annahmen waren dabei falsch und sind korrigiert:
   XML-Parser mit „Unterminated element(s) in XML" abbrechen.
 
 **Seit 05.08.2026 ist der gesamte Weg live verifiziert** — eine echte
-monatliche Beitragsgrundlagenmeldung wurde von der ÖGK übernommen (Protokoll
-18395850, `status: uebernommen`, 7 von 7 Sätzen). Vier Anläufe waren nötig; alle
+monatliche Beitragsgrundlagenmeldung wurde von der ÖGK übernommen (`status: uebernommen`,
+7 von 7 Sätzen). Vier Anläufe waren nötig; alle
 drei Abweisungen kamen als Status `403` mit `nicht_uebernommen` und haben
 **nichts gebucht**. Beanstandet war nie der Inhalt, sondern immer der Umschlag:
 
