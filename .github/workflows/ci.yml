@@ -35,6 +35,8 @@ jobs:
           npm test -w @kreiseck/uid
           npm test -w @kreiseck/finanzonline
           npm test -w @kreiseck/elda
+      - name: SIT-Werkzeug (ohne Netz)
+        run: npm run test:sit -w @kreiseck/elda
 
   lint:
     name: Lint & Format

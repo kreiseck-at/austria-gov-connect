@@ -45,6 +45,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "tsc -p tsconfig.test.json && node --test $(find test-dist -name '*.test.js')",
     "test:live": "npm run build && node test/live/live-check.js",
+    "test:sit": "node --test test/sit/lib/*.test.js test/sit/faelle/*.test.js",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
