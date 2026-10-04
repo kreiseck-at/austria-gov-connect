@@ -130,12 +130,12 @@ test('wiederholbar folgt istWiederholbar — ein interner Fehler bleibt einen Ve
 test('vorgangKlasse trennt Ausfall und Außerbetriebnahme, obwohl beide im ausfall_se-Vorgang stecken', () => {
   const ausfall: Vorgang = {
     art: 'ausfall_se',
-    zertifikatsseriennummer: '1B9066BE',
+    zertifikatsseriennummer: '3C7A91D2',
     ausfall: { begruendung: 2, beginn: new Date('2026-01-01T00:00:00Z') },
   };
   const abn: Vorgang = {
     art: 'ausfall_se',
-    zertifikatsseriennummer: '1B9066BE',
+    zertifikatsseriennummer: '3C7A91D2',
     ausserbetriebnahme: { begruendung: 7 },
   };
   assert.equal(vorgangKlasse(ausfall), 'ausfall');
