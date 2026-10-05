@@ -64,14 +64,18 @@ function ersetzeFormen(text, seriennummer) {
   return { text, anzahl };
 }
 
-const PAYLOAD = /(<(?:[\w.-]+:)?payload>)([^<]*)(<\/(?:[\w.-]+:)?payload>)/g;
+// Base64 steckt an zwei Stellen: im <payload> einer Rücksendung und in der
+// `requestId:` einer Fehlerantwort (<messages>), die UUID, Seriennummer und
+// eine Zahl trägt.
+const PAYLOAD = /(<(?:[\w.-]+:)?payload>|requestId:)([^<]*)(<\/(?:[\w.-]+:)?payload>|(?=<))/g;
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
 /**
  * Liefert ELDA eine Rücksendung inline statt als MTOM-Anhang, steht sie als
- * Base64 im `<payload>` – dort fände sie keine Suche im Klartext. Der Payload
- * wird dekodiert, maskiert und wieder kodiert; die Länge des Inhalts bleibt
- * gleich. Was kein sauberes Base64 ist (etwa ein `cid:`-Verweis), bleibt stehen.
+ * Base64 im `<payload>`; eine Fehlerantwort trägt die Seriennummer Base64 in
+ * der `requestId`. Dort fände sie keine Suche im Klartext. Das Base64 wird
+ * dekodiert, maskiert und wieder kodiert; die Länge des Inhalts bleibt gleich.
+ * Was kein sauberes Base64 ist (etwa ein `cid:`-Verweis), bleibt stehen.
  */
 function maskierePayloads(text, seriennummer) {
   let anzahl = 0;

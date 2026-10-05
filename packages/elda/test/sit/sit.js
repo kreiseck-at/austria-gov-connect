@@ -623,6 +623,13 @@ async function befehlLauf(positionen, optionen) {
         `${r.statusCode}${r.protokollnummer ? ` Protokollnummer ${r.protokollnummer}` : ''}${r.meldung ? ` „${schwaerze(r.meldung)}"` : ''}`;
       console.log(`${fall.id} ${fall.aktion}${fall.aufrufe > 1 ? ` (${aufruf})` : ''} → ${text}`);
       if (lauf.http?.wartung) abbruch('SIT in Wartung (HTTP 403 „Wartung") – Lauf beendet.');
+      // Bekannter ELDA-Fehler auf der SIT (lswh, 05.10.2026): Auflisten bei leerer
+      // Outbox liefert 500. Kein Zugangsproblem – Senden funktioniert trotzdem.
+      if (fall.aktion === 'auflisten' && r.statusCode === '500') {
+        console.log(
+          '  Hinweis: 500 beim Auflisten = leere Outbox (SIT-Fehler, Befund B004), kein Zugangsfehler.',
+        );
+      }
     }
   }
   console.log(

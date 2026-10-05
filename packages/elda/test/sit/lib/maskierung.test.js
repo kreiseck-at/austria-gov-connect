@@ -128,3 +128,19 @@ test('maskiereText erreicht auch Base64 im <payload> einer rohen Antwort', () =>
 test('unbrauchbare Seriennummer ist ein Fehler', () => {
   assert.throws(() => maskiereObus(bestand(), '12'), /6 oder 7 Ziffern/);
 });
+
+test('maskierePayloads: auch die Base64-requestId in <messages> wird dekodiert und maskiert', () => {
+  // ELDA antwortet bei Fehlern mit `requestId:<base64>` – darin stehen UUID, Seriennummer und eine Zahl.
+  const roh = `11111111-2222-3333-4444-555555555555,${SERIENNUMMER},12501`;
+  const xml = `<serviceResult><messages>Interner Verarbeitungsfehler.</messages><messages>requestId:${Buffer.from(roh).toString('base64')}</messages><statusCode>500</statusCode></serviceResult>`;
+  const { text, anzahl } = maskierePayloads(xml, SERIENNUMMER);
+  assert.equal(anzahl, 1);
+  const b64 = /requestId:([^<]*)</.exec(text)[1];
+  assert.equal(
+    Buffer.from(b64, 'base64').toString('latin1'),
+    `11111111-2222-3333-4444-555555555555,******,12501`,
+  );
+  assert.ok(!text.includes(SERIENNUMMER));
+  const { bytes } = maskiereText(Buffer.from(xml, 'latin1'), SERIENNUMMER);
+  assert.ok(!bytes.toString('latin1').includes(Buffer.from(roh).toString('base64')));
+});
