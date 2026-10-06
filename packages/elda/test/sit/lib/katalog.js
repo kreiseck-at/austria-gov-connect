@@ -52,6 +52,8 @@ function validiereFall(fall) {
     fehler('aufrufe muss 1, 2 oder 3 sein');
   }
   if (fall.rang !== undefined && !Number.isInteger(fall.rang)) fehler('rang muss eine ganze Zahl sein');
+  if (fall.braucht !== undefined && fall.braucht !== 'kasseneck')
+    fehler(`braucht unbekannt: ${fall.braucht}`);
 }
 
 /** Vorläufe, die in dieser Woche noch nicht erfolgreich gelaufen sind. */

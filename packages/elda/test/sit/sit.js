@@ -38,6 +38,7 @@ const { ladeTestdaten } = require('./lib/testdaten');
 const { ladeKatalog, planFuer, alsMarkdown, fehlendeVorlaeufe } = require('./lib/katalog');
 const { statusJeFall, gelaufenInWoche, enthaeltNummer, URTEILE } = require('./lib/status');
 const { baueKontext } = require('./lib/kontext');
+const { verfuegbar: kasseneckVerfuegbar } = require('./lib/kasseneck');
 const { maskiereObus, maskiereText, ohneSeriennummer, formenDerSeriennummer } = require('./lib/maskierung');
 
 const VERSION = require('../../package.json').version;
@@ -434,6 +435,12 @@ function befehlGeneralprobe() {
       fertig.add(fall.id);
       fall.abhaengig.forEach((id) => bau(nachId.get(id)));
       if (fall.aktion === 'beobachten') return;
+      if (fall.braucht === 'kasseneck' && !kasseneckVerfuegbar()) {
+        console.log(
+          `übersprungen ${fall.id}: braucht KASSENECK_PFAD (kasseneck-Checkout mit functions-lohn)`,
+        );
+        return;
+      }
       const fenster = fall.fenster === 'jedes' ? 'mo-vm' : fall.fenster[0];
       const jetzt = zeitpunkt(fenster);
       try {

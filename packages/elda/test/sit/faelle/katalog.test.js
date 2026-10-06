@@ -16,6 +16,7 @@ const { ladeTestdaten } = require('../lib/testdaten');
 const { erstelleAblage } = require('../lib/ablage');
 const { baueKontext } = require('../lib/kontext');
 const { elementWert } = require('../lib/manipulation');
+const { verfuegbar } = require('../lib/kasseneck');
 const { maskiereObus } = require('../lib/maskierung');
 const { ttmmjjjj, zrDatum, wienerZeit } = require('../lib/fenster');
 
@@ -51,6 +52,7 @@ const SART = {
   V12: 'M4',
   V13: 'M4',
   V15: 'M4',
+  V16: 'M4',
   V19: 'M9',
   V20: 'S4',
   B03: 'M3',
@@ -81,6 +83,8 @@ function baueAlle(ablage) {
     besucht.add(fall.id);
     for (const id of fall.abhaengig) bau(nachId.get(id));
     if (fall.aktion === 'beobachten') return;
+    // Die mBGM-Fälle rechnen mit kasseneck; ohne Checkout (CI) bauen sie nicht.
+    if (fall.braucht === 'kasseneck' && !verfuegbar()) return;
     const fenster = ersterFenster(fall);
     const jetzt = IM_FENSTER[fenster];
     const ctx = baueKontext({
@@ -123,12 +127,16 @@ const feld = (satz, pos, laenge) => satz.slice(pos - 1, pos - 1 + laenge);
 
 test('der Katalog lädt und jeder Fall mit baue ist gebaut worden', () => {
   assert.ok(KATALOG.length >= 25);
-  for (const f of KATALOG.filter((x) => x.aktion !== 'beobachten')) assert.ok(GEBAUT.has(f.id), f.id);
+  for (const f of KATALOG.filter(
+    (x) => x.aktion !== 'beobachten' && (x.braucht !== 'kasseneck' || verfuegbar()),
+  )) {
+    assert.ok(GEBAUT.has(f.id), f.id);
+  }
 });
 
 test('jeder Sendefall: drei Sätze, VR, TM, simuliertes Erstellungsdatum, Seriennummer, Träger, Satzart', () => {
   for (const [id, { ergebnis, ctx }] of GEBAUT) {
-    if (!Buffer.isBuffer(ergebnis.inhalt)) continue;
+    if (!Buffer.isBuffer(ergebnis.inhalt) || id.startsWith('M')) continue;
     const s = saetze(ergebnis.inhalt, id === 'B03' ? '\n' : '\r\n');
     assert.equal(s.length, 3, `${id}: Vorlauf, Meldung, Schluss`);
     const [vorlauf, meldungssatz] = s;
@@ -219,3 +227,20 @@ test('Z-Fälle verändern genau das gemeinte Element', () => {
 test('T14 fragt eine Protokollnummer ab, die es nicht gibt', () => {
   assert.deepEqual(GEBAUT.get('T14').ergebnis, { protokollnummer: '1' });
 });
+
+test(
+  'mBGM-Fälle: Bestand MB, TM, simuliertes Datum, Seriennummer, ein Paket je Konto',
+  { skip: !verfuegbar() && 'braucht KASSENECK_PFAD' },
+  () => {
+    for (const id of ['M03', 'M13', 'M14']) {
+      const { ergebnis, ctx } = GEBAUT.get(id);
+      const s = saetze(ergebnis.inhalt);
+      const [vorlauf] = s;
+      assert.equal(feld(vorlauf, 21, 2), 'TM', `${id}: PROJ`);
+      assert.equal(feld(vorlauf, 23, 2), 'MB', `${id}: BEST`);
+      assert.equal(feld(vorlauf, 31, 8), ttmmjjjj(ctx.zr), `${id}: EDAT`);
+      for (const satz of s) assert.equal(feld(satz, 12, 7), '0765432', `${id}: OBUS`);
+      assert.ok(s.length > 3, `${id}: Vorlauf, Paket, Schluss`);
+    }
+  },
+);
