@@ -1,5 +1,7 @@
 'use strict';
 
+const { kasseneck } = require('./kasseneck');
+
 // Bausteine für die Fälle der Versichertenmeldung: ein Satz für eine Rolle bei
 // einem Dienstgeberkonto, als fertiger Bestand. Die Fachprüfung macht das
 // Paket – lehnt ein Builder einen Fall ab, ist das ein Befund über unsere
@@ -38,9 +40,77 @@ function meldung(ctx, { fall, art, rolle, dg, traeger, freieDN = false, felder, 
   };
 }
 
+/**
+ * Ein mBGM-Paket für EIN Beitragskonto und EINEN Beitragszeitraum, gerechnet
+ * mit der Lohnlogik von kasseneck (Abrechnung → `baueMeldung`), gebaut und
+ * geprüft mit diesem Paket. Ein einziger Prüfbefund (`pruefeAbfolge`,
+ * `pruefeMbgmPaket`) bricht ab – gesendet wird nur, was kasseneck auch senden
+ * würde. Das Paket muss alle im Monat Beschäftigten des Kontos enthalten.
+ *
+ * @param a.monat Beitragszeitraum als JJJJ-MM
+ * @param a.bundesland für die Abrechnung (Dienstgeberabgaben)
+ * @param a.beschaeftigte [{ rolle, mitarbeiter }] – `mitarbeiter` in der
+ *   Eingabeform von kasseneck (dienstnehmerGruppe, eintritt, wochenstunden, …);
+ *   Name und Versicherungsnummer kommen aus den Testdaten der Rolle.
+ */
+function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, optionen = {} }) {
+  const k = kasseneck();
+  const parameter = k.ladeParameter(Number(monat.slice(0, 4)));
+  const konto = ctx.konto(dg, { traeger });
+  const referenzwerte = [];
+  const eintraege = beschaeftigte.map(({ rolle, mitarbeiter }, i) => {
+    const person = ctx.rolle(rolle);
+    const abrechnung = k.erstelleAbrechnung({
+      mitarbeiter: { id: rolle, austritt: null, salaryType: 'monthly', ...mitarbeiter },
+      monat,
+      parameter,
+      bundesland,
+      sonderzahlungKontext: null,
+    });
+    if (abrechnung.meta?.fehler) {
+      throw new Error(
+        `kasseneck rechnet ${rolle} für ${monat} nicht: ${JSON.stringify(abrechnung.meta.fehler)}`,
+      );
+    }
+    const refw = ctx.referenzwert(`${fall}-${i + 1}`);
+    referenzwerte.push(refw);
+    return k.mbgm.baueMeldung({
+      abrechnung,
+      mitarbeiter: {
+        versicherungsnummer: person.vsnr,
+        familienname: person.familienname,
+        vorname: person.vorname,
+        lehrlingsArt: mitarbeiter.lehrlingsArt,
+      },
+      referenzwert: refw,
+    });
+  });
+  const paketref = ctx.referenzwert(fall);
+  const saetze = ctx.elda.erstelleMbgmPaket(
+    eintraege,
+    k.mbgm.bauePaketOptionen({
+      elda: { beitragskontonummer: konto.bknr },
+      dienstgebername: ctx.dienstgeber(dg).name,
+      beitragszeitraum: `${monat.slice(5, 7)}${monat.slice(0, 4)}`,
+      paketreferenzwert: paketref,
+      // Die Testbetriebe der SIT sind Selbstabrechner (Stammdaten-Basispaket).
+      abrechnungsartFuer: () => 'selbstabrechnung',
+    }),
+  );
+  const befunde = [...ctx.elda.pruefeAbfolge(saetze), ...ctx.elda.pruefeMbgmPaket(saetze)];
+  if (befunde.length > 0) {
+    throw new Error(`mBGM-Paket ${fall} hat Befunde: ${JSON.stringify(befunde).slice(0, 500)}`);
+  }
+  return {
+    inhalt: ctx.elda.erstelleMbgmBestand(saetze, ctx.bestandOptionen({ dg, traeger, ...optionen })),
+    dateiName: ctx.dateiName(fall),
+    referenzwerte: [paketref, ...referenzwerte],
+  };
+}
+
 /** Satztrenner CRLF → LF, sonst byte-gleich. */
 function mitLf(inhalt) {
   return Buffer.from(inhalt.toString('latin1').replace(/\r\n/g, '\n'), 'latin1');
 }
 
-module.exports = { meldung, mitLf };
+module.exports = { meldung, mbgmPaket, mitLf };

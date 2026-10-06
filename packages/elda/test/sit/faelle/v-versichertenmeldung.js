@@ -262,6 +262,29 @@ module.exports = [
     },
   }),
   fall({
+    id: 'V16',
+    titel: 'Abmeldung Lehrling einvernehmlich nach mBGM mit BV (M4)',
+    zweck:
+      'Prüft die Lehre aus V15/VW1942: dieselbe Person, aber erst nachdem M03 die BV-Zeit ' +
+      'gemeldet hat. Abmeldegrund 03 (einvernehmliche Lösung), Ende am Vortag des simulierten Datums.',
+    quelle: 'E.29.2 (M4), D.22; SIT-Befund B008',
+    erwartung: 'übernommen und in der Sammelverarbeitung verarbeitet (kein VW1942)',
+    fenster: ['mi-vm'],
+    abhaengig: ['M03'],
+    rang: 25,
+    baue: (ctx) => {
+      const ende = d(ctx, plusTage(ctx.zr, -1));
+      return meldung(ctx, {
+        fall: 'V16',
+        art: 'abmeldung',
+        rolle: 'arbeiterlehrling',
+        dg: 'A',
+        traeger: '14',
+        felder: { GERF: 'N', ADAT: ende, EBSV: ende, AGRD: '03', BVEN: ende },
+      });
+    },
+  }),
+  fall({
     id: 'V19',
     titel: 'Richtigstellung Abmeldung: Abmeldegrund 30 → 34 (M9)',
     zweck: 'Richtigstellung einer Abmeldung über REFU, Datum unverändert.',
