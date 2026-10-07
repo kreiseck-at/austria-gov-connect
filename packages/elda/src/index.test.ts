@@ -183,6 +183,8 @@ test('index exportiert den Lohnzettel Finanz (L16)', () => {
     'pruefeLohnzettel',
     'jahressteuerNachRechenblatt2026',
     'kindfeld',
+    'vsnrPrueffzifferGueltig',
+    'steuernummerPrueffzifferGueltig',
   ]) {
     assert.equal(typeof (elda as Record<string, unknown>)[name], 'function', name);
   }
@@ -190,4 +192,8 @@ test('index exportiert den Lohnzettel Finanz (L16)', () => {
   assert.equal(elda.VSTR_LOHNZETTEL, '94');
   assert.deepEqual(Object.keys(elda.LOHNZETTELVERSION), ['28', '29']);
   assert.ok(elda.L16_PRUEFKATALOG.has('F7004'));
+  assert.ok(elda.L16_OFFEN.F0200);
+  for (const intern of ['VORZEICHEN_KATALOG', 'NUMERISCH_KATALOG']) {
+    assert.equal((elda as Record<string, unknown>)[intern], undefined, `sollte intern sein: ${intern}`);
+  }
 });

@@ -1023,11 +1023,13 @@ Mitteilungssätzen (Satzart `L1`, Satzlänge 3500).
 
 **Ausdrücklich nicht umgesetzt** — ELDA prüft diese serverseitig:
 
-- Die **Prüfziffer der Versicherungsnummer** — das Verfahren steht in keiner
-  der verfügbaren Quellen. Geprüft wird nur die Stellenfolge `LLLPTTMMJJ`
-  aus Kapitel D.6 (siehe `F7020` oben); die vierte Stelle bleibt
-  ungerechnet. Sie zu raten wäre schlimmer als sie wegzulassen: Eine falsch
-  berechnete Prüfziffer wiese gültige Versicherungsnummern ab.
+- Die **Prüfziffer der Versicherungsnummer** — das DM-Org beschreibt das
+  Verfahren nicht. Geprüft wird bei der Versichertenmeldung nur die
+  Stellenfolge `LLLPTTMMJJ` aus Kapitel D.6 (siehe `F7020` oben). Das
+  Verfahren selbst steht in der Anfragebeantwortung 4690/AB XXIII. GP (siehe
+  Quellen); der Lohnzettel prüft damit (`F2001`, `vsnrPrueffzifferGueltig`).
+  Die Versicherungsnummer des Beispiels in D.43 (`1234010180`), die die
+  Beispiele hier verwenden, besteht diese Prüfung übrigens nicht.
 - Die **trägerabhängige Länge der Beitragskontonummer** — im Prüfkatalog nur
   als Warnung geführt, nicht als harter Fehler.
 - Die inhaltliche **Schreibweise von Namen** (`F7036`/`F7038`) — sie verlangt
@@ -1412,7 +1414,7 @@ const uebermittlung = {
       felder: {
         REFN: 'DV-2026-0001', // je Arbeitgeber, Jahr und Dienstverhältnis eindeutig
         ARTL: '01', BELZ: '0101', ENLZ: '3112', SOZS: '3',
-        AVLN: '1234', AGBD: '010180',
+        AVLN: '1237', AGBD: '010180', // erfunden, prüfziffernrichtig
         ANAM: 'Weinzierl Mirela', AADR: 'Musterweg 1', ALKZ: 'A', APLZ: '5020', AORT: 'Salzburg',
         GESW: 'J', VOLL: 'J',
       },
@@ -1425,7 +1427,7 @@ const uebermittlung = {
   ],
 };
 
-const befunde = pruefeLohnzettel(lohnzettelSaetze(uebermittlung, new Date()), '28');
+const befunde = pruefeLohnzettel(lohnzettelSaetze(uebermittlung, new Date()), '28', { heute: new Date() });
 const datei = erstelleLohnzettelBestand(uebermittlung, bestandOptionen); // ohne versicherungstraeger
 ```
 
@@ -1472,13 +1474,31 @@ Feldnummer.
 
 **Prüfkatalog.** `pruefeLohnzettel` rechnet die Regeln des Prüfkatalogs L16
 (Finanzministerium, Version 09 vom 17.02.2026, „für Lohnzettel mit Zeitraum ab
-1.1.2026", elda.at) nach, deren Bedingung eindeutig ist — derzeit 208 von 333
-Codes, aufgelistet in `L16_GEPRUEFT` und `L16_NICHT_GEPRUEFT`. Darunter die
-Summenregeln (`F4800` KZ 230, `F6201` KZ 243, `F6401` KZ 245, `F7004` KZ 260),
-die Einschränkungen je Lohnzettelart, Höchstbeträge, die Kinderblöcke (`KA…`
-für Kind 1, `KB…` für Kind 2 usw.) und das Rechenblatt `FC 7002, 7003 für KJ
-2026`, das die Lohnsteuer gegen eine „Jahressteuer nach Tarif" hält
-(`jahressteuerNachRechenblatt2026`, getestet mit dem Beispiel des Blatts).
+1.1.2026", elda.at) nach — derzeit **327 von 333 Codes**, aufgelistet in
+`L16_GEPRUEFT`; die übrigen sechs stehen samt Begründung in `L16_OFFEN`.
+Darunter:
+
+- die Format-, Vorzeichen- und Wertregeln auf dem rohen Satz („Unzulässiges
+  Vorzeichen", „unzulässiger Wert", Datum, Uhrzeit, `TTMM`) — der Bau stellt
+  sie schon sicher, geprüft werden sie trotzdem, damit ein anders
+  zusammengestellter Satz denselben Code bekommt wie bei ELDA. Wo der Katalog
+  ein Vorzeichen anders fasst als die Feldtabelle, gilt der Katalog: Er lässt
+  etwa bei KZ 215 auch „-" zu, bei den insgesamt einbehaltenen Beiträgen
+  (`VIEB`) dagegen nur „+" (`F4100`);
+- Namen und Anschrift gegen den Zeichenvorrat des Zeichensatz-Dokuments
+  (`F2100`, `F2300`–`F2600`, `KA00`, `KA05`);
+- die **Prüfziffern** der Versicherungsnummer (`F2001`, `KA20`;
+  `vsnrPrueffzifferGueltig`) und der Steuernummer (`F9991`;
+  `steuernummerPrueffzifferGueltig`), Quellen unten;
+- die Summenregeln (`F4800` KZ 230, `F6201` KZ 243, `F6401` KZ 245, `F7004`
+  KZ 260), die Einschränkungen je Lohnzettelart, Höchstbeträge, die
+  Kinderblöcke (`KA…` für Kind 1, `KB…` für Kind 2 usw.);
+- das Rechenblatt `FC 7002, 7003 für KJ 2026`, das die Lohnsteuer gegen eine
+  „Jahressteuer nach Tarif" hält (`jahressteuerNachRechenblatt2026`, getestet
+  mit dem Beispiel des Blatts), samt `F7011`/`F7012` beim freiwilligen
+  Lohnsteuerabzug ausländischer Arbeitgeber (gemeldet zusätzlich zu
+  `F7002`/`F7003` — ob ELDA dann nur einen Code ausgibt, sagt der Katalog
+  nicht).
 
 | Befundfeld | Inhalt |
 | ---------- | ------ |
@@ -1488,13 +1508,46 @@ für Kind 1, `KB…` für Kind 2 usw.) und das Rechenblatt `FC 7002, 7003 für K
 
 Eine Legende zu Fehlerstatus und Fehlerindikation enthält der Katalog nicht;
 das DM-Org erklärt nur `G` (D.32: übernommen, aber „mit dem Fehlerstatus „G"
-gekennzeichnet"). Das Paket deutet die Buchstaben deshalb nicht. Nicht
-nachgerechnet werden unter anderem Regeln mit „auf Monate aliquotiert" (wie
-der Katalog aliquotiert, steht nicht dabei), Prüfziffern von
-Versicherungs- und Steuernummer und drei Zeilen, deren Wortlaut sich selbst
-widerspricht (`F4400`, `F6202`, `F9573`; Begründung im Code). Regeln zum
-„laufenden Jahr" rechnen mit dem Übermittlungsdatum `DTUE`. Für Version 29
-gibt es noch keinen Katalog — `pruefeLohnzettel` lehnt sie ab.
+gekennzeichnet"). Das Paket deutet die Buchstaben deshalb nicht.
+
+**„Auf Monate aliquotiert".** Sieben Regeln (`F4802`, `F5205`, `F5402`,
+`F7402`, `F8202`, `F9121`, `F7006`) aliquotieren eine Grenze „entsprechend Feld
+15 und 16", ohne zu sagen, wie — der Katalog 2025 (Version 10) sagt es auch
+nicht. Geprüft wird deshalb, was unter **jeder** naheliegenden Lesart gilt: Bei
+einer Obergrenze zählt der größte Anteil (angebrochene Monate voll, oder Tage
+durch 360), bei einer Untergrenze der kleinste (nur volle Kalendermonate, oder
+Tage durch 366), bei einem Sollwert mit Toleranz der ganze Bereich dazwischen.
+Ein Befund heißt also: Die Regel schlägt an, wie immer ELDA aliquotiert. Ein
+Pendlereuro von 3.050 € im ganzen Jahr liegt über 3.000 €, aber unter 365/360
+davon — er bleibt ohne Befund. Ebenso `F7010`, dessen „Anzahl der Tage" Beginn
+und Ende ein- oder ausschließen kann.
+
+**Lesarten, die im Code begründet sind:** Das Sterbedatum (Katalog Feld 98)
+und die Aushilfskräfte (Feld 139/140) führt die Feldtabelle der Version 28 nur
+noch als Reserve (`RESE_99`, `RESE_140`/`RESE_141`); deren Regeln greifen nur,
+wenn dort etwas steht. `F3300` (Geburtsdatum des Partners) entfällt ohne
+Partnerangabe. `F3602` vergleicht den Korrekturindikator mit „K" (der Katalog
+schreibt „k"). Für `KA25` nennt das DM-Org kein Format; gemeldet wird nur, was
+weder als `TTMMJJJJ` noch als `JJJJMMTT` ein Datum ist. Die Spalte „Prfg. nur
+bei LZ-Art" führt bei `F0700` ein „-" — gelesen als „für jede Lohnzettelart".
+
+**Tag des Einlangens.** „Zukünftig" (`F0800` Übermittlungsdatum, `F9801`
+Sterbedatum) misst sich am Tag, an dem die Datei bei ELDA einlangt. Den kennt
+nur der Aufrufer: `pruefeLohnzettel(saetze, '28', { heute: new Date() })`.
+Ohne `heute` entfallen diese zwei Prüfungen. Regeln zum „laufenden Jahr"
+rechnen mit dem Übermittlungsdatum `DTUE`.
+
+**Offen** (`L16_OFFEN`) — Fragen an ELDA bzw. Fälle für den Kundentest:
+
+| Code | Frage |
+| ---- | ----- |
+| `F0200` | Die Bedingung verlangt `RADAUS` oder `OESTAT` in `CLADR`, die Feldtabelle E.14.1 lässt das Feld beim Senden leer. Setzt ELDA es vor der Prüfung selbst? |
+| `F4400` | Die Bedingung nennt Feld 40 und 42 (KZ 220 und die insgesamt einbehaltenen Beiträge), der Fehlertext „KZ 220 und KZ 225". Welche Felder gelten? |
+| `F6202` | Die Summe bei KZ 243 geht nur auf, wenn sie den Betrag für Entwicklungshelfer*innen (Feld 127) meint. Welches Feld wird verglichen? |
+| `F9573` | Bedingung „Jahr < 2024 oder > 2024", das Feld heißt aber „Mitarbeiterprämie … (2024) oder … Z 478 (ab 2025)", und `F9575` prüft Jahre nach 2024. Ist eine Mitarbeiterprämie ab 2025 zulässig? |
+| `F9160`, `KA10` | „internationales KFZ Kennzeichen" — gegen welches Verzeichnis wird geprüft? |
+
+Für Version 29 gibt es noch keinen Katalog — `pruefeLohnzettel` lehnt sie ab.
 
 **Getestet** ist der Lohnzettel bisher nur hier: Die SIT-Plattform verarbeitet
 den Bestand `LF` nicht (ÖGK, „LSWH-Test – Regelbetrieb", 10/2023), testen
@@ -1550,7 +1603,17 @@ gedacht.
   um E1–E5).
 - Prüfkatalog L16 des Finanzministeriums, „für Lohnzettel mit Zeitraum ab
   1.1.2026", Version 09 vom 17.02.2026 (elda.at, Downloads Dienstgeber), mit
-  den Blättern `FC 6201`, `FC 7002, 7003 für KJ 2026` und `Fehlertexte`.
+  den Blättern `FC 6201`, `FC 7002, 7003 für KJ 2026` und `Fehlertexte`;
+  zum Vergleich die Version 10 für Lohnzettel ab 1.1.2025.
+- Prüfziffer der Versicherungsnummer: Anfragebeantwortung 4690/AB XXIII. GP
+  des Bundesministers für Gesundheit, Familie und Jugend vom 01.09.2008
+  (parlament.gv.at), mit der Stellungnahme des Hauptverbands der
+  österreichischen Sozialversicherungsträger: Aufbau `LLL P TT MM JJ`,
+  Faktoren 3, 7, 9 und 5, 8, 4, 2, 1, 6, Prüfziffer = Summe modulo 11, „Ergibt
+  sich ein Divisionsrest von 10, so wird die nächsthöhere Laufnummer
+  verwendet."
+- Prüfziffer der Steuernummer: STUZZA, „Finanzamtszahlung in MBS", Version
+  7.0.07 vom 12.12.2016, Seite 8 (Verfahren und Beispiel 26–913572–9).
 
 **Seitenangaben.** Gegenüber der 42. Ergänzung hat die 43. Inhalt nur in
 D.5 (10-stellige ÖGK-Beitragskontonummer), D.54 (Verrechnungsgrundlage bei

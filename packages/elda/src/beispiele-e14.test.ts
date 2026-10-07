@@ -46,7 +46,7 @@ test('Rechenblatt: das Beispiel als Lohnzettel löst F7002 aus, nicht F7003', ()
   // 01.01.–07.09.2026 sind 250 Tage, soziale Stellung 4, AVAB ohne Kinder.
   const lz = {
     ...LOHNZETTEL_2026,
-    felder: { ...LOHNZETTEL_2026.felder, ENLZ: '0709', SOZS: '4', AVAB: 'J', PVLN: '1234', PGBD: '010180' },
+    felder: { ...LOHNZETTEL_2026.felder, ENLZ: '0709', SOZS: '4', AVAB: 'J', PVLN: '1237', PGBD: '010180' },
     betraege: {
       B210: 3_500_000,
       B220: 2_500_000,

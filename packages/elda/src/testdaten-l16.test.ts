@@ -1,9 +1,11 @@
 // Gemeinsame Testdaten für die Lohnzettel-Tests. Die Endung `.test.ts` hält die
 // Datei aus dem veröffentlichten Paket; Tests enthält sie keine.
 //
-// Alles erfunden: Arbeitgeber, Arbeitnehmerin und Kennungen sind die
-// Ersatzwerte der übrigen Tests (Steuernummer 91-123/4565, Versicherungsnummer
-// aus dem Beispiel in Kapitel D.43).
+// Alles erfunden: Arbeitgeber, Arbeitnehmerin und Steuernummer sind die
+// Ersatzwerte der übrigen Tests (Steuernummer 91-123/4565). Die
+// Versicherungsnummer 1237 010180 ist erfunden und prüfziffernrichtig — die
+// des Beispiels in Kapitel D.43 (1234 010180) besteht die Prüfziffer nicht
+// (`F2001`).
 
 import type { BestandOptionen } from './bestand';
 import type { Lohnzettel, LohnzettelUebermittlung } from './lohnzettel';
@@ -29,7 +31,7 @@ export const LOHNZETTEL_2026: Lohnzettel = {
     BELZ: '0101',
     ENLZ: '3112',
     SOZS: '3',
-    AVLN: '1234',
+    AVLN: '1237',
     AGBD: '010180',
     ANAM: 'Weinzierl Mirela',
     AADR: 'Musterweg 1',

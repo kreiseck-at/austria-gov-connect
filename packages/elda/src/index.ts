@@ -213,7 +213,11 @@ export {
   jahressteuerNachRechenblatt2026,
   L16_GEPRUEFT,
   L16_NICHT_GEPRUEFT,
+  L16_OFFEN,
+  vsnrPrueffzifferGueltig,
+  steuernummerPrueffzifferGueltig,
   type LohnzettelBefund,
+  type LohnzettelPruefOptionen,
 } from './pruefung-e14';
 export { L16_PRUEFKATALOG, L16_PRUEFKATALOG_QUELLE, type L16Regel } from './pruefkatalog-l16';
 export { BEST_LOHNZETTEL_FINANZ } from './bestand';

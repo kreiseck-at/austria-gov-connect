@@ -1,36 +1,62 @@
-import type { RohSatz } from './bestand';
+import { wanduhrzeit, ZEITZONE_STANDARD, type RohSatz } from './bestand';
 import { EldaError } from './errors';
 import { KINDERBLOECKE, kindfeld, VORZEICHEN_L1, type Lohnzettelversion } from './felder-e14';
 import { L16_PRUEFKATALOG, type L16Regel } from './pruefkatalog-l16';
+import { pruefeVorrat, type Feldklasse } from './zeichensatz';
 
 /**
  * Inhaltliche Prüfungen des Lohnzettels L16 nach dem Prüfkatalog des
  * Finanzministeriums (`pruefkatalog-l16.ts`, Version 09 vom 17.02.2026, „für
  * Lohnzettel mit Zeitraum ab 1.1.2026").
  *
- * **Umfang.** Nachgerechnet werden die Regeln, deren Bedingung der Katalog
- * eindeutig formuliert — Summenregeln, Plausibilitätsgrenzen, Abhängigkeiten
- * zwischen Feldern, die Lohnzettelarten-Einschränkungen und das Rechenblatt
- * `FC 7002, 7003 für KJ 2026`. {@link L16_GEPRUEFT} listet sie;
- * {@link L16_NICHT_GEPRUEFT} die übrigen Codes des Katalogs. Nicht dabei sind
- * insbesondere:
+ * **Umfang.** Nachgerechnet wird jede Regel, deren Bedingung der Katalog
+ * eindeutig formuliert oder die sich mit einer belegten Quelle eindeutig
+ * machen lässt — Format-, Vorzeichen- und Wertebereichsregeln auf dem rohen
+ * Satz, Summenregeln, Plausibilitätsgrenzen, Abhängigkeiten zwischen Feldern,
+ * die Lohnzettelarten-Einschränkungen, die Prüfziffern und das Rechenblatt
+ * `FC 7002, 7003 für KJ 2026`. {@link L16_GEPRUEFT} listet sie,
+ * {@link L16_NICHT_GEPRUEFT} den Rest; warum jeder davon offen ist, steht bei
+ * {@link L16_OFFEN}.
  *
- * - Format-, Wertebereichs- und Vorzeichenregeln („unzulässiger Wert",
- *   „Unzulässiges Vorzeichen"): Die stellt `erstelleLohnzettelBestand` beim
- *   Bau sicher.
- * - Regeln mit „auf Monate aliquotiert" (`F4802`, `F5205`, `F5402`, `F7402`,
- *   `F8202`, `F9121`) und `F7006`/`F7010`: Wie der Katalog aliquotiert, steht
- *   nicht dabei.
- * - Prüfziffern (Versicherungsnummer `F2001`/`KA20`, Steuernummer `F9991`):
- *   Die Verfahren stehen in keiner der verwendeten Quellen.
- * - `F7011`/`F7012`: ob sie `F7002`/`F7003` ersetzen oder ergänzen, sagt der
- *   Katalog nicht.
- * - `F6202`: Die Regel steht bei KZ 243, ihre Summe geht aber nur auf, wenn
- *   sie den Betrag für Entwicklungshelfer*innen (Feld 127) meint; welches Feld
- *   verglichen wird, sagt die Zeile nicht.
- * - `F9573`: siehe den Kommentar bei `F9574`.
- * - `F4400`: Bedingung („Feld 40 und Feld 42 gleich 'blank' oder 0") und
- *   Fehlertext („KZ 220 und KZ 225 gleich 0") nennen verschiedene Felder.
+ * Die Format- und Vorzeichenregeln stellt `erstelleLohnzettelBestand` schon
+ * beim Bau sicher. Geprüft werden sie hier trotzdem, damit ein von Hand oder
+ * aus einer anderen Quelle zusammengestellter Satz denselben Code bekommt, den
+ * ELDA vergeben würde. Wo der Katalog ein Vorzeichen strenger oder lockerer
+ * fasst als die Feldtabelle des DM-Org (`VORZEICHEN_L1`), gilt hier der
+ * Katalog — er ist die Prüfung, die ELDA anwendet.
+ *
+ * **Feldnummern.** Der Katalog zählt die Felder anders als das DM-Org (siehe
+ * `pruefkatalog-l16.ts`). Zugeordnet ist über die Feldbezeichnung des
+ * Katalogs; zwei Katalogfelder führt die Feldtabelle der Version 28 nur noch
+ * als Reserve: das Sterbedatum (Katalog 98 = `RESE_99`, 8 Stellen numerisch)
+ * und die Aushilfskräfte (Katalog 139/140 = `RESE_140`/`RESE_141`). Deren
+ * Regeln greifen nur, wenn dort etwas steht.
+ *
+ * **Prüfziffern.**
+ * - Versicherungsnummer (`F2001`, `KA20`): Anfragebeantwortung 4690/AB
+ *   XXIII. GP des Bundesministers für Gesundheit, Familie und Jugend vom
+ *   01.09.2008 (Stellungnahme des Hauptverbands): „Jede Stelle der Laufnummer
+ *   und des Geburtsdatums wird mit einem Faktor multipliziert", Faktoren 3, 7,
+ *   9 und 5, 8, 4, 2, 1, 6; „Die Prüfziffer P ist der Divisionsrest aus der
+ *   Summe der Produkte geteilt durch die Zahl 11. Ergibt sich ein
+ *   Divisionsrest von 10, so wird die nächsthöhere Laufnummer verwendet." Ein
+ *   Rest von 10 ist also nie gültig.
+ * - Steuernummer (`F9991`): STUZZA, „Finanzamtszahlung in MBS", Version
+ *   7.0.07 vom 12.12.2016, Seite 8 — die Ziffern an den Stellen 2, 4, 6 und 8
+ *   verdoppeln, deren Ziffernsummen und die Ziffern an den Stellen 1, 3, 5
+ *   und 7 addieren, auf die nächste Dekade ergänzen.
+ *
+ * **Aliquotierung.** Die Regeln „auf Monate aliquotiert (entsprechend Feld 15
+ * und 16)" (`F4802`, `F5205`, `F5402`, `F7402`, `F8202`, `F9121`, `F7006`)
+ * sagen nicht, wie aliquotiert wird; der Katalog 2025 (Version 10) auch
+ * nicht. Geprüft wird deshalb nur, was unter **jeder** naheliegenden Lesart
+ * gilt: Für eine Obergrenze zählt der größte Anteil (angebrochene Monate voll,
+ * oder Tage durch 360), für eine Untergrenze der kleinste (nur volle
+ * Kalendermonate, oder Tage durch 366), bei einem Sollwert mit Toleranz der
+ * ganze Bereich dazwischen. Ein Befund heißt dann: Die Regel schlägt an, wie
+ * immer ELDA aliquotiert. Grenzfälle dazwischen bleiben unentdeckt, ein
+ * falscher Befund entsteht nicht. Dasselbe gilt für `F7010`, dessen „Anzahl
+ * der Tage" Beginn und Ende ein- oder ausschließen kann.
  *
  * **Bezugsdatum.** Regeln, die vom „laufenden Jahr" oder vom „aktuellen Datum
  * bei ELDA Eingang" sprechen (`F1702`, `F1703`, `F1705`, `F1706`), rechnen hier
@@ -68,6 +94,8 @@ interface Kontext {
   info: Readonly<Record<string, string | undefined>>;
   version: Lohnzettelversion;
   artl: number;
+  /** Tag des Einlangens bei ELDA als JJJJMMTT, falls der Aufrufer ihn nennt. */
+  heute?: string;
 }
 
 function s(k: Kontext, name: string): string {
@@ -242,6 +270,262 @@ function rechenblatt(k: Kontext): { f7002: boolean; f7003: boolean } | undefined
   const summeG = summeI * 0.25 < 730 ? 730 : summeI * 0.25;
   const differenz = b(k, 'B260') / 100 - summeI;
   return { f7002: differenz < summeF, f7003: differenz > summeG };
+}
+
+/** Leer oder nur Ziffern („unzulässiger Wert" bei numerischen Feldern). */
+function numerisch(k: Kontext, name: string): boolean {
+  return /^\d*$/.test(s(k, name));
+}
+
+/** Vorzeichenfeld: leer („bei 'blank' wird "+" angenommen") oder eines der erlaubten Zeichen. */
+function vorzeichenFalsch(k: Kontext, name: string, erlaubt: readonly string[]): boolean {
+  const v = s(k, name);
+  return v !== '' && !erlaubt.includes(v);
+}
+
+/** Leer oder nur Nullen — so behandelt der Katalog unbelegte numerische Felder. */
+function leer(wert: string): boolean {
+  return /^0*$/.test(wert);
+}
+
+/**
+ * Prüfziffer der Versicherungsnummer `LLLPTTMMJJ` nach der Anfragebeantwortung
+ * 4690/AB XXIII. GP (siehe Modulkopf). Ein Divisionsrest von 10 ist nie gültig.
+ */
+export function vsnrPrueffzifferGueltig(vsnr: string): boolean {
+  if (!/^\d{10}$/.test(vsnr)) return false;
+  const z = [...vsnr].map(Number);
+  const faktoren = [3, 7, 9, 0, 5, 8, 4, 2, 1, 6];
+  const rest = faktoren.reduce((summe, f, i) => summe + f * z[i]!, 0) % 11;
+  return rest !== 10 && rest === z[3];
+}
+
+/**
+ * Prüfziffer der neunstelligen Steuernummer (Finanzamtsnummer und Steuernummer
+ * samt Prüfziffer) nach STUZZA „Finanzamtszahlung in MBS", Seite 8 (siehe
+ * Modulkopf).
+ */
+export function steuernummerPrueffzifferGueltig(steuernummer: string): boolean {
+  if (!/^\d{9}$/.test(steuernummer)) return false;
+  const z = [...steuernummer].map(Number);
+  let summe = 0;
+  for (let i = 0; i < 8; i++) {
+    if (i % 2 === 1) {
+      const doppelt = 2 * z[i]!;
+      summe += Math.floor(doppelt / 10) + (doppelt % 10);
+    } else {
+      summe += z[i]!;
+    }
+  }
+  return (10 - (summe % 10)) % 10 === z[8];
+}
+
+/** TTMMJJ mit zweistelligem Jahr: ein gültiger Kalendertag im 20. oder 21. Jahrhundert. */
+function kalendertagTtmmjj(wert: string): boolean {
+  if (!/^\d{6}$/.test(wert)) return false;
+  const jj = Number(wert.slice(4, 6));
+  return datum(wert.slice(0, 4), 1900 + jj) !== undefined || datum(wert.slice(0, 4), 2000 + jj) !== undefined;
+}
+
+/**
+ * `F2000`/`F3300`: Geburtsdatum der Versicherungsnummer. Mit einer Laufnummer
+ * über 1000 sind neben einem Kalendertag die fiktiven Monate 13 bis 16 zulässig
+ * („TT13JJJJ, TT14JJJJ, TT15JJJJ, TT16JJJJ" — der Katalog schreibt das Jahr
+ * vierstellig, das Feld hat sechs Stellen), sonst nur ein Kalendertag.
+ */
+function geburtsdatumUngueltig(laufnummer: number, ttmmjj: string): boolean {
+  if (kalendertagTtmmjj(ttmmjj)) return false;
+  if (laufnummer <= 1000 || !/^\d{6}$/.test(ttmmjj)) return true;
+  const tag = Number(ttmmjj.slice(0, 2));
+  const monat = Number(ttmmjj.slice(2, 4));
+  return !(monat >= 13 && monat <= 16 && tag >= 1 && tag <= 31);
+}
+
+/** Liegt jedes Zeichen im Vorrat der Feldklasse (Zeichensatz-Dokument)? */
+function imVorrat(text: string, klasse: Feldklasse): boolean {
+  try {
+    pruefeVorrat(text, klasse, '');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** HHMMSS als gültige Uhrzeit. */
+function uhrzeit(wert: string): boolean {
+  if (!/^\d{6}$/.test(wert)) return false;
+  return Number(wert.slice(0, 2)) <= 23 && Number(wert.slice(2, 4)) <= 59 && Number(wert.slice(4, 6)) <= 59;
+}
+
+/**
+ * Anteil des Lohnzahlungszeitraums am Jahr — als kleinster und größter Wert
+ * aller naheliegenden Lesarten von „auf Monate aliquotiert" (siehe Modulkopf).
+ */
+function anteil(k: Kontext): { min: number; max: number } | undefined {
+  const jahr = n(k, 'JALZ');
+  const von = datum(s(k, 'BELZ'), jahr);
+  const bis = datum(s(k, 'ENLZ'), jahr);
+  if (von === undefined || bis === undefined || bis < von) return undefined;
+  const dauer = Math.round((bis.getTime() - von.getTime()) / 86_400_000) + 1;
+  const angebrochen = bis.getUTCMonth() - von.getUTCMonth() + 1;
+  let voll = 0;
+  for (let m = von.getUTCMonth(); m <= bis.getUTCMonth(); m++) {
+    const erster = new Date(Date.UTC(jahr, m, 1));
+    const letzter = new Date(Date.UTC(jahr, m + 1, 0));
+    if (von <= erster && bis >= letzter) voll++;
+  }
+  return {
+    min: Math.min(voll / 12, (dauer - 1) / 366),
+    max: Math.max(angebrochen / 12, dauer / 360),
+  };
+}
+
+/** Obergrenze in Euro, aliquotiert nach der großzügigsten Lesart, in Cent. */
+function obergrenze(k: Kontext, jahresbetrag: number): number | undefined {
+  const a = anteil(k);
+  return a === undefined ? undefined : euro(jahresbetrag) * a.max;
+}
+
+/** Felder 38 bis 70 des Katalogs (Kennzahlen bis KZ 260), die `F3602` beim Storno durch Nullen verlangt. */
+const STORNO_BETRAEGE = [
+  'B215',
+  'B220',
+  'BIEB',
+  'B225',
+  'B226',
+  'B230',
+  'RESE_52',
+  'BAUS',
+  'BPEN',
+  'BEFB',
+  'BSTF',
+  'BSSB',
+  'B243',
+  'B245',
+  'BIEL',
+  'BABL',
+  'B260',
+];
+
+/**
+ * Vorzeichenregeln des Katalogs: Code, Vorzeichenfeld und die zulässigen
+ * Zeichen laut Spalte „Fehler wenn" („ungleich "+"" bzw. „ungleich "+" oder
+ * "-""). Leer gilt immer als „+".
+ */
+export const VORZEICHEN_KATALOG: Readonly<Record<string, readonly [string, readonly string[]]>> = {
+  F3500: ['V210', ['+']],
+  F3700: ['V215', ['+', '-']],
+  F3900: ['V220', ['+', '-']],
+  F4100: ['VIEB', ['+']],
+  F4300: ['V225', ['+']],
+  F4500: ['V226', ['+', '-']],
+  F4700: ['V230', ['+']],
+  F5100: ['VAUS', ['+', '-']],
+  F5300: ['VPEN', ['+', '-']],
+  F5500: ['VEFB', ['+', '-']],
+  F5700: ['VSTF', ['+', '-']],
+  F5900: ['VSSB', ['+', '-']],
+  F6100: ['V243', ['+', '-']],
+  F6300: ['V245', ['+', '-']],
+  F6500: ['VIEL', ['+', '-']],
+  F6700: ['VABL', ['+', '-']],
+  F6900: ['V260', ['+', '-']],
+  F7100: ['VSOB', ['+', '-']],
+  F7300: ['VFB1', ['+', '-']],
+  F7700: ['VFB2', ['+', '-']],
+  F7900: ['VAUF', ['+', '-']],
+  F8100: ['VFB3', ['+', '-']],
+  F8300: ['VNEB', ['+', '-']],
+  F8700: ['VPFG', ['+', '-']],
+  F8900: ['VSFB', ['+', '-']],
+  F1124: ['VAPK', ['+', '-']],
+  F9060: ['VENT', ['+', '-']],
+  F9080: ['VPRE', ['+', '-']],
+  F9110: ['VPEND', ['+', '-']],
+  F9170: ['VWBKB', ['+', '-']],
+  F9180: ['RESE_140', ['+', '-']],
+  F9220: ['VFABO', ['+', '-']],
+  F9420: ['VHOPA', ['+', '-']],
+  F9440: ['VKOUN', ['+', '-']],
+  F9460: ['VMAGB', ['+', '-']],
+  F9540: ['VTEPR', ['+', '-']],
+  F9560: ['VMAPR', ['+']],
+  F9620: ['VFSVB', ['+']],
+  F9640: ['VKAKL', ['+']],
+  F9660: ['VZUKB', ['+']],
+};
+
+/**
+ * Wertregeln des Katalogs für numerische Felder („unzulässiger Wert" bzw.
+ * „ungleich ('blank' oder numerisch)"): Code und Feld.
+ */
+export const NUMERISCH_KATALOG: Readonly<Record<string, string>> = {
+  F3600: 'B210',
+  F3800: 'B215',
+  F4000: 'B220',
+  F4200: 'BIEB',
+  F4403: 'B225',
+  F4602: 'B226',
+  F4801: 'B230',
+  F5200: 'BAUS',
+  F5400: 'BPEN',
+  F5600: 'BEFB',
+  F5800: 'BSTF',
+  F6000: 'BSSB',
+  F6200: 'B243',
+  F6400: 'B245',
+  F6600: 'BIEL',
+  F6800: 'BABL',
+  F7000: 'B260',
+  F7200: 'BSOB',
+  F7400: 'BFB1',
+  F7800: 'BFB2',
+  F8000: 'BAUF',
+  F8200: 'BFB3',
+  F8400: 'BNEB',
+  F8800: 'BPFG',
+  F9000: 'BSFB',
+  F9043: 'ANZK',
+  F1125: 'BAPK',
+  F9070: 'ENTW',
+  F9091: 'PREI',
+  F9120: 'BPEND',
+  F9171: 'WBKB',
+  F9430: 'HOPA',
+  F9450: 'KOUN',
+  F9470: 'MAGB',
+  F9550: 'TEPR',
+  F9570: 'MAPR',
+  F9580: 'STUM',
+  F9590: 'STUMJ',
+  F9621: 'FSVB',
+  F9650: 'KAKL',
+  F9670: 'ZUKB',
+  F9700: 'AKZKB',
+};
+
+/** Zulässige Werte der Art der Übermittlung (`F0700`). */
+const ARTEN_DER_UEBERMITTLUNG = ['', 'A', 'B', 'C', 'D', 'H', 'O', 'R', 'F'];
+
+/**
+ * `F1200` „ungültiger FC im LZ-Verfahren": Das Feld `FEHL` trägt „max. 5
+ * Fehlermeldungen zu je 4 Stellen" (E.14). Der Katalog sagt zu `F6201`, „in der
+ * Datenzeile würde ELDA … nur die 4-stelligen Codes liefern" — gelesen wird
+ * deshalb: Jede belegte Vierergruppe ist die Ziffernfolge eines `F`-Codes des
+ * Katalogs oder ein Kinder-Code (`K` + Block + zwei Ziffern). Beim Senden ist
+ * das Feld ohnehin leer.
+ */
+function fehlermeldungUngueltig(k: Kontext): boolean {
+  const roh = (k.w.FEHL ?? '').padEnd(20, ' ');
+  for (let i = 0; i < 20; i += 4) {
+    const gruppe = roh.slice(i, i + 4).trim();
+    if (gruppe === '') continue;
+    const kind = /^K[A-O](\d\d)$/.exec(gruppe);
+    if (kind && L16_PRUEFKATALOG.has(`KA${kind[1]}`)) continue;
+    if (/^\d{4}$/.test(gruppe) && L16_PRUEFKATALOG.has(`F${gruppe}`)) continue;
+    return true;
+  }
+  return false;
 }
 
 /** „ungleich 'blank' oder 0" bei Betragsfeldern. */
@@ -554,6 +838,144 @@ const REGELN: Readonly<Record<string, (k: Kontext) => boolean>> = {
   F9775: (k) => belegt(k, 'AGLAG') && !ja(k, 'SBK00') && !ja(k, 'SBKDW'),
   F9780: (k) => b(k, 'AGLAG') > euro(2000),
   F9781: (k) => belegt(k, 'AGLAG') && n(k, 'JALZ') < 2026,
+
+  // --- Kopf des Lohnzettels -------------------------------------------------
+  // „ungleich 'L' und Infosatz Feld 10 gleich 'LZ'" — Feld 10 des Katalogs ist ARTD.
+  F0100: (k) => s(k, 'FSART') !== 'L' && (k.info.ARTD ?? '').trim() === 'LZ',
+  F0700: (k) => !ARTEN_DER_UEBERMITTLUNG.includes(s(k, 'ARTU')),
+  // „ungültiger Kalendertag oder zukünftig" — zukünftig nur, wenn der Aufrufer den Tag des Einlangens nennt.
+  F0800: (k) => {
+    const dtue = s(k, 'DTUE');
+    if (datumJjjjmmtt(dtue) === undefined) return true;
+    return k.heute !== undefined && dtue > k.heute;
+  },
+  F0900: (k) => s(k, 'ZTUE') !== '' && !uhrzeit(s(k, 'ZTUE')),
+  F1200: (k) => fehlermeldungUngueltig(k),
+  F1502: (k) => !/^\d{4}$/.test(s(k, 'BELZ')),
+  F1602: (k) => !/^\d{4}$/.test(s(k, 'ENLZ')),
+
+  // --- Arbeitnehmer und Partner ---------------------------------------------
+  F2000: (k) => geburtsdatumUngueltig(n(k, 'AVLN'), s(k, 'AGBD')),
+  // „#19 > 1000 und Prüfung valide SVNR false"
+  F2001: (k) => n(k, 'AVLN') > 1000 && !vsnrPrueffzifferGueltig(s(k, 'AVLN') + s(k, 'AGBD')),
+  F2100: (k) => !imVorrat(k.w.ANAM ?? '', 'personenname'),
+  F2300: (k) => !imVorrat(k.w.AADR ?? '', 'unternehmen'),
+  // „zulässig laut DM-Org: alphabetisch"
+  F2400: (k) => !/^\p{L}*$/u.test(s(k, 'ALKZ')),
+  F2500: (k) => !imVorrat(k.w.APLZ ?? '', 'unternehmen'),
+  F2600: (k) => !imVorrat(k.w.AORT ?? '', 'unternehmen'),
+  F3200: (k) => {
+    const lfnr = n(k, 'PVLN');
+    return lfnr !== 0 && lfnr < 1000;
+  },
+  // Wie F2000, für den Partner. Ohne Partnerangabe (beide Felder leer) entfällt
+  // die Prüfung — sonst schlüge sie bei jedem Lohnzettel ohne Partner an.
+  F3300: (k) =>
+    !(leer(s(k, 'PVLN')) && leer(s(k, 'PGBD'))) && geburtsdatumUngueltig(n(k, 'PVLN'), s(k, 'PGBD')),
+
+  // --- Beträge ----------------------------------------------------------------
+  // „wenn Feld 36 'blank' oder 0 und Feld 103 = 'k' und Felder 38 … 70 ungleich 'blank' oder 0".
+  // Feld 103 des Katalogs ist KORR; das DM-Org schreibt den Wert groß („K").
+  F3602: (k) =>
+    !belegt(k, 'B210') && s(k, 'KORR').toUpperCase() === 'K' && STORNO_BETRAEGE.some((f) => !leer(s(k, f))),
+  ...Object.fromEntries(
+    Object.entries(VORZEICHEN_KATALOG).map(([code, [feld, erlaubt]]) => [
+      code,
+      (k: Kontext) => vorzeichenFalsch(k, feld, erlaubt),
+    ]),
+  ),
+  ...Object.fromEntries(
+    Object.entries(NUMERISCH_KATALOG).map(([code, feld]) => [code, (k: Kontext) => !numerisch(k, feld)]),
+  ),
+
+  // --- Aliquotierte Grenzen (siehe Modulkopf) --------------------------------
+  // „wenn Feld 18>5 und Feld 48 < 4.500,-- aliquotiert auf Monate und Feld 48 > (Feld 36-Feld 40) x 9,5%"
+  F4802: (k) => {
+    const a = anteil(k);
+    return (
+      a !== undefined &&
+      n(k, 'SOZS') > 5 &&
+      b(k, 'B230') < euro(4500) * a.min &&
+      b(k, 'B230') > (b(k, 'B210') - b(k, 'B220')) * 0.095
+    );
+  },
+  // „Betrag > 83.160,-- auf Monate aliquotiert"
+  F5205: (k) => {
+    const grenze = obergrenze(k, 83160);
+    return grenze !== undefined && b(k, 'BAUS') > grenze;
+  },
+  // „Betrag > 3672 auf Monate aliquotiert + 5,00 Toleranz"
+  F5402: (k) => {
+    const grenze = obergrenze(k, 3672);
+    return grenze !== undefined && b(k, 'BPEN') > grenze + euro(5);
+  },
+  // „Wenn Feld 74 > 801 - auf Monate (aliquotiert …) + 6,00 Toleranz"
+  F7402: (k) => {
+    const grenze = obergrenze(k, 801);
+    return grenze !== undefined && b(k, 'BFB1') > grenze + euro(6);
+  },
+  // „wenn Feld 18 < '6' und Feld 82 ungleich "blank" oder 0 oder wenn Feld 82 > 3868,--
+  //  oder wenn Feld 82 > 5.434,-- und Feld 31 ungleich "blank" auf Monate aliquotiert"
+  F8202: (k) => {
+    if (n(k, 'SOZS') < 6 && belegt(k, 'BFB3')) return true;
+    const grenze = obergrenze(k, 3868);
+    const grenzeAvab = obergrenze(k, 5434);
+    return (
+      (grenze !== undefined && b(k, 'BFB3') > grenze) ||
+      (grenzeAvab !== undefined && b(k, 'BFB3') > grenzeAvab && s(k, 'AVAB') !== '')
+    );
+  },
+  // „Feld 132 > 3000 (Jahresbetrag) auf Monate (aliquotiert …)"
+  F9121: (k) => {
+    const grenze = obergrenze(k, 3000);
+    return grenze !== undefined && b(k, 'BPEND') > grenze;
+  },
+  // „Wenn Feld 15 ungleich Feld 16 und Feld 70 ungleich 20% von Wert Feld 36 - [7.300 aliquotiert +/- 10 Toleranz]"
+  F7006: (k) => {
+    const a = anteil(k);
+    if (a === undefined || s(k, 'BELZ') === s(k, 'ENLZ')) return false;
+    const tief = (b(k, 'B210') - euro(7300) * a.max) * 0.2;
+    const hoch = (b(k, 'B210') - euro(7300) * a.min) * 0.2;
+    return b(k, 'B260') < tief - euro(10) || b(k, 'B260') > hoch + euro(10);
+  },
+  // „Wenn Feld 15 ungleich Feld 16 und (Feld 36 / Anzahl der Tage) > 30 und Feld 70 ungleich
+  //  [Feld 36 minus (30,- x Anzahl der Tage)] x 20% Toleranz +/- 10" — Tage mit und ohne Endtag.
+  F7010: (k) => {
+    const mit = tage(k);
+    if (mit === undefined || s(k, 'BELZ') === s(k, 'ENLZ')) return false;
+    const ohne = mit - 1;
+    if (b(k, 'B210') / mit <= euro(30)) return false;
+    const tief = (b(k, 'B210') - euro(30) * mit) * 0.2;
+    const hoch = (b(k, 'B210') - euro(30) * ohne) * 0.2;
+    return b(k, 'B260') < tief - euro(10) || b(k, 'B260') > hoch + euro(10);
+  },
+  // „Wenn Fehlercode F7002 (F7003) anschlägt und Feld 153 = 'J'" — Feld 153 ist FLABZ.
+  // Gemeldet werden beide Codes; ob ELDA dann nur F7011/F7012 ausgibt, sagt der Katalog nicht.
+  F7011: (k) => ja(k, 'FLABZ') && rechenblatt(k)?.f7002 === true,
+  F7012: (k) => ja(k, 'FLABZ') && rechenblatt(k)?.f7003 === true,
+
+  // --- Sterbedatum (Katalog 98 = RESE_99) ------------------------------------
+  // Leer oder nur Nullen: nichts gemeldet. Gelesen wird: falsches Format → F9802,
+  // kein Kalendertag → F9800, nach dem Tag des Einlangens → F9801.
+  F9802: (k) => !leer(s(k, 'RESE_99')) && !/^\d{8}$/.test(s(k, 'RESE_99')),
+  F9800: (k) =>
+    !leer(s(k, 'RESE_99')) && /^\d{8}$/.test(s(k, 'RESE_99')) && datumJjjjmmtt(s(k, 'RESE_99')) === undefined,
+  F9801: (k) =>
+    !leer(s(k, 'RESE_99')) &&
+    datumJjjjmmtt(s(k, 'RESE_99')) !== undefined &&
+    k.heute !== undefined &&
+    s(k, 'RESE_99') > k.heute,
+
+  // --- Arbeitgeber ------------------------------------------------------------
+  // „weniger als 9 Zeichen; bei 8 stelliger Steuernummer muss … die führende 0 … vorangestellt werden"
+  F9992: (k) => s(k, 'STNRA').length < 8 || !/^\d+$/.test(s(k, 'STNRA')),
+  F9991: (k) => {
+    const stnr = s(k, 'STNRA');
+    return /^\d{8,9}$/.test(stnr) && !steuernummerPrueffzifferGueltig(stnr.padStart(9, '0'));
+  },
+
+  // --- Aushilfskräfte (Katalog 140 = RESE_141) --------------------------------
+  F9184: (k) => n(k, 'JALZ') > 2019 && !leer(s(k, 'RESE_141')),
 };
 
 /** Nummern der Kinderblöcke, deren Familienname ausgefüllt ist (so zählt `F9213`). */
@@ -619,6 +1041,16 @@ const KINDREGELN: Readonly<Record<string, (k: Kontext, f: (name: string) => stri
     return ganz + halb > 12;
   },
   KA63: (k, f) => s(k, f('KFAM')) !== '' && n(k, f('KBGFP')) === 0 && n(k, f('KBHFP')) === 0,
+  KA00: (k, f) => !imVorrat(k.w[f('KFAM')] ?? '', 'personenname'),
+  KA05: (k, f) => !imVorrat(k.w[f('KVON')] ?? '', 'personenname'),
+  // „Ungültige SVNR Prüfziffer" — nur, wenn eine Nummer angegeben ist.
+  KA20: (k, f) => !leer(s(k, f('KVSNR'))) && !vsnrPrueffzifferGueltig(s(k, f('KVSNR'))),
+  // „ungültiges Datum": Das DM-Org nennt für KGEBD kein Format. Gemeldet wird nur,
+  // was weder als TTMMJJJJ (wie GEBD/GEBP) noch als JJJJMMTT ein Datum ist.
+  KA25: (k, f) => {
+    const wert = s(k, f('KGEBD'));
+    return !leer(wert) && datumTtmmjjjj(wert) === undefined && datumJjjjmmtt(wert) === undefined;
+  },
 };
 
 /** Codes des Katalogs, die `pruefeLohnzettel` nachrechnet. */
@@ -634,8 +1066,36 @@ export const L16_NICHT_GEPRUEFT: readonly string[] = [...L16_PRUEFKATALOG.keys()
   (code) => !L16_GEPRUEFT.includes(code),
 );
 
+/**
+ * Warum die übrigen Codes offen sind — je Code ein Satz. Jeder ist eine Frage
+ * an ELDA bzw. ein Fall für den Kundentest.
+ */
+export const L16_OFFEN: Readonly<Record<string, string>> = {
+  F0200:
+    'Bedingung „ungleich RADAUS oder ungleich OESTAT" — die Feldtabelle E.14.1 lässt CLADR beim Senden leer; ' +
+    'ob ELDA das Feld vor der Prüfung selbst setzt, ist offen.',
+  F4400:
+    'Bedingung nennt Feld 40 und 42 (KZ 220 und die insgesamt einbehaltenen Beiträge), der Fehlertext ' +
+    '„KZ 220 und KZ 225".',
+  F6202:
+    'Steht bei KZ 243, die Summe geht aber nur auf, wenn sie den Betrag für Entwicklungshelfer*innen ' +
+    '(Feld 127) meint; welches Feld verglichen wird, sagt die Zeile nicht.',
+  F9573:
+    'Bedingung „Feld 17 < 2024 oder > 2024", das Feld heißt aber „gemäß § 124b Z 447 (2024) oder gemäß ' +
+    '§ 124b Z 478 (ab 2025)", und F9575 prüft ausdrücklich Jahre nach 2024 — wörtlich genommen schlüge die ' +
+    'Regel bei jeder Mitarbeiterprämie ab 2025 an.',
+  F9160:
+    '„unzulässiger Wert" in der Länderkennung der ausländischen Arbeitsstätte (internationales ' +
+    'Kfz-Kennzeichen) — gegen welches Verzeichnis geprüft wird, nennt der Katalog nicht.',
+  KA10:
+    '„muss ein internationales KFZ Kennzeichen sein" — gegen welches Verzeichnis geprüft wird, nennt der ' +
+    'Katalog nicht.',
+};
+
 function anwendbar(regel: L16Regel, k: Kontext): boolean {
-  if (!regel.lzArten.includes(k.artl)) return false;
+  // „-" in der Spalte „Prfg. nur bei LZ-Art" (nur `F0700`, ein Feld des Satzkopfs):
+  // gelesen als „unabhängig von der Lohnzettelart".
+  if (regel.lzArten.length > 0 && !regel.lzArten.includes(k.artl)) return false;
   if (regel.unterbrechung === 'N' && ja(k, 'ANME')) return false;
   return true;
 }
@@ -650,6 +1110,17 @@ function befund(regel: L16Regel, code: string, lohnzettel: number): LohnzettelBe
   };
 }
 
+/** Optionen der Prüfung. */
+export interface LohnzettelPruefOptionen {
+  /**
+   * Tag, an dem die Datei bei ELDA einlangt. Nur damit lassen sich die Regeln
+   * prüfen, die ein Datum „in der Zukunft" ablehnen (`F0800` für das
+   * Übermittlungsdatum, `F9801` für das Sterbedatum); ohne diese Angabe
+   * entfallen sie. Ausgewertet wird der Kalendertag in Wiener Ortszeit.
+   */
+  heute?: Date;
+}
+
 /**
  * Prüft Informationssatz und Lohnzettel gegen die nachgerechneten Regeln des
  * Prüfkatalogs.
@@ -658,12 +1129,21 @@ function befund(regel: L16Regel, code: string, lohnzettel: number): LohnzettelBe
  * @returns alle Befunde; ein leeres Array heißt: keine der nachgerechneten
  *   Regeln schlägt an. Das ist keine Zusage, dass ELDA den Lohnzettel annimmt.
  */
-export function pruefeLohnzettel(saetze: readonly RohSatz[], version: Lohnzettelversion): LohnzettelBefund[] {
+export function pruefeLohnzettel(
+  saetze: readonly RohSatz[],
+  version: Lohnzettelversion,
+  optionen: LohnzettelPruefOptionen = {},
+): LohnzettelBefund[] {
   if (version !== '28') {
     throw new EldaError(
       `Für Lohnzettelversion ${version} liegt kein Prüfkatalog vor; der verwendete gilt für Zeiträume ab ` +
         '2026 und damit für Version 28.',
     );
+  }
+  let heute: string | undefined;
+  if (optionen.heute !== undefined) {
+    const t = wanduhrzeit(optionen.heute, ZEITZONE_STANDARD);
+    heute = `${t.jahr}${t.monat}${t.tag}`;
   }
   const info = saetze[0];
   if (info === undefined || info.satzart !== 'I1') {
@@ -676,7 +1156,7 @@ export function pruefeLohnzettel(saetze: readonly RohSatz[], version: Lohnzettel
     }
     const nummer = i + 1;
     const artl = Number.parseInt((satz.werte.ARTL ?? '').trim(), 10);
-    const k: Kontext = { w: satz.werte, info: info.werte, version, artl };
+    const k: Kontext = { w: satz.werte, info: info.werte, version, artl, heute };
     if (!LOHNZETTELARTEN.has(artl)) {
       befunde.push(befund(L16_PRUEFKATALOG.get('F1100')!, 'F1100', nummer));
       return;
