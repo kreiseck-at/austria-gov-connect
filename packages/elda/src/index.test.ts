@@ -124,3 +124,7 @@ test('index exportiert das Lesen von Rücksendungen', () => {
     'offen',
   ]);
 });
+
+test('index exportiert die Beitragsberechnung nach D.62', () => {
+  assert.equal(elda.berechneBeitragCent(95_000, 28.45), 27_028);
+});

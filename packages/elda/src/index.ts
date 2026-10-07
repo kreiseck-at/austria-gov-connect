@@ -114,6 +114,7 @@ export {
   type Schwere,
 } from './pruefung-e32';
 export { pruefeAbfolge, ABFOLGE } from './abfolge-e32';
+export { berechneBeitragCent } from './beitrag-e32';
 
 // --- VSNR-Anforderung (Kapitel E.30) und Adresse Versicherter (Kapitel E.31) --
 export {

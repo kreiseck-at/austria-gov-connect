@@ -526,10 +526,12 @@ muss für die Produktion nicht ebenso gelten:
   Standard-Tarifgruppenverrechnung (T01) wurde im Unterschied zum gemeldeten
   Beitrag € 270,27 der Beitrag in der Höhe von € 270,28 verbucht." Gemeldet war
   eine Beitragsgrundlage von € 950,00 bei 28,45 %, also genau € 270,275. Der
-  Träger rundet kaufmännisch auf. In JavaScript ergibt `0.2845 * 95000`
+  Träger rundet kaufmännisch auf — so verlangt es D.62 („kaufmännisch gerundet
+  auf zwei Nachkommastellen"). In JavaScript ergibt `0.2845 * 95000`
   `27027.499999999996`, und `Math.round` macht daraus 27027 Cent. Wer Beiträge
-  berechnet, muss in ganzen Zahlen rechnen (Prozentsatz in Hundertstelprozent ×
-  Cent) und erst dann runden. `pruefeMbgmPaket` rechnet Beiträge nicht nach.
+  berechnet, muss in ganzen Zahlen rechnen (Tausendstelprozent × Cent) und erst
+  dann runden: `berechneBeitragCent(95000, 28.45)` liefert 27028.
+  `pruefeMbgmPaket` meldet solche Abweichungen seither als Warnung `DM-D.62`.
 - Eine **verspätete mBGM** (nach dem 15. des Folgemonats) wurde angenommen und
   verarbeitet; einen eigenen Clearing-Code für die Verspätung gab es nicht.
 - **Formal nicht geprüft** wurden dort: der Projektcode (`DM` statt `TM` wurde
@@ -1052,6 +1054,17 @@ senden.
 | `F9072` | Höchstanzahl der Sätze je Art (Warnung) |
 | `FAK-3.1.11` | mehr als ein Tarifblock bei regelmäßiger Beschäftigung (Warnung) |
 | `BW1838` | Lehrlinge (`B044`, `B045`) mit der allgemeinen AV-Minderung `A01`–`A03` statt `A04`/`A05` (Fehler; Tarifsystem, Clearing auf der SIT) |
+| `DM-D.62` | Beitrag jeder Verrechnungsposition `V1` = Verrechnungsbasis × Prozentsatz, kaufmännisch auf den Cent gerundet (Warnung; nur Selbstabrechnung) |
+
+**Beiträge nachrechnen (D.61, D.62, E.32.2.2.5).** Der Beitrag einer Position
+ergibt sich „durch Multiplikation des Verrechnungsbasis-Betrags … mit dem
+Prozentsatz … unter Berücksichtigung des Vorzeichens (Datenfeld VPVZ),
+kaufmännisch gerundet auf zwei Nachkommastellen" — je Position, nicht über eine
+Summe. `berechneBeitragCent(basisCent, prozentsatz)` rechnet das in ganzen
+Zahlen. Die Prüfung rechnet nur nach, was in der Meldung steht; ob der
+Prozentsatz zur Tarifgruppe passt, weiß sie nicht (`BW1850`), denn die Sätze
+des Tarifsystems liefert das Paket nicht mit. Alle 40 Beispiele des Kapitels
+E.32.2 bestehen die Nachrechnung.
 
 **AV-Minderung ab 2027 (43. Ergänzung, D.60, Seite 152).** Für die Minderung
 der AV bei geringem Einkommen zählt ab 01.01.2027 der Beginn des
@@ -1241,9 +1254,10 @@ wird nichts davon geraten:
 - **Mitteilung bei Abweisung:** nach dem Schema gelesen, auf der SIT aber nie
   beobachtet (alle Sendungen kamen `uebernommen`). Das Klartext-Protokoll
   (`mbd_…`) wird nicht ausgewertet.
-- **Beitragshöhe:** `pruefeMbgmPaket` rechnet Beiträge nicht aus
-  Beitragsgrundlage und Prozentsatz nach; Rundungsfehler (`BW1917`) und falsche
-  Sätze (`BW1850`) erkennt erst der Träger.
+- **Beitragssätze:** Die Rundung je Position wird nachgerechnet (`DM-D.62`),
+  der Prozentsatz selbst nicht — falsche Sätze (`BW1850`) erkennt erst der
+  Träger. Wie er auf Abweichungen über die Rundung hinaus reagiert, ist nicht
+  beobachtet.
 - **Lehrlingsregel:** belegt nur für die Beschäftigtengruppen `B044`/`B045`
   und die Abschläge `A01`–`A03`. Ob `A04`/`A05`/`A27` umgekehrt bei anderen
   Gruppen unzulässig sind und ob `A25`/`A26` bei Lehrlingen ebenso `BW1838`
