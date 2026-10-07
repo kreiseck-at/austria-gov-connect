@@ -214,8 +214,8 @@ export {
   L16_GEPRUEFT,
   L16_NICHT_GEPRUEFT,
   L16_OFFEN,
-  vsnrPrueffzifferGueltig,
-  steuernummerPrueffzifferGueltig,
+  vsnrPruefzifferGueltig,
+  steuernummerPruefzifferGueltig,
   type LohnzettelBefund,
   type LohnzettelPruefOptionen,
 } from './pruefung-e14';

@@ -183,8 +183,8 @@ test('index exportiert den Lohnzettel Finanz (L16)', () => {
     'pruefeLohnzettel',
     'jahressteuerNachRechenblatt2026',
     'kindfeld',
-    'vsnrPrueffzifferGueltig',
-    'steuernummerPrueffzifferGueltig',
+    'vsnrPruefzifferGueltig',
+    'steuernummerPruefzifferGueltig',
   ]) {
     assert.equal(typeof (elda as Record<string, unknown>)[name], 'function', name);
   }

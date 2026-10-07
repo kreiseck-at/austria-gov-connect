@@ -5,6 +5,7 @@
 // Regelablauf in einer Woche (die Anlage wird danach zurückgesetzt):
 //   Mo vormittags  V01 Arbeiter, V02 Angestellte (zweiter Träger)
 //   Mo nachmittags V03–V06 Lehrlinge, geringfügig, freier DN
+//   Mo vormittags  V21 Negativtest: Anmeldung mit falscher Prüfziffer der VSNR
 //   Di vormittags  V07 Änderung, V15 Abmeldung Probezeit, V09 Richtigstellung,
 //                  V11 Storno Anmeldung, V13 Abmeldung mit Urlaubsersatzleistung
 //   Di nachmittags V12 Abmeldung, V19 Richtigstellung Abmeldung, V20 Storno Abmeldung
@@ -18,7 +19,9 @@
 // Feldbelegung nach E.29.1 und den Beispielen aus E.29.2; bei M8/M9/S3/S4 stehen
 // die Namen in Grundstellung, der Verweis auf die Ursprungsmeldung geht über REFU.
 
-const { meldung } = require('../lib/bausteine');
+const { meldung, setzeFeld } = require('../lib/bausteine');
+const { FELDER_E29 } = require('../../../dist/felder-e29.js');
+const { vsnrPruefzifferGueltig } = require('../../../dist/pruefung-e14.js');
 const { plusTage } = require('../lib/fenster');
 
 const d = (ctx, iso) => ctx.ttmmjjjj(iso);
@@ -329,5 +332,38 @@ module.exports = [
         traeger: '14',
         felder: { REFU: ctx.referenzwertVon('V12'), ADAT: d(ctx, ctx.zrVon('V12')) },
       }),
+  }),
+  fall({
+    id: 'V21',
+    titel: 'Negativtest: Anmeldung mit falscher Prüfziffer der Versicherungsnummer (M3)',
+    zweck:
+      'Der Prüfkatalog (Blatt VR, F7020) nennt nur „ungültig“; ob ELDA dabei die Prüfziffer rechnet, ist ' +
+      'unbelegt. Die Prüfziffer selbst ist belegt (Anfragebeantwortung 4690/AB XXIII. GP: Faktoren ' +
+      '3,7,9,5,8,4,2,1,6, Rest mod 11). Der Builder prüft nur die Stellenfolge; die vierte Stelle wird ' +
+      'deshalb nachträglich im Bestand verfälscht. Entscheidet, ob das Paket die Prüfziffer bei der ' +
+      'Versichertenmeldung als Fehler behandeln muss.',
+    quelle: 'E.29 Feld VSNR, D.6; Prüfkatalog Blatt VR (F7020); 4690/AB XXIII. GP',
+    erwartung: 'F7020, Satz nicht übernommen – oder übernommen, dann prüft ELDA die Prüfziffer nicht',
+    fenster: ANMELDUNG,
+    baue: (ctx) => {
+      const b = anmeldung('V21', 'arbeiter', 'A', '14', (c) => ({
+        BBER: '01',
+        GERF: 'N',
+        FRDV: 'N',
+        VWAZ: VOLLZEIT(c),
+      }))(ctx);
+      const vsnr = ctx.rolle('arbeiter').vsnr;
+      const falsch = vsnr.slice(0, 3) + String((Number(vsnr[3]) + 1) % 10) + vsnr.slice(4);
+      if (vsnrPruefzifferGueltig(falsch)) throw new Error('V21: die verfälschte Versicherungsnummer ist gültig.');
+      return {
+        ...b,
+        inhalt: setzeFeld(
+          b.inhalt,
+          2,
+          FELDER_E29.find((f) => f.name === 'VSNR'),
+          falsch,
+        ),
+      };
+    },
   }),
 ];
