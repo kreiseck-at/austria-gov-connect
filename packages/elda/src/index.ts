@@ -12,6 +12,25 @@ export { hashKundenpasswort, type KundenpasswortQuelle } from './security';
 export { ELDA_ENDPOINTS, type EldaUmgebung } from './endpoints';
 export { ELDA_STATUS } from './status';
 export { findeRuecksendung, type Ruecksendung } from './zuordnung';
+export {
+  artDerRuecksendung,
+  liesMitteilung,
+  MITTEILUNG_STATUS,
+  liesClearing,
+  ZUSTELLUNGSGRUND,
+  DRINGLICHKEIT,
+  MELDUNG_STATUS,
+  MELDUNG_STATUS_ZUSATZ,
+  MVB_CLEARING_VERSION,
+  type RuecksendungsArt,
+  type Mitteilung,
+  type MitteilungMeldung,
+  type MitteilungCode,
+  type Dialogfall,
+  type ClearingInhalt,
+  type ClearingInformation,
+  type Fachinformation,
+} from './ruecksendung';
 export { EldaError, EldaProtocolError, EldaStatusError } from './errors';
 /**
  * Die Fehlerklassen der Transportschicht, weitergereicht aus

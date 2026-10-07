@@ -90,3 +90,17 @@ test('die Transport-Fehlerklassen sind weitergereicht und voneinander unterschei
   assert.equal(p.rohantwort, '<x');
   assert.equal(new m.FonTransportError('weg') instanceof m.EldaError, false);
 });
+
+test('index exportiert das Lesen von Rücksendungen', () => {
+  for (const name of ['artDerRuecksendung', 'liesMitteilung', 'liesClearing']) {
+    assert.equal(typeof (elda as Record<string, unknown>)[name], 'function', name);
+  }
+  assert.equal(elda.MELDUNG_STATUS.IA, 'in Arbeit');
+  assert.equal(elda.DRINGLICHKEIT.K, 'Kontrollfall, Meldung kontrollieren');
+  assert.deepEqual(Object.keys(elda.MITTEILUNG_STATUS), [
+    'uebernommen',
+    'teilweise_uebernommen',
+    'nicht_uebernommen',
+    'offen',
+  ]);
+});
