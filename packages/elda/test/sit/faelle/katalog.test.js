@@ -59,7 +59,6 @@ const SART = {
   B11: 'M3',
   B12: 'M3',
   T02: 'M3',
-  S40: 'M3',
 };
 const VSTR = { V02: '15', V09: '15', V13: '15', B03: '15', B11: '15', B12: '15', V06: '15' };
 const REFU_AUS = { V09: 'V02', V11: 'V05', V19: 'V15', V20: 'V12' };
@@ -139,8 +138,7 @@ test('der Katalog lädt und jeder Fall mit baue ist gebaut worden', () => {
 
 test('jeder Sendefall: drei Sätze, VR, TM, simuliertes Erstellungsdatum, Seriennummer, Träger, Satzart', () => {
   for (const [id, { ergebnis, ctx }] of GEBAUT) {
-    if (!Buffer.isBuffer(ergebnis.inhalt) || id.startsWith('M') || (id.startsWith('S') && id !== 'S40'))
-      continue;
+    if (!Buffer.isBuffer(ergebnis.inhalt) || /^[MS]/.test(id)) continue;
     const s = saetze(ergebnis.inhalt, id === 'B03' ? '\n' : '\r\n');
     assert.equal(s.length, 3, `${id}: Vorlauf, Meldung, Schluss`);
     const [vorlauf, meldungssatz] = s;
@@ -257,13 +255,13 @@ test('FH- und SM-Fälle: Bestand, Version, Satzlänge, Satzart, Abwandlung nur i
     return feld(satz, f.pos, f.laenge);
   };
   const erwartet = {
-    S04: ['FH', '03', 850, '80'],
-    S41: ['FH', '03', 850, '81'],
-    S42: ['FH', '03', 850, '80'],
-    S03: ['SM', '02', 800, '65'],
-    S31: ['SM', '02', 800, '66'],
-    S32: ['SM', '02', 800, '65'],
-    S33: ['SM', '02', 800, '65'],
+    S31: ['FH', '03', 850, '80'],
+    S32: ['FH', '03', 850, '81'],
+    S33: ['FH', '03', 850, '80'],
+    S40: ['SM', '02', 800, '65'],
+    S41: ['SM', '02', 800, '66'],
+    S42: ['SM', '02', 800, '65'],
+    S43: ['SM', '02', 800, '65'],
   };
   for (const [id, [best, vers, laenge, sart]] of Object.entries(erwartet)) {
     const { ergebnis, ctx } = GEBAUT.get(id);
@@ -280,20 +278,67 @@ test('FH- und SM-Fälle: Bestand, Version, Satzlänge, Satzart, Abwandlung nur i
       assert.equal(feld(x, 19, 2), '14', `${id}: VSTR`);
     }
     assert.equal(feld(satz, 1, 2), sart, `${id}: Satzart`);
-    assert.equal(feld(satz, 21, 10).trimEnd(), GEBAUT.get('S40').ctx.konto('A', { traeger: '14' }).bknr);
+    assert.equal(feld(satz, 21, 10).trimEnd(), GEBAUT.get('S30').ctx.konto('A', { traeger: '14' }).bknr);
   }
+  const s30 = saetze(GEBAUT.get('S30').ergebnis.inhalt);
+  assert.equal(feld(s30[0], 23, 2), 'VR', 'S30: BEST');
+  assert.equal(feld(s30[1], 1, 2), 'M3', 'S30: Satzart');
   const fh = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
-  assert.equal(wert(FELDER_E12, fh('S04'), 'KART'), '04');
-  assert.equal(wert(FELDER_E12, fh('S04'), 'STSL'), 'AUT');
-  assert.equal(wert(FELDER_E12, fh('S04'), 'WORT').trimEnd(), 'Wien');
-  assert.equal(wert(FELDER_E12, fh('S04'), 'ADAT'), ttmmjjjj(zrDatum('di-vm')));
-  assert.equal(wert(FELDER_E12, fh('S41'), 'ADAT'), '31032025');
-  assert.equal(wert(FELDER_E12, fh('S41'), 'GESL'), '0');
-  assert.equal(wert(FELDER_E12, fh('S42'), 'KART'), '09');
+  assert.equal(wert(FELDER_E12, fh('S31'), 'KART'), '04');
+  assert.equal(wert(FELDER_E12, fh('S31'), 'STSL'), 'AUT');
+  assert.equal(wert(FELDER_E12, fh('S31'), 'WORT').trimEnd(), 'Wien');
+  assert.equal(wert(FELDER_E12, fh('S31'), 'ADAT'), ttmmjjjj(zrDatum('di-vm')));
+  assert.equal(wert(FELDER_E12, fh('S32'), 'ADAT'), '31032025');
+  assert.equal(wert(FELDER_E12, fh('S32'), 'GESL'), '0');
+  assert.equal(wert(FELDER_E12, fh('S33'), 'KART'), '09');
   const sm = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
-  assert.equal(wert(FELDER_E22, sm('S03'), 'JAHR'), '2025');
-  assert.equal(feld(sm('S03'), 502, 10), '4 01012801');
-  assert.equal(feld(sm('S32'), 502, 2), '3 ');
-  assert.equal(feld(sm('S33'), 502, 2), '01');
-  assert.equal(wert(FELDER_E22, sm('S03'), 'REFN').trimEnd(), GEBAUT.get('S03').ergebnis.referenzwerte[0]);
+  assert.equal(wert(FELDER_E22, sm('S40'), 'JAHR'), '2025');
+  assert.equal(feld(sm('S40'), 502, 10), '4 01012801');
+  assert.equal(feld(sm('S42'), 502, 2), '3 ');
+  assert.equal(feld(sm('S43'), 502, 2), '01');
+  assert.equal(wert(FELDER_E22, sm('S40'), 'REFN').trimEnd(), GEBAUT.get('S40').ergebnis.referenzwerte[0]);
+});
+
+test('S-Fälle: Bestand VS bzw. AV (S11 ist eine Anmeldung, VR), TM, Seriennummer, Träger', () => {
+  const BEST = { S10: 'VS', S11: 'VR', S12: 'VS', S13: 'VS', S20: 'AV', S21: 'AV' };
+  for (const [id, best] of Object.entries(BEST)) {
+    const { ergebnis, ctx } = GEBAUT.get(id);
+    const s = saetze(ergebnis.inhalt);
+    assert.equal(s.length, 3, `${id}: Vorlauf, Meldung, Schluss`);
+    const [vorlauf, meldungssatz] = s;
+    assert.equal(feld(vorlauf, 21, 2), 'TM', `${id}: PROJ`);
+    assert.equal(feld(vorlauf, 23, 2), best, `${id}: BEST`);
+    assert.equal(feld(vorlauf, 31, 8), ttmmjjjj(ctx.zr), `${id}: EDAT`);
+    for (const satz of s) {
+      assert.equal(feld(satz, 12, 7), '0765432', `${id}: OBUS`);
+      assert.equal(feld(satz, 19, 2), id === 'S21' ? '15' : '14', `${id}: VSTR`);
+    }
+    assert.equal(feld(meldungssatz, 1, 2), best === 'VR' ? 'M3' : best, `${id}: Satzart`);
+  }
+});
+
+test('S11 meldet ohne VSNR, mit Geburtsdatum und REFV = Referenzwert von S10', () => {
+  const { FELDER_E29 } = require('../../../dist/felder-e29.js');
+  const f = (name) => FELDER_E29.find((x) => x.name === name);
+  const m3 = saetze(GEBAUT.get('S11').ergebnis.inhalt)[1];
+  assert.equal(feld(m3, f('VSNR').pos, f('VSNR').laenge), '0000000000');
+  assert.equal(feld(m3, f('GEBD').pos, f('GEBD').laenge), '14031998');
+  assert.equal(
+    feld(m3, f('REFV').pos, f('REFV').laenge).trimEnd(),
+    GEBAUT.get('S10').ergebnis.referenzwerte[0],
+  );
+});
+
+test('Negativtests S13 und S21 ändern genau ein Feld des gültigen Satzes', () => {
+  const { FELDER_E30 } = require('../../../dist/felder-e30.js');
+  const { FELDER_E31 } = require('../../../dist/felder-e31.js');
+  const gesl = FELDER_E30.find((x) => x.name === 'GESL');
+  const wkfz = FELDER_E31.find((x) => x.name === 'WKFZ');
+  const s13 = saetze(GEBAUT.get('S13').ergebnis.inhalt);
+  assert.equal(s13[1].length, 688);
+  assert.equal(feld(s13[1], gesl.pos, gesl.laenge), '5');
+  const s21 = saetze(GEBAUT.get('S21').ergebnis.inhalt);
+  assert.equal(s21[1].length, 416);
+  assert.equal(feld(s21[1], wkfz.pos, wkfz.laenge), 'A  ');
+  assert.equal(feld(saetze(GEBAUT.get('S20').ergebnis.inhalt)[1], wkfz.pos, wkfz.laenge), 'D  ');
 });

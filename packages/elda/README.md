@@ -14,8 +14,9 @@ reduziert** (Kapitel E.29 der Organisationsbeschreibung) — Anmeldung, Abmeldun
 Datenbestand, siehe „Meldungen erzeugen" unten. Andere Meldungsarten, insbesondere die
 monatliche Beitragsgrundlagenmeldung (mBGM) ist seit 0.6.0 als Satzschicht
 enthalten — Feldtabellen, Pflichtmatrix, Codekataloge und der Zusammenbau für
-beide Verfahren (Selbstabrechnung und Vorschreibung). Der Lohnzettel Finanz
-(L16, Kapitel E.13/E.14) ist **nicht** enthalten.
+beide Verfahren (Selbstabrechnung und Vorschreibung). Dazu kommen die
+**VSNR-Anforderung** (Kapitel E.30) und die **Adresse Versicherter** (Kapitel
+E.31). Der Lohnzettel Finanz (L16, Kapitel E.13/E.14) ist **nicht** enthalten.
 
 ## Reifegrad
 
@@ -525,10 +526,12 @@ muss für die Produktion nicht ebenso gelten:
   Standard-Tarifgruppenverrechnung (T01) wurde im Unterschied zum gemeldeten
   Beitrag € 270,27 der Beitrag in der Höhe von € 270,28 verbucht." Gemeldet war
   eine Beitragsgrundlage von € 950,00 bei 28,45 %, also genau € 270,275. Der
-  Träger rundet kaufmännisch auf. In JavaScript ergibt `0.2845 * 95000`
+  Träger rundet kaufmännisch auf — so verlangt es D.62 („kaufmännisch gerundet
+  auf zwei Nachkommastellen"). In JavaScript ergibt `0.2845 * 95000`
   `27027.499999999996`, und `Math.round` macht daraus 27027 Cent. Wer Beiträge
-  berechnet, muss in ganzen Zahlen rechnen (Prozentsatz in Hundertstelprozent ×
-  Cent) und erst dann runden. `pruefeMbgmPaket` rechnet Beiträge nicht nach.
+  berechnet, muss in ganzen Zahlen rechnen (Tausendstelprozent × Cent) und erst
+  dann runden: `berechneBeitragCent(95000, 28.45)` liefert 27028.
+  `pruefeMbgmPaket` meldet solche Abweichungen seither als Warnung `DM-D.62`.
 - Eine **verspätete mBGM** (nach dem 15. des Folgemonats) wurde angenommen und
   verarbeitet; einen eigenen Clearing-Code für die Verspätung gab es nicht.
 - **Formal nicht geprüft** wurden dort: der Projektcode (`DM` statt `TM` wurde
@@ -1051,6 +1054,17 @@ senden.
 | `F9072` | Höchstanzahl der Sätze je Art (Warnung) |
 | `FAK-3.1.11` | mehr als ein Tarifblock bei regelmäßiger Beschäftigung (Warnung) |
 | `BW1838` | Lehrlinge (`B044`, `B045`) mit der allgemeinen AV-Minderung `A01`–`A03` statt `A04`/`A05` (Fehler; Tarifsystem, Clearing auf der SIT) |
+| `DM-D.62` | Beitrag jeder Verrechnungsposition `V1` = Verrechnungsbasis × Prozentsatz, kaufmännisch auf den Cent gerundet (Warnung; nur Selbstabrechnung) |
+
+**Beiträge nachrechnen (D.61, D.62, E.32.2.2.5).** Der Beitrag einer Position
+ergibt sich „durch Multiplikation des Verrechnungsbasis-Betrags … mit dem
+Prozentsatz … unter Berücksichtigung des Vorzeichens (Datenfeld VPVZ),
+kaufmännisch gerundet auf zwei Nachkommastellen" — je Position, nicht über eine
+Summe. `berechneBeitragCent(basisCent, prozentsatz)` rechnet das in ganzen
+Zahlen. Die Prüfung rechnet nur nach, was in der Meldung steht; ob der
+Prozentsatz zur Tarifgruppe passt, weiß sie nicht (`BW1850`), denn die Sätze
+des Tarifsystems liefert das Paket nicht mit. Alle 40 Beispiele des Kapitels
+E.32.2 bestehen die Nachrechnung.
 
 **AV-Minderung ab 2027 (43. Ergänzung, D.60, Seite 152).** Für die Minderung
 der AV bei geringem Einkommen zählt ab 01.01.2027 der Beginn des
@@ -1070,6 +1084,101 @@ Ergänzung ist bei allen ÖGK-Landesstellen auch die 10-stellige Form gültig
 (D.5); ab 01.02.2027 vergibt die ÖGK nur mehr 10-stellige Nummern. Den Katalog der
 Tarifgruppen liefert das Paket bewusst nicht mit — er ändert sich laufend
 (siehe `codes-e32.ts`).
+
+### VSNR-Anforderung und Adresse Versicherter
+
+Zwei Meldungen mit je einer Satzart und einem eigenen Bestand:
+
+| Builder | Satzart | Bestand | Kapitel | Satzlänge |
+| ------- | ------- | ------- | ------- | --------- |
+| `vsnrAnforderung` → `erstelleVsnrAnforderungBestand` | `VS` | `VS`, Version `01` | E.30 | 688 |
+| `adresseVersicherter` → `erstelleAdressmeldungBestand` | `AV` | `AV`, Version `01` | E.31 | 416 |
+
+Beide Kapitel sind in der 42. und 43. Ergänzung wortgleich (Seiten 329–336
+bzw. 340–347). Die Builder prüfen die Pflichtstufen aus E.30.1/E.31.1 — ein
+leeres Pflichtfeld trägt den Code, mit dem der Prüfkatalog es abweist — und die
+Katalogregeln mit Status `N`, die sich aus den Feldwerten entscheiden lassen.
+Ein Bestand nimmt nur Sätze seiner eigenen Satzart auf (Kapitel C.1).
+
+**VSNR-Anforderung (E.30.2, Seite 343).** Hat eine anzumeldende Person noch
+keine Versicherungsnummer, fordert der Dienstgeber eine an — vorab oder
+spätestens zeitgleich mit der Anmeldung. Die Anmeldung geht als eigener
+`VR`-Bestand, mit Geburtsdatum statt VSNR und dem Referenzwert der Anforderung
+in `REFV`:
+
+```ts
+const vs = vsnrAnforderung({
+  REFW: 'VS-2026-0001',
+  BKNR: '4711815',
+  DGNA: 'Bäckerei Kornblum',
+  GEBD: '14031998',
+  FANA: 'Weinzierl',
+  VONA: 'Mirela',
+  GESL: '2',
+  STSL: 'AUT',
+  WKFZ: 'A',
+  PLZL: '5020',
+  WORT: 'Salzburg',
+  WSTR: 'Musterweg',
+  WHNR: '1',
+});
+const m3 = anmeldung({
+  REFW: 'M3-2026-0001',
+  BKNR: '4711815',
+  DGNA: 'Bäckerei Kornblum',
+  GEBD: '14031998',
+  REFV: 'VS-2026-0001',
+  FANA: 'Weinzierl',
+  VONA: 'Mirela',
+  ADAT: '12102026',
+  BBER: '02',
+  GERF: 'N',
+  FRDV: 'N',
+  VWAZ: wochenarbeitszeit(40),
+});
+await elda.senden({ dateiName: 'vs.dat', inhalt: erstelleVsnrAnforderungBestand([vs], opt) });
+await elda.senden({ dateiName: 'vr.dat', inhalt: erstelleBestand([m3], opt) });
+```
+
+Die vergebene Nummer kommt laut E.30.2 „über das externe Clearingsystem mit dem
+Referenzwert der VSNR – Anforderung" zurück (`liesClearing`); danach gilt für
+alle weiteren Meldungen die VSNR (D.45). Ist die Nummer nur unbekannt, aber
+vergeben, kann sie im WEB-BE-Kunden-Portal abgefragt werden.
+
+Geprüft werden:
+
+| Code | Prüft |
+| ---- | ----- |
+| `F6500`–`F6586` (leer) | Pflichtfelder laut E.30.1; `F6520` (Dienstgebername) steht nur auf dem Blatt `FC-Texte` |
+| `F6531` | Geburtsdatum `TTMMJJJJ`, `00MMJJJJ` oder `0000JJJJ` |
+| `F6541`, `F6551` | Familien- und Vorname gegen die „Prüfvorschriften" aus D.8/D.9: zulässige Zeichen, vor jedem Sonderzeichen ein Buchstabe, nach Bindestrich (und beim Familiennamen Hochkomma) ein Buchstabe, Punkt im Familiennamen nur an letzter oder vorletzter Stelle |
+| `D.8` | dieselben Regeln für den früheren Familiennamen `FNA1`; der Katalog prüft ihn nicht |
+| `F6562` | Geschlecht 1, 2, 3, 4, 6 oder 7 (Feldtabelle E.30) |
+| `F6571` | Staatsangehörigkeit als ISOA3-Code der Staatencode-Tabelle (`STAATEN`, Stand 22.04.2026) |
+| `F6512` | beim Träger ÖGK-V keine Beitragskontonummer mit führendem Leerzeichen (beim Bau des Bestands) |
+
+Die Groß- und Kleinschreibung der Namen prüft das Paket nicht: D.8 nennt
+Ausnahmen (Vorsilben, nachgewiesene Großschrift), die sich aus dem Namen nicht
+entscheiden lassen.
+
+**Adresse Versicherter (E.31.2.1, Seite 346).** An die ÖGK geht die Meldung
+**nur für einen ausländischen Hauptwohnsitz** — inländische Adressen holt die ÖGK
+aus dem zentralen Melderegister. Pflicht ist sie bei der ersten Beschäftigung mit
+bekannter VSNR, bei einer Wiederanmeldung mit neuem Wohnsitz im Ausland und bei
+einem Umzug ins Ausland während des Dienstverhältnisses; nicht nötig, wenn eine
+VSNR-Anforderung die Adresse schon trägt.
+
+| Code | Prüft |
+| ---- | ----- |
+| `F8000`–`F8070` (leer) | Pflichtfelder laut E.31.1 |
+| `F8031` | Versicherungsnummer in der Form `LLLPTTMMJJ` (die Prüfziffer nicht) |
+| `F8041` | `WKFZ` ist nicht `A` |
+| `F8012` | wie `F6512` |
+
+`STAATEN` und `STAATSANGEHOERIGKEITEN` geben die Staatencode-Tabelle der ÖGK
+(elda.at, Downloads) als Daten heraus. Das KFZ-Kennzeichen des Wohnorts wird
+nicht gegen sie geprüft: D.12 nennt „weitere KFZ-Kennzeichen" in einem
+Verzeichnis, das nur den Versicherungsträgern zugänglich ist.
 
 ### Familienhospizkarenz/Pflegekarenz (Kapitel E.12)
 
@@ -1205,21 +1314,26 @@ gedacht.
 - Organisationsbeschreibung „Datenaustausch mit Dienstgebern", 43. Ergänzung,
   Version 43.1.0 (09/2026, wirksam ab 01.12.2026), abgeglichen gegen die 42.
   Ergänzung (Version 42.7.0, 07/2026): Kapitel E.1 (Identifikationsteil), E.2
-  (Vorlaufsatz), E.3 (Schlusssatz), E.12 (Familienhospizkarenz/Pflegekarenz),
-  E.22 (Schwerarbeitsmeldung), E.29 (Versichertenmeldung reduziert:
+  (Vorlaufsatz), E.3 (Schlusssatz), E.29 (Versichertenmeldung reduziert:
   Feldtabelle, Pflichtmatrix, Erstellvorschriften mit Beispielen), D.22
   (Abmeldegrund-Codeliste samt Abhängigkeitstabelle auf Seite 96), D.6
   (Aufbau der Versicherungsnummer), D.39 (Beschäftigungsbereich-Codeliste),
-  D.41 (freier Dienstvertrag), D.43 (Referenzwert), D.47 (betriebliche
-  Vorsorge), E.30.2 (VSNR-Anforderung).
-- Prüfkatalog zur 43. Ergänzung (Version 43.1.0.0), Blätter `VR`,
-  `mBGM Paket` (Kapitel H.23), `Allgemein` (H.1), `FH` (H.7) und `SM` (H.12)
-  samt `FC-Texte`.
+  D.41 (freier Dienstvertrag), D.43 (Referenzwert), D.45 (Referenzwert der
+  VSNR-Anforderung), D.47 (betriebliche Vorsorge), D.7–D.12 (Geburtsdatum,
+  Namen, akademischer Grad, Staatenschlüssel, Wohnort), D.13/D.14 (An-/Abmelde-
+  und richtiges Datum bei Familienhospiz-Meldungen), E.12
+  (Familienhospizkarenz/Pflegekarenz), E.22 (Schwerarbeitsmeldung), E.30
+  (VSNR-Anforderung), E.31 (Adresse Versicherter).
+- Prüfkatalog zur 43. Ergänzung (Version 43.1.0.0), Blätter `VR`, `VS`, `AV`,
+  `FH` (H.7), `SM` (H.12), `Allgemein` (H.1), `FC-Texte` und `mBGM Paket`
+  (Kapitel H.23).
 - Schwerarbeitsverordnung, § 5 (Meldepflicht, Frist).
 - Für E.12 und E.22 druckt die DM-Org keine Beispiele ab, und öffentliche
   Beispieldateien von ÖGK oder ELDA gibt es nicht; die Tests prüfen deshalb
-  Feld für Feld gegen die Feldtabellen. Die Kapitel E.12 und E.22 sind in der
-  42. und 43. Ergänzung wortgleich; die Seitenangaben im Code nennen beide.
+  Feld für Feld gegen die Feldtabellen. Beide Kapitel sind in der 42. und 43.
+  Ergänzung wortgleich; die Seitenangaben im Code nennen beide.
+- Staatencode-Tabelle der ÖGK, Stand 22.04.2026 (elda.at, Downloads
+  Dienstgeber).
 
 **Seitenangaben.** Gegenüber der 42. Ergänzung hat die 43. Inhalt nur in
 D.5 (10-stellige ÖGK-Beitragskontonummer), D.54 (Verrechnungsgrundlage bei
@@ -1227,7 +1341,8 @@ Verrechnung mit und ohne Zeit), D.60 (Abschläge ALT/NEU, `Z15`/`Z16` bei
 Sonderzahlungen) sowie in Kapiteln geändert, die dieses Paket nicht abbildet
 (E.10, E.13/E.14, E.16, E.24, E.26, E.27). E.1–E.3, E.29 und E.32 sind
 inhaltlich gleich geblieben. `codes-e32.ts` zitiert die Seiten der 43.
-Ergänzung; die übrigen Seiten- und Fußnotenangaben im Code beziehen sich auf
+Ergänzung, ebenso `felder-e30.ts`, `felder-e31.ts` und die übrigen Dateien zu
+E.30/E.31; die übrigen Seiten- und Fußnotenangaben im Code beziehen sich auf
 die 42. In der 43. liegen D.61 bis E.10 zwei Seiten später, E.28 bis G.10 —
 also E.29 und E.32 — elf Seiten später; die Fußnoten ab D.61 sind um neun bis
 zehn verschoben.
@@ -1242,18 +1357,17 @@ zehn verschoben.
 ## Ausblick
 
 Abgedeckt sind die Versichertenmeldung reduziert (Kapitel E.29), die
-monatliche Beitragsgrundlagenmeldung (Kapitel E.32), Familienhospizkarenz/
-Pflegekarenz (E.12), die Schwerarbeitsmeldung (E.22) und das Lesen der
+monatliche Beitragsgrundlagenmeldung (Kapitel E.32), VSNR-Anforderung (E.30),
+Adresse Versicherter (E.31), Familienhospizkarenz/Pflegekarenz (E.12), die
+Schwerarbeitsmeldung (E.22) und das Lesen der
 Rücksendungen (Mitteilung, Clearing-Datensatz 2.0). Noch offen — ohne Beleg
 wird nichts davon geraten:
 
 - **Lohnzettel Finanz** (L16, Kapitel E.13/E.14, Bestand `LF`): nicht
   enthalten; braucht seine eigene Spec-Grundlage. Die SIT-Plattform verarbeitet
   `LF` nicht, getestet werden kann er nur im Kundentest.
-- **Weitere Verarbeitungen, die die SIT kennt:** VSNR-Anforderung (`VS`),
-  Adressmeldung (`AV`) — keine Builder.
 - **Familienhospiz und Schwerarbeit** sind gebaut, aber noch nie gesendet
-  worden (SIT-Fälle S03, S04, S31–S33, S40–S42). Offen bis dahin:
+  worden (SIT-Fälle S30–S33, S40–S43). Offen bis dahin:
   - Die Erstellvorschriften aus E.12.2 ohne eigene Katalogzeile (bei der
     Anmeldung zur Freistellung nur 03, 04, 07, zur Teilzeit nur 05, 06; 07 erst
     ab 01.11.2023; Entgelte nur bei 01/02) werden nicht geprüft.
@@ -1261,18 +1375,28 @@ wird nichts davon geraten:
     Status N, die sich widersprechen: `F0081` „gültig 1,2" und `F0082`
     „gültig 1,2,3,4,6,7". Das Paket folgt der Feldtabelle (wie `F0082`).
   - Die Tätigkeitsart ist zweistellig, die Codes sind einstellig abgedruckt.
-    Das Paket sendet `1 ` und weist `01` ab; ob ELDA `01` annimmt, klärt S33.
+    Das Paket sendet `1 ` und weist `01` ab; ob ELDA `01` annimmt, klärt S43.
   - Die Version der Schwerarbeitsmeldung ist laut Kapitelkopf `02`, die
     Fehlertexte nennen „SM01".
   - Wie ELDA einen Storno (66) der ursprünglichen Schwerarbeitsmeldung
     zuordnet und was bei mehr als 26 Tätigkeiten im Jahr gilt, sagt E.22
     nicht; mehr als 26 weist das Paket ab.
+- **VSNR-Anforderung und Adressmeldung:** nach DM-Org und Prüfkatalog gebaut,
+  gegen ELDA noch nie gesendet. Offen ist dort: ob ELDA beim Geschlecht `F6561`
+  („gültig 1,2") oder `F6562` („gültig 1,2,3,4,6,7") anwendet — beide Zeilen
+  stehen mit Status `N` im Katalog; ob `WKFZ = A` an einen anderen Träger als
+  die ÖGK zulässig ist (`F8041` sagt nein, die Feldtabelle schränkt nur die ÖGK
+  ein); woran ELDA eine „ungültige" Beitragskontonummer (`F6511`, `F8011`) und
+  Postleitzahl (`F6583`, `F8051`) erkennt; welche Regel hinter der Groß- und
+  Kleinschreibung von Ort und Straße steht (`F6585`, `F6587`, `F8061`,
+  `F8071`); und wie der Clearingfall mit der vergebenen VSNR aussieht.
 - **Mitteilung bei Abweisung:** nach dem Schema gelesen, auf der SIT aber nie
   beobachtet (alle Sendungen kamen `uebernommen`). Das Klartext-Protokoll
   (`mbd_…`) wird nicht ausgewertet.
-- **Beitragshöhe:** `pruefeMbgmPaket` rechnet Beiträge nicht aus
-  Beitragsgrundlage und Prozentsatz nach; Rundungsfehler (`BW1917`) und falsche
-  Sätze (`BW1850`) erkennt erst der Träger.
+- **Beitragssätze:** Die Rundung je Position wird nachgerechnet (`DM-D.62`),
+  der Prozentsatz selbst nicht — falsche Sätze (`BW1850`) erkennt erst der
+  Träger. Wie er auf Abweichungen über die Rundung hinaus reagiert, ist nicht
+  beobachtet.
 - **Lehrlingsregel:** belegt nur für die Beschäftigtengruppen `B044`/`B045`
   und die Abschläge `A01`–`A03`. Ob `A04`/`A05`/`A27` umgekehrt bei anderen
   Gruppen unzulässig sind und ob `A25`/`A26` bei Lehrlingen ebenso `BW1838`

@@ -112,15 +112,6 @@ function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, o
 const GESL = { m: '1', w: '2', x: '3' };
 
 /**
- * Ein gebauter Satz mit geänderten Werten – NUR für Negativtests. Der Builder
- * des Pakets hat den Satz vorher vollständig geprüft; geändert wird danach
- * genau das, was ELDA abweisen soll. Der Bestandsbau prüft nicht noch einmal.
- */
-function abgewandelt(satz, aenderungen) {
-  return Object.freeze({ ...satz, werte: Object.freeze({ ...satz.werte, ...aenderungen }) });
-}
-
-/**
  * Eine Meldung Familienhospizkarenz/Pflegekarenz (E.12) für eine Rolle, als
  * fertiger Bestand FH. Bei der Anmeldung (80) kommen Geschlecht und
  * Staatsangehörigkeit dazu – die Staatsangehörigkeit aus der Rolle
@@ -129,9 +120,8 @@ function abgewandelt(satz, aenderungen) {
  *
  * @param a.art Builder des Pakets, z. B. familienhospizAnmeldung
  * @param a.felder übrige Felder (ADAT, KART, …)
- * @param a.aendern Werte, die NACH der Prüfung gesetzt werden (Negativtest)
  */
-function familienhospiz(ctx, { fall, art, rolle, dg, traeger, felder, aendern }) {
+function familienhospiz(ctx, { fall, art, rolle, dg, traeger, felder }) {
   const bauer = ctx.elda[art];
   if (typeof bauer !== 'function') throw new Error(`Unbekannte Satzart-Funktion '${art}'.`);
   const person = ctx.rolle(rolle);
@@ -139,7 +129,7 @@ function familienhospiz(ctx, { fall, art, rolle, dg, traeger, felder, aendern })
   const refn = ctx.referenzwert(fall);
   const anmeldung = art === 'familienhospizAnmeldung';
   const anschrift = person.anschrift;
-  let satz = bauer({
+  const satz = bauer({
     BKNR: konto.bknr,
     DGNA: ctx.dienstgeber(dg).name,
     VSNR: person.vsnr,
@@ -157,7 +147,6 @@ function familienhospiz(ctx, { fall, art, rolle, dg, traeger, felder, aendern })
     REFN: refn,
     ...felder,
   });
-  if (aendern) satz = abgewandelt(satz, aendern);
   return {
     inhalt: ctx.elda.erstelleFamilienhospizBestand([satz], ctx.bestandOptionen({ dg, traeger })),
     dateiName: ctx.dateiName(fall),
@@ -172,16 +161,15 @@ function familienhospiz(ctx, { fall, art, rolle, dg, traeger, felder, aendern })
  * @param a.art schwerarbeitsmeldung oder stornoSchwerarbeitsmeldung
  * @param a.jahr Tätigkeitsjahr JJJJ
  * @param a.taetigkeiten [{ art, von, bis }]
- * @param a.aendern Werte, die NACH der Prüfung gesetzt werden (Negativtest)
  */
-function schwerarbeit(ctx, { fall, art, rolle, dg, traeger, jahr, taetigkeiten, aendern }) {
+function schwerarbeit(ctx, { fall, art, rolle, dg, traeger, jahr, taetigkeiten }) {
   const bauer = ctx.elda[art];
   if (typeof bauer !== 'function') throw new Error(`Unbekannte Satzart-Funktion '${art}'.`);
   const person = ctx.rolle(rolle);
   const konto = ctx.konto(dg, { traeger });
   const d = ctx.dienstgeber(dg);
   const refn = ctx.referenzwert(fall);
-  let satz = bauer({
+  const satz = bauer({
     BKNR: konto.bknr,
     DGNA: d.name,
     DKFZ: d.anschrift.kfz,
@@ -196,7 +184,6 @@ function schwerarbeit(ctx, { fall, art, rolle, dg, traeger, jahr, taetigkeiten, 
     REFN: refn,
     taetigkeiten,
   });
-  if (aendern) satz = abgewandelt(satz, aendern);
   return {
     inhalt: ctx.elda.erstelleSchwerarbeitBestand([satz], ctx.bestandOptionen({ dg, traeger })),
     dateiName: ctx.dateiName(fall),
@@ -204,9 +191,28 @@ function schwerarbeit(ctx, { fall, art, rolle, dg, traeger, jahr, taetigkeiten, 
   };
 }
 
+/**
+ * Überschreibt in einem fertigen Bestand ein Feld eines Satzes – für
+ * Negativtests mit Werten, die die Builder des Pakets zu Recht ablehnen. Der
+ * Bestand bleibt sonst byte-gleich; Länge und Position kommen aus der
+ * Feldtabelle, `wert` wird auf die Feldlänge aufgefüllt.
+ *
+ * @param satzNr 1 = Vorlaufsatz, 2 = erster Meldungssatz
+ * @param feld Eintrag der Feldtabelle ({ name, pos, laenge })
+ */
+function setzeFeld(inhalt, satzNr, feld, wert) {
+  if (wert.length > feld.laenge) throw new Error(`Wert für ${feld.name} ist länger als ${feld.laenge}.`);
+  const saetze = inhalt.toString('latin1').split('\r\n');
+  const satz = saetze[satzNr - 1];
+  if (satz === undefined) throw new Error(`Satz ${satzNr} gibt es im Bestand nicht.`);
+  saetze[satzNr - 1] =
+    satz.slice(0, feld.pos - 1) + wert.padEnd(feld.laenge, ' ') + satz.slice(feld.pos - 1 + feld.laenge);
+  return Buffer.from(saetze.join('\r\n'), 'latin1');
+}
+
 /** Satztrenner CRLF → LF, sonst byte-gleich. */
 function mitLf(inhalt) {
   return Buffer.from(inhalt.toString('latin1').replace(/\r\n/g, '\n'), 'latin1');
 }
 
-module.exports = { meldung, mbgmPaket, familienhospiz, schwerarbeit, abgewandelt, mitLf };
+module.exports = { meldung, mbgmPaket, familienhospiz, schwerarbeit, mitLf, setzeFeld };

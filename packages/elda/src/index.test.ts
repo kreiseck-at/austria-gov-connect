@@ -48,6 +48,10 @@ test('index exportiert die Meldungs-Builder', () => {
     'wochenarbeitszeit',
     'erstelleMbgmPaket',
     'erstelleMbgmBestand',
+    'vsnrAnforderung',
+    'erstelleVsnrAnforderungBestand',
+    'adresseVersicherter',
+    'erstelleAdressmeldungBestand',
     'familienhospizAnmeldung',
     'familienhospizAbmeldung',
     'familienhospizAenderungsmeldung',
@@ -70,8 +74,24 @@ test('index exportiert die Meldungs-Builder', () => {
 test('index exportiert die Bestandsbezeichnungen aus Kapitel B.3', () => {
   assert.equal(elda.BEST_VERSICHERTENMELDUNG, 'VR');
   assert.equal(elda.BEST_MBGM, 'MB');
+  assert.equal(elda.BEST_VSNR_ANFORDERUNG, 'VS');
+  assert.equal(elda.BEST_ADRESSE_VERSICHERTER, 'AV');
   assert.equal(elda.BEST_FAMILIENHOSPIZ, 'FH');
   assert.equal(elda.BEST_SCHWERARBEIT, 'SM');
+});
+
+test('index exportiert Pflichtstufen und Staatencode-Tabelle, aber keine Feldtabellen von E.30/E.31', () => {
+  assert.equal(elda.PFLICHT_E30.GESL, 'Z');
+  assert.equal(elda.PFLICHT_E31.VSNR, 'Z');
+  assert.ok(elda.STAATSANGEHOERIGKEITEN.has('AUT'));
+  for (const intern of [
+    'FELDER_E30',
+    'FELDER_E31',
+    'pruefeVsnrAnforderungInhalt',
+    'pruefeAdressmeldungInhalt',
+  ]) {
+    assert.equal((elda as Record<string, unknown>)[intern], undefined, `sollte intern sein: ${intern}`);
+  }
 });
 
 test('index exportiert Codelisten und Matrizen von Familienhospiz und Schwerarbeit, aber keine Prüfinterna', () => {
@@ -135,4 +155,8 @@ test('index exportiert das Lesen von Rücksendungen', () => {
     'nicht_uebernommen',
     'offen',
   ]);
+});
+
+test('index exportiert die Beitragsberechnung nach D.62', () => {
+  assert.equal(elda.berechneBeitragCent(95_000, 28.45), 27_028);
 });

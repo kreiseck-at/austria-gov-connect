@@ -21,11 +21,10 @@ const { createHash } = require('node:crypto');
 const elda = require('../../dist/index.js');
 const { redigiereGeheimnisse } = require('../../dist/redigieren.js');
 const { FELDER_E29 } = require('../../dist/felder-e29.js');
+const { FELDER_E30 } = require('../../dist/felder-e30.js');
+const { FELDER_E31 } = require('../../dist/felder-e31.js');
 const { FELDER_E12 } = require('../../dist/felder-e12.js');
 const { FELDER_E22 } = require('../../dist/felder-e22.js');
-
-/** Feldtabelle je Bestandsbezeichnung (Vorlaufsatz, Position 23) für `zeigen`. */
-const FELDER_NACH_BESTAND = { VR: FELDER_E29, FH: FELDER_E12, SM: FELDER_E22 };
 const {
   FENSTER,
   GUELTIG_BIS,
@@ -277,6 +276,15 @@ const VORLAUF = [
 ];
 const stueck = (satz, pos, laenge) => satz.slice(pos - 1, pos - 1 + laenge);
 
+/** Feldtabelle je Satzart für die Anzeige; die Versichertenmeldung ist der Normalfall. */
+const FELDER_JE_SATZART = {
+  VS: FELDER_E30,
+  AV: FELDER_E31,
+  ...Object.fromEntries(['80', '81', '82', '83', '84', '85', '86'].map((sa) => [sa, FELDER_E12])),
+  65: FELDER_E22,
+  66: FELDER_E22,
+};
+
 function zeigeBestand(inhalt) {
   const text = inhalt.toString('latin1');
   const trenner = text.includes('\r\n') ? '\r\n' : '\n';
@@ -284,7 +292,6 @@ function zeigeBestand(inhalt) {
   console.log(
     `  ${inhalt.length} Bytes, ${saetze.length} Sätze, Satztrenner ${trenner === '\r\n' ? 'CRLF' : 'LF'}`,
   );
-  const tabelle = FELDER_NACH_BESTAND[stueck(saetze[0], 23, 2)] ?? FELDER_E29;
   saetze.forEach((satz, i) => {
     // OBUS ist die Seriennummer – nie ausgeben.
     const kopf = `  Satz ${i + 1} (${satz.slice(0, 2)}, ${satz.length} Zeichen; OBUS *******, VSTR ${stueck(satz, 19, 2)})`;
@@ -293,7 +300,7 @@ function zeigeBestand(inhalt) {
     } else if (i === saetze.length - 1) {
       console.log(`${kopf}: Schlusssatz`);
     } else {
-      const felder = tabelle
+      const felder = (FELDER_JE_SATZART[satz.slice(0, 2)] ?? FELDER_E29)
         .filter((f) => f.pos > 20)
         .map((f) => [f.name, stueck(satz, f.pos, f.laenge).trim()])
         .filter(([, w]) => w !== '' && !/^0+$/.test(w));
