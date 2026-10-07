@@ -437,3 +437,46 @@ test('F9051 liest das Vorzeichen der Gesamtsumme aus GSVZ, nicht aus GSUM', () =
   const verdreht = storno.map((s) => (s.satzart === 'PS' ? { ...s, werte: { ...s.werte, GSVZ: '+' } } : s));
   assert.equal(pruefeMbgmPaket(verdreht).filter((b) => b.code === 'F9051').length, 1);
 });
+
+// SIT 07.10.2026: Eine mBGM für Lehrlinge mit der allgemeinen AV-Minderung A03
+// kam mit Clearing BW1838 zurück („… Verrechnungsposition Minderung AV auf 0%
+// (A03) ist nicht zulässig“) und BW1850 (Beitragssumme abweichend). Das
+// Tarifsystem führt für Lehrlinge eigene Abschläge: A04/A05.
+const lehrling = (bsgr: string, vpty: string): Beitragsgrundlagenmeldung => ({
+  ...MELDUNG,
+  tarifbloecke: [
+    {
+      beschaeftigtengruppe: bsgr,
+      beginnDerVerrechnung: 1,
+      basen: [
+        {
+          typ: 'AB',
+          betragCent: 90_000,
+          positionen: [
+            { typ: 'T01', prozentsatz: 28.45, betragCent: 25_605 },
+            { typ: vpty, prozentsatz: -1.15, betragCent: -1_035 },
+          ],
+        },
+      ],
+    },
+  ],
+});
+
+test('Lehrlinge (B044/B045) mit allgemeiner AV-Minderung A01–A03: Fehler BW1838', () => {
+  for (const bsgr of ['B044', 'B045']) {
+    for (const vpty of ['A01', 'A02', 'A03']) {
+      const b = pruefeMbgmPaket(erstelleMbgmPaket([lehrling(bsgr, vpty)], OPT)).filter(
+        (x) => x.code === 'BW1838',
+      );
+      assert.equal(b.length, 1, `${bsgr}/${vpty}`);
+      assert.equal(b[0]!.schwere, 'fehler');
+      assert.match(b[0]!.meldung, /A04|A05/);
+    }
+  }
+});
+
+test('Lehrlinge mit A04/A05 und Arbeiter mit A03 sind in Ordnung', () => {
+  assert.deepEqual(pruefeMbgmPaket(erstelleMbgmPaket([lehrling('B045', 'A04')], OPT)), []);
+  assert.deepEqual(pruefeMbgmPaket(erstelleMbgmPaket([lehrling('B044', 'A05')], OPT)), []);
+  assert.deepEqual(pruefeMbgmPaket(erstelleMbgmPaket([lehrling('B001', 'A03')], OPT)), []);
+});

@@ -75,6 +75,7 @@ bestanden bewertet ist, weist `lauf` auf mögliche Folgefehler hin.
 | `abholen [--ja]` | ja | Rücksendungen auflisten bzw. abholen und sichern |
 | `urteil <ID> <Urteil>` | nein | Bewertung ins Laufprotokoll |
 | `protokoll` | nein | Status je Fall (Wiener Zeit), Läufe mit Antwort / Versuche |
+| `auswerten` | nein | gesicherte Mitteilungen und Clearingfälle lesen, Clearing per Referenzwert dem Fall zugeordnet |
 | `katalog` | nein | Katalog als Markdown |
 
 `SIT_JETZT` (ISO-Zeitpunkt) verschiebt für die Befehle **ohne Netz** die aktuelle Zeit; Netzbefehle nehmen immer die

@@ -323,6 +323,67 @@ function befehlKatalog() {
   console.log(alsMarkdown(katalog, statusJeFall(katalog, ablage.ereignisse())));
 }
 
+/**
+ * Wertet die gesicherten Rücksendungen aus – Mitteilungen und Clearing –, mit
+ * den Lesern des Pakets. Clearingfälle werden über den Referenzwert dem
+ * eigenen Fall zugeordnet; vom Träger selbst angelegte (Mahnung, mBGM von Amts
+ * wegen) tragen einen internen Referenzwert und stehen als „Träger“.
+ */
+function befehlAuswerten() {
+  const { ablage } = grundlagen({ fuerNetz: false });
+  const ereignisse = ablage.ereignisse();
+  const fallZu = new Map();
+  for (const e of ereignisse) {
+    if (e.art === 'lauf') for (const r of e.referenzwerte ?? []) fallZu.set(r, e.fall);
+  }
+  const ordner = path.join(ablage.basis, 'ruecksendungen');
+  const dateien = fs.existsSync(ordner) ? fs.readdirSync(ordner).sort() : [];
+  const codes = new Map();
+  for (const datei of dateien) {
+    const name = datei.replace(/^\d+__/, '');
+    const art = elda.artDerRuecksendung(name).art;
+    const inhalt = fs.readFileSync(path.join(ordner, datei));
+    try {
+      if (art === 'mitteilung') {
+        const m = elda.liesMitteilung(inhalt);
+        const refs = m.meldungen
+          .map((x) => fallZu.get(x.referenznummer) ?? x.referenznummer)
+          .filter((r) => r !== undefined);
+        const summen = m.bestaende
+          .map((b) => `${b.code} ${b.uebernommen ?? '?'}/${b.empfangen ?? '?'}`)
+          .join(', ');
+        console.log(`${name}: ${m.status} (${summen}) – ${[...new Set(refs)].join(', ')}`);
+        for (const c of [...m.codes, ...m.meldungen.flatMap((x) => x.codes)]) {
+          console.log(`  ${c.typ ?? ''} ${c.code} (Zeile ${c.zeilennummer ?? '?'}): ${c.text}`);
+        }
+      } else if (art === 'clearing') {
+        for (const fall of elda.liesClearing(inhalt)) {
+          const inh = fall.meldung.inhalt;
+          const status = inh?.meldungStatus
+            ? `${inh.meldungStatus} ${elda.MELDUNG_STATUS[inh.meldungStatus] ?? ''}`.trim()
+            : '–';
+          const zusatz = inh?.meldungStatusZusatz ? `/${inh.meldungStatusZusatz}` : '';
+          const wer = fallZu.get(fall.referenzwert) ?? 'Träger';
+          const zeitraum = fall.fachinformationen.find((f) => f.typ === 'Beitragszeitraum')?.wert ?? '';
+          for (const info of inh?.informationen ?? []) {
+            codes.set(info.code, (codes.get(info.code) ?? 0) + 1);
+            if (wer === 'Träger') continue;
+            console.log(
+              `${name}: ${wer} ${fall.bestandBez}/${fall.satzart} ${zeitraum} → ${info.code} [${status}${zusatz}, ` +
+                `${elda.DRINGLICHKEIT[info.dringlichkeit] ?? info.dringlichkeit ?? '–'}] ${info.text}`,
+            );
+          }
+        }
+      }
+    } catch (err) {
+      console.log(`${name}: nicht lesbar – ${err.message}`);
+    }
+  }
+  if (codes.size > 0) {
+    console.log(`Clearing gesamt: ${[...codes].map(([c, n]) => `${c} ×${n}`).join(', ')}`);
+  }
+}
+
 function befehlProtokoll() {
   const { katalog, ablage } = grundlagen();
   const status = statusJeFall(katalog, ablage.ereignisse());
@@ -669,6 +730,11 @@ async function befehlAbholen(optionen) {
     statusCode: liste.statusCode,
     anzahl: liste.ruecksendungen.length,
   });
+  if (!liste.ok && liste.statusCode === '500') {
+    // Bekannter SIT-Fehler (lswh, 05.10.2026): 500 statt einer leeren Liste.
+    console.log('Outbox leer (SIT antwortet dann mit 500, Befund B004).');
+    return;
+  }
   if (!liste.ok) abbruch(`Auflisten → ${liste.statusCode} „${schwaerze(liste.meldung) ?? ''}"`);
 
   const laeufe = ablage.ereignisse().filter((e) => e.art === 'lauf' && e.protokollnummer);
@@ -756,6 +822,8 @@ async function main() {
       return befehlAbholen(optionen);
     case 'urteil':
       return befehlUrteil(positionen, optionen);
+    case 'auswerten':
+      return befehlAuswerten();
     case 'protokoll':
       return befehlProtokoll();
     case 'katalog':
