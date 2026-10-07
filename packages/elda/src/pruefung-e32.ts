@@ -1,5 +1,6 @@
 import type { RohSatz } from './bestand';
 import { pruefeAbfolge } from './abfolge-e32';
+import { pruefeBeitraege } from './beitrag-e32';
 
 /**
  * Prüfregeln des mBGM-Pakets aus dem Prüfkatalog der 43. Ergänzung,
@@ -393,6 +394,7 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
   }
 
   befunde.push(...pruefeLehrlingsAbschlag(saetze));
+  if (selbstabrechnung) befunde.push(...pruefeBeitraege(saetze));
 
   // Die eigentliche Strukturregel steht nicht im Prüfkatalog, sondern in
   // Kapitel E.32.2.2.6 — der Katalog verweist bei F9070 nur darauf.
