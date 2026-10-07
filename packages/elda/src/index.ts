@@ -114,3 +114,4 @@ export {
   type Schwere,
 } from './pruefung-e32';
 export { pruefeAbfolge, ABFOLGE } from './abfolge-e32';
+export { berechneBeitragCent } from './beitrag-e32';
