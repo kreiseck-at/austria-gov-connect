@@ -21,6 +21,8 @@ const { createHash } = require('node:crypto');
 const elda = require('../../dist/index.js');
 const { redigiereGeheimnisse } = require('../../dist/redigieren.js');
 const { FELDER_E29 } = require('../../dist/felder-e29.js');
+const { FELDER_E30 } = require('../../dist/felder-e30.js');
+const { FELDER_E31 } = require('../../dist/felder-e31.js');
 const {
   FENSTER,
   GUELTIG_BIS,
@@ -272,6 +274,9 @@ const VORLAUF = [
 ];
 const stueck = (satz, pos, laenge) => satz.slice(pos - 1, pos - 1 + laenge);
 
+/** Feldtabelle je Satzart für die Anzeige; die Versichertenmeldung ist der Normalfall. */
+const FELDER_JE_SATZART = { VS: FELDER_E30, AV: FELDER_E31 };
+
 function zeigeBestand(inhalt) {
   const text = inhalt.toString('latin1');
   const trenner = text.includes('\r\n') ? '\r\n' : '\n';
@@ -287,7 +292,8 @@ function zeigeBestand(inhalt) {
     } else if (i === saetze.length - 1) {
       console.log(`${kopf}: Schlusssatz`);
     } else {
-      const felder = FELDER_E29.filter((f) => f.pos > 20)
+      const felder = (FELDER_JE_SATZART[satz.slice(0, 2)] ?? FELDER_E29)
+        .filter((f) => f.pos > 20)
         .map((f) => [f.name, stueck(satz, f.pos, f.laenge).trim()])
         .filter(([, w]) => w !== '' && !/^0+$/.test(w));
       console.log(`${kopf}: ${felder.map(([n, w]) => `${n}=${w}`).join('  ')}`);
