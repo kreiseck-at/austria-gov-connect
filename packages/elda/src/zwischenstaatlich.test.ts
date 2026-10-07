@@ -323,6 +323,8 @@ test('Inhaltsregeln des Prüfkatalogs (Blatt ES und Allgemein)', () => {
   fehlercode(() => antragZwischenstaatlich('E1', { ...E1, GEBD: '31022000' }), 'F7587');
   fehlercode(() => antragZwischenstaatlich('E1', { ...E1, VSNR: '1234011680' }), 'F7589');
   fehlercode(() => antragZwischenstaatlich('E1', { ...E1, WKFZ: 'A' }), 'F7616');
+  // Zwei Großbuchstaben genügen nicht: der Code muss in der Staatencode-Tabelle stehen.
+  fehlercode(() => antragZwischenstaatlich('E1', { ...E1, WKFZ: 'QQ' }), 'F7616');
   fehlercode(() => antragZwischenstaatlich('E1', { ...E1, UIDM: 'keine-uuid' }), 'F7662');
   fehlercode(() => antragZwischenstaatlich('E1', { ...E1, BFEST: 'X' }), 'F7526');
   fehlercode(() => antragZwischenstaatlich('E1', { ...E1, ANFL: 'J' }), 'F7663');

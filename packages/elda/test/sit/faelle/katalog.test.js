@@ -247,16 +247,57 @@ test(
   },
 );
 
+test('S-Fälle: Bestand VS bzw. AV (S11 ist eine Anmeldung, VR), TM, Seriennummer, Träger', () => {
+  const BEST = { S10: 'VS', S11: 'VR', S12: 'VS', S13: 'VS', S20: 'AV', S21: 'AV' };
+  for (const [id, best] of Object.entries(BEST)) {
+    const { ergebnis, ctx } = GEBAUT.get(id);
+    const s = saetze(ergebnis.inhalt);
+    assert.equal(s.length, 3, `${id}: Vorlauf, Meldung, Schluss`);
+    const [vorlauf, meldungssatz] = s;
+    assert.equal(feld(vorlauf, 21, 2), 'TM', `${id}: PROJ`);
+    assert.equal(feld(vorlauf, 23, 2), best, `${id}: BEST`);
+    assert.equal(feld(vorlauf, 31, 8), ttmmjjjj(ctx.zr), `${id}: EDAT`);
+    for (const satz of s) {
+      assert.equal(feld(satz, 12, 7), '0765432', `${id}: OBUS`);
+      assert.equal(feld(satz, 19, 2), id === 'S21' ? '15' : '14', `${id}: VSTR`);
+    }
+    assert.equal(feld(meldungssatz, 1, 2), best === 'VR' ? 'M3' : best, `${id}: Satzart`);
+  }
+});
+
+test('S11 meldet ohne VSNR, mit Geburtsdatum und REFV = Referenzwert von S10', () => {
+  const { FELDER_E29 } = require('../../../dist/felder-e29.js');
+  const f = (name) => FELDER_E29.find((x) => x.name === name);
+  const m3 = saetze(GEBAUT.get('S11').ergebnis.inhalt)[1];
+  assert.equal(feld(m3, f('VSNR').pos, f('VSNR').laenge), '0000000000');
+  assert.equal(feld(m3, f('GEBD').pos, f('GEBD').laenge), '14031998');
+  assert.equal(feld(m3, f('REFV').pos, f('REFV').laenge).trimEnd(), GEBAUT.get('S10').ergebnis.referenzwerte[0]);
+});
+
+test('Negativtests S13 und S21 ändern genau ein Feld des gültigen Satzes', () => {
+  const { FELDER_E30 } = require('../../../dist/felder-e30.js');
+  const { FELDER_E31 } = require('../../../dist/felder-e31.js');
+  const gesl = FELDER_E30.find((x) => x.name === 'GESL');
+  const wkfz = FELDER_E31.find((x) => x.name === 'WKFZ');
+  const s13 = saetze(GEBAUT.get('S13').ergebnis.inhalt);
+  assert.equal(s13[1].length, 688);
+  assert.equal(feld(s13[1], gesl.pos, gesl.laenge), '5');
+  const s21 = saetze(GEBAUT.get('S21').ergebnis.inhalt);
+  assert.equal(s21[1].length, 416);
+  assert.equal(feld(s21[1], wkfz.pos, wkfz.laenge), 'A  ');
+  assert.equal(feld(saetze(GEBAUT.get('S20').ergebnis.inhalt)[1], wkfz.pos, wkfz.laenge), 'D  ');
+});
+
 test('ES-Fälle: Bestand ES, Version 08, TM, Satzart und Träger; Negativfälle weichen genau an einer Stelle ab', () => {
   const { FELDER_E27 } = require('../../../dist/felder-e27.js');
   const pos = (name) => FELDER_E27.find((f) => f.name === name);
   const erwartet = {
-    S05: ['E1', '14'],
-    S051: ['E5', '15'],
-    S052: ['E2', '15'],
-    S053: ['E1', '14'],
-    S054: ['E1', '14'],
-    S055: ['E1', '14'],
+    S50: ['E1', '14'],
+    S51: ['E5', '15'],
+    S52: ['E2', '15'],
+    S53: ['E1', '14'],
+    S54: ['E1', '14'],
+    S55: ['E1', '14'],
   };
   for (const [id, [sart, vstr]] of Object.entries(erwartet)) {
     const { ergebnis, ctx } = GEBAUT.get(id);
@@ -277,17 +318,17 @@ test('ES-Fälle: Bestand ES, Version 08, TM, Satzart und Träger; Negativfälle 
     assert.equal(uidm, ergebnis.referenzwerte[0], `${id}: UIDM als Referenzwert protokolliert`);
   }
   const antragVon = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
-  // Storno verweist über UIDU auf S05.
-  assert.equal(feld(antragVon('S053'), pos('UIDU').pos, 40).trimEnd(), GEBAUT.get('S05').ergebnis.referenzwerte[0]);
-  assert.equal(feld(antragVon('S053'), 21, 2), '02');
-  // S054: nur AGSTAAT auf AT geändert.
+  // Storno verweist über UIDU auf S50.
+  assert.equal(feld(antragVon('S53'), pos('UIDU').pos, 40).trimEnd(), GEBAUT.get('S50').ergebnis.referenzwerte[0]);
+  assert.equal(feld(antragVon('S53'), 21, 2), '02');
+  // S54: nur AGSTAAT auf AT geändert.
   const agstaat = pos('AGSTAAT');
-  assert.equal(feld(antragVon('S054'), agstaat.pos, 2), 'AT');
-  assert.equal(feld(antragVon('S05'), agstaat.pos, 2), 'DE');
-  // S055: Dienstgeber-Platz 2 ist eine Kopie von Platz 1.
+  assert.equal(feld(antragVon('S54'), agstaat.pos, 2), 'AT');
+  assert.equal(feld(antragVon('S50'), agstaat.pos, 2), 'DE');
+  // S55: Dienstgeber-Platz 2 ist eine Kopie von Platz 1.
   const p1 = pos('DGNA_1').pos;
   const p2 = pos('DGNA_2').pos;
-  const a = antragVon('S055');
+  const a = antragVon('S55');
   assert.equal(a.slice(p2 - 1, p2 - 1 + 399), a.slice(p1 - 1, p1 - 1 + 399));
   assert.notEqual(a.slice(p2 - 1, p2 - 1 + 399).trim(), '');
 });

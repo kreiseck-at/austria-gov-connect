@@ -116,6 +116,24 @@ export {
   type Schwere,
 } from './pruefung-e32';
 export { pruefeAbfolge, ABFOLGE } from './abfolge-e32';
+export { berechneBeitragCent } from './beitrag-e32';
+
+// --- VSNR-Anforderung (Kapitel E.30) und Adresse Versicherter (Kapitel E.31) --
+export {
+  vsnrAnforderung,
+  erstelleVsnrAnforderungBestand,
+  type VsnrAnforderungFelder,
+} from './vsnr-anforderung';
+export { adresseVersicherter, erstelleAdressmeldungBestand, type AdressmeldungFelder } from './adressmeldung';
+export { PFLICHT_E30 } from './pflicht-e30';
+export { PFLICHT_E31 } from './pflicht-e31';
+export {
+  BEST_VSNR_ANFORDERUNG,
+  BEST_ADRESSE_VERSICHERTER,
+  VERSION_VSNR_ANFORDERUNG,
+  VERSION_ADRESSE_VERSICHERTER,
+} from './bestand';
+export { STAATEN, STAATEN_STAND, STAATSANGEHOERIGKEITEN, type Staat } from './staaten';
 
 // --- Antrag auf zwischenstaatliche Bescheinigung (Kapitel E.27) ------------
 export {

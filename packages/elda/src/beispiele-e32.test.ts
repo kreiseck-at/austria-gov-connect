@@ -1515,6 +1515,13 @@ for (const b of BEISPIELE) {
       [],
       'Paketpruefungen des Pruefkatalogs',
     );
+    // D.62: Jeder abgedruckte Beitrag ist Basis mal Prozentsatz, kaufmaennisch
+    // gerundet -- die unabhaengige Gegenprobe fuer die Nachrechnung.
+    assert.deepEqual(
+      pruefeMbgmPaket(saetze).filter((x) => x.code === 'DM-D.62'),
+      [],
+      'Beitraege nach D.62',
+    );
   });
 }
 
@@ -2088,6 +2095,13 @@ for (const b of SPEZIALFAELLE) {
       pruefeMbgmPaket(saetze).filter((x) => x.schwere === 'fehler'),
       [],
       'Paketpruefungen des Pruefkatalogs',
+    );
+    // D.62: Jeder abgedruckte Beitrag ist Basis mal Prozentsatz, kaufmaennisch
+    // gerundet -- die unabhaengige Gegenprobe fuer die Nachrechnung.
+    assert.deepEqual(
+      pruefeMbgmPaket(saetze).filter((x) => x.code === 'DM-D.62'),
+      [],
+      'Beitraege nach D.62',
     );
   });
 }

@@ -1,6 +1,6 @@
 'use strict';
 
-// S05 – Antrag auf zwischenstaatliche Bescheinigung (Bestand ES, Kapitel E.27).
+// S50–S55 – Antrag auf zwischenstaatliche Bescheinigung (Bestand ES, Kapitel E.27).
 //
 // Ob die SIT-Plattform ES heute verarbeitet, ist offen: Die ÖGK hat beim
 // LSWH-Event am 09.10.2025 (Präsentation der ÖGK, Seite 24) die „Erweiterung des
@@ -21,6 +21,7 @@
 
 const { randomUUID } = require('node:crypto');
 const { plusTage } = require('../lib/fenster');
+const { setzeFeld } = require('../lib/bausteine');
 
 const NACH_ANMELDUNG = ['mo-nm', 'di-vm', 'di-nm', 'mi-nm'];
 const fall = (mehr) => ({ gefahr: null, aktion: 'senden', ...mehr });
@@ -93,26 +94,14 @@ function entsendungE1(ctx, uidm) {
   });
 }
 
-/**
- * Ersetzt Bytes im zweiten Satz (dem Antrag) eines Bestands mit einem Antrag.
- * Für die Negativfälle: Das Paket baut nur gültige Anträge, die Abweichung
- * entsteht erst danach – wie bei den Umschlag-Fällen.
- */
-function ersetzeImAntrag(inhalt, pos, wert) {
-  const text = inhalt.toString('latin1');
-  const beginn = text.indexOf('\r\n') + 2;
-  const p = beginn + pos - 1;
-  return Buffer.from(text.slice(0, p) + wert + text.slice(p + wert.length), 'latin1');
-}
-
-const posVon = (ctx, name) => {
+const feldVon = (name) => {
   const { FELDER_E27 } = require('../../../dist/felder-e27.js');
-  return FELDER_E27.find((f) => f.name === name).pos;
+  return FELDER_E27.find((f) => f.name === name);
 };
 
 module.exports = [
   fall({
-    id: 'S05',
+    id: 'S50',
     titel: 'Antrag Entsendung nach Deutschland (ES, E1)',
     zweck:
       'Klärt, ob die SIT Anträge auf zwischenstaatliche Bescheinigung verarbeitet, und prüft den ' +
@@ -121,20 +110,20 @@ module.exports = [
     erwartung: 'übernommen – oder Abweisung „Bestand ES" = auf der SIT noch nicht freigegeben',
     fenster: NACH_ANMELDUNG,
     abhaengig: ['V01'],
-    baue: (ctx) => bestand(ctx, 'S05', entsendungE1(ctx, randomUUID()), { dg: 'A', traeger: '14' }),
+    baue: (ctx) => bestand(ctx, 'S50', entsendungE1(ctx, randomUUID()), { dg: 'A', traeger: '14' }),
   }),
   fall({
-    id: 'S051',
+    id: 'S51',
     titel: 'Antrag Entsendung nach Serbien, bilaterales Abkommen (ES, E5)',
     zweck: 'Satzart E5 mit Staat aus der Tabelle „Satzart E5"; ohne Wirtschaftssektor.',
     quelle: 'E.27, E.27.1, D.36 (Satzart E5)',
     erwartung: 'übernommen',
     fenster: NACH_ANMELDUNG,
-    abhaengig: ['V02', 'S05'],
+    abhaengig: ['V02', 'S50'],
     baue: (ctx) =>
       bestand(
         ctx,
-        'S051',
+        'S51',
         ctx.elda.antragZwischenstaatlich('E5', {
           UIDM: randomUUID(),
           ...person(ctx, 'angestellte'),
@@ -147,19 +136,19 @@ module.exports = [
       ),
   }),
   fall({
-    id: 'S052',
+    id: 'S52',
     titel: 'Antrag Beschäftigung in Österreich und Slowenien (ES, E2)',
     zweck: 'Satzart E2 mit Arbeitsorten; ANATJ = J verlangt einen Arbeitsort in Österreich.',
     quelle: 'E.27, E.27.1, D.36; Prüfkatalog Blatt ES F7650',
     erwartung: 'übernommen',
     fenster: NACH_ANMELDUNG,
-    abhaengig: ['B03', 'S05'],
+    abhaengig: ['B03', 'S50'],
     baue: (ctx) => {
       const d = ctx.dienstgeber('B');
       const beginn = plusTage(ctx.zr, 14);
       return bestand(
         ctx,
-        'S052',
+        'S52',
         ctx.elda.antragZwischenstaatlich('E2', {
           UIDM: randomUUID(),
           ...person(ctx, 'reserve_1'),
@@ -192,51 +181,53 @@ module.exports = [
     },
   }),
   fall({
-    id: 'S053',
-    titel: 'Storno des Antrags S05 (ES, E1, MART 02)',
+    id: 'S53',
+    titel: 'Storno des Antrags S50 (ES, E1, MART 02)',
     zweck: 'Storno über die UIDU des Antrags; der Storno-Satz trägt sonst nur Grundstellung.',
     quelle: 'E.27.2 (Storno), D.68, D.69',
     erwartung: 'übernommen',
     fenster: ['di-vm', 'di-nm', 'mi-nm'],
-    abhaengig: ['S05'],
+    abhaengig: ['S50'],
     baue: (ctx) =>
       bestand(
         ctx,
-        'S053',
+        'S53',
         ctx.elda.stornoAntragZwischenstaatlich('E1', {
           UIDM: randomUUID(),
-          UIDU: ctx.referenzwertVon('S05'),
+          UIDU: ctx.referenzwertVon('S50'),
         }),
         { dg: 'A', traeger: '14' },
       ),
   }),
   fall({
-    id: 'S054',
+    id: 'S54',
     titel: 'Negativ: Entsendung nach Österreich (E1, AGSTAAT AT)',
     zweck: 'Fußnote 33 zu D.36: AT ist bei E1 nicht zulässig. Kommt F7611 zurück?',
     quelle: 'D.36 Fußnote 33; Prüfkatalog Blatt ES Nr. 4 (F7611)',
     erwartung: 'nicht übernommen, F7611',
     fenster: NACH_ANMELDUNG,
-    abhaengig: ['S05'],
+    abhaengig: ['S50'],
     baue: (ctx) => {
-      const b = bestand(ctx, 'S054', entsendungE1(ctx, randomUUID()), { dg: 'A', traeger: '14' });
-      return { ...b, inhalt: ersetzeImAntrag(b.inhalt, posVon(ctx, 'AGSTAAT'), 'AT') };
+      const b = bestand(ctx, 'S54', entsendungE1(ctx, randomUUID()), { dg: 'A', traeger: '14' });
+      return { ...b, inhalt: setzeFeld(b.inhalt, 2, feldVon('AGSTAAT'), 'AT') };
     },
   }),
   fall({
-    id: 'S055',
+    id: 'S55',
     titel: 'Negativ: zweiter Dienstgeber bei E1',
     zweck: 'Bei E1 ist der Dienstgeber-Block nur einmal zulässig. Kommt F7515 zurück?',
     quelle: 'E.27 Seite 295; Prüfkatalog Blatt ES (F7515)',
     erwartung: 'nicht übernommen, F7515',
     fenster: NACH_ANMELDUNG,
-    abhaengig: ['S05'],
+    abhaengig: ['S50'],
     baue: (ctx) => {
-      const b = bestand(ctx, 'S055', entsendungE1(ctx, randomUUID()), { dg: 'A', traeger: '14' });
-      const text = b.inhalt.toString('latin1');
-      const beginn = text.indexOf('\r\n') + 2;
-      const block1 = text.slice(beginn + posVon(ctx, 'DGNA_1') - 1, beginn + posVon(ctx, 'DGNA_2') - 1);
-      return { ...b, inhalt: ersetzeImAntrag(b.inhalt, posVon(ctx, 'DGNA_2'), block1) };
+      const b = bestand(ctx, 'S55', entsendungE1(ctx, randomUUID()), { dg: 'A', traeger: '14' });
+      // Platz 2 des Dienstgeber-Blocks (399 Zeichen ab DGNA_2) wird eine Kopie von Platz 1.
+      const p1 = feldVon('DGNA_1').pos;
+      const p2 = feldVon('DGNA_2').pos;
+      const block1 = b.inhalt.toString('latin1').split('\r\n')[1].slice(p1 - 1, p2 - 1);
+      const platz2 = { name: 'Dienstgeber-Block Platz 2', pos: p2, laenge: p2 - p1 };
+      return { ...b, inhalt: setzeFeld(b.inhalt, 2, platz2, block1) };
     },
   }),
 ];

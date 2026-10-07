@@ -1,6 +1,7 @@
 import { EldaError } from './errors';
 import { PLAETZE_ARBEITSORT, PLAETZE_DIENSTGEBER, PLAETZE_SELBSTAENDIG } from './felder-e27';
 import { PFLICHT_E27, type E27Meldeart, type E27Satzart } from './pflicht-e27';
+import { STAATEN } from './staaten';
 import { alsZahl, gueltigeVsnrStruktur, gueltigesDatum, gueltigesGeburtsdatum } from './pruefung-e29';
 
 type Werte = Readonly<Record<string, string | undefined>>;
@@ -218,8 +219,14 @@ const BKNR_NEU_ERLAUBT: ReadonlySet<E27Satzart> = new Set<E27Satzart>(['E1', 'E2
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Zwei Großbuchstaben — die Form des ISO-A2-Codes aus D.11/D.12. */
-const ISO_A2 = /^[A-Z]{2}$/;
+/**
+ * Die ISOA2-Codes der Staatencode-Tabelle der ÖGK (`STAATEN`, Stand
+ * 22.04.2026). Kapitel D.12 (Seite 79) verweist für den zweistelligen
+ * Staatenschlüssel „ISO A2 Code (lt. EU-Recht)" auf genau dieses Verzeichnis
+ * auf elda.at; der Prüfkatalog prüft WKFZ, DGKFZ und STKFZ „lt. D.12" (F7616,
+ * F7506_n, F7562_n, Status N).
+ */
+const ISO_A2: ReadonlySet<string> = new Set(STAATEN.flatMap((s) => (s.isoA2 === undefined ? [] : [s.isoA2])));
 
 function jn(werte: Werte, name: string, code: string): void {
   const w = wert(werte, name);
@@ -270,16 +277,19 @@ export function pruefeInhaltE27(satzart: E27Satzart, meldeart: E27Meldeart, wert
     wirf('F0082', 'Das Geschlecht (GESL) ist ungültig; zulässig sind 1, 2, 3, 4, 6 und 7.');
   }
   const wkfz = wert(werte, 'WKFZ');
-  if (wkfz !== undefined && !ISO_A2.test(wkfz)) {
-    wirf('F7616', 'WKFZ: erwartet ein Staatenschlüssel nach ISO A2, zwei Großbuchstaben (Kapitel D.12).');
+  if (wkfz !== undefined && !ISO_A2.has(wkfz)) {
+    wirf('F7616', 'WKFZ: kein ISOA2-Code der Staatencode-Tabelle der ÖGK (Kapitel D.12).');
   }
 
   // --- Dienstgeber -------------------------------------------------------------
   for (let platz = 1; platz <= PLAETZE_DIENSTGEBER; platz++) {
     const n = (f: string): string => `${f}_${platz}`;
     const dgkfz = wert(werte, n('DGKFZ'));
-    if (dgkfz !== undefined && !ISO_A2.test(dgkfz)) {
-      wirf(`F7506_${platz}`, `${n('DGKFZ')}: erwartet ein Staatenschlüssel nach ISO A2 (Kapitel D.12).`);
+    if (dgkfz !== undefined && !ISO_A2.has(dgkfz)) {
+      wirf(
+        `F7506_${platz}`,
+        `${n('DGKFZ')}: kein ISOA2-Code der Staatencode-Tabelle der ÖGK (Kapitel D.12).`,
+      );
     }
     const dgws = wert(werte, n('DGWS'));
     if (dgws !== undefined && !WIRTSCHAFTSSEKTOR.has(dgws.padStart(2, '0'))) {
@@ -346,8 +356,11 @@ export function pruefeInhaltE27(satzart: E27Satzart, meldeart: E27Meldeart, wert
   // --- Selbständige Tätigkeit (E4) -----------------------------------------------
   for (let platz = 1; platz <= PLAETZE_SELBSTAENDIG; platz++) {
     const stkfz = wert(werte, `STKFZ_${platz}`);
-    if (stkfz !== undefined && !ISO_A2.test(stkfz)) {
-      wirf(`F7562_${platz}`, `STKFZ_${platz}: erwartet ein Staatenschlüssel nach ISO A2 (Kapitel D.12).`);
+    if (stkfz !== undefined && !ISO_A2.has(stkfz)) {
+      wirf(
+        `F7562_${platz}`,
+        `STKFZ_${platz}: kein ISOA2-Code der Staatencode-Tabelle der ÖGK (Kapitel D.12).`,
+      );
     }
     datum(werte, `STAS_${platz}`, `F7601_${platz}`);
     jn(werte, `MARGST_${platz}`, `F7643_${platz}`);
