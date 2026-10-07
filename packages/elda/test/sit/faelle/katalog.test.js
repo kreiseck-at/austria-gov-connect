@@ -247,6 +247,58 @@ test(
   },
 );
 
+test('FH- und SM-Fälle: Bestand, Version, Satzlänge, Satzart, Abwandlung nur im Negativtest', () => {
+  const { FELDER_E12 } = require('../../../dist/felder-e12.js');
+  const { FELDER_E22 } = require('../../../dist/felder-e22.js');
+  const wert = (tabelle, satz, name) => {
+    const f = tabelle.find((x) => x.name === name);
+    return feld(satz, f.pos, f.laenge);
+  };
+  const erwartet = {
+    S31: ['FH', '03', 850, '80'],
+    S32: ['FH', '03', 850, '81'],
+    S33: ['FH', '03', 850, '80'],
+    S40: ['SM', '02', 800, '65'],
+    S41: ['SM', '02', 800, '66'],
+    S42: ['SM', '02', 800, '65'],
+    S43: ['SM', '02', 800, '65'],
+  };
+  for (const [id, [best, vers, laenge, sart]] of Object.entries(erwartet)) {
+    const { ergebnis, ctx } = GEBAUT.get(id);
+    const s = saetze(ergebnis.inhalt);
+    assert.equal(s.length, 3, id);
+    const [vorlauf, satz] = s;
+    assert.equal(feld(vorlauf, 21, 2), 'TM', `${id}: PROJ`);
+    assert.equal(feld(vorlauf, 23, 2), best, `${id}: BEST`);
+    assert.equal(feld(vorlauf, 150, 2), vers, `${id}: VERS`);
+    assert.equal(feld(vorlauf, 31, 8), ttmmjjjj(ctx.zr), `${id}: EDAT`);
+    for (const x of s) {
+      assert.equal(x.length, laenge, `${id}: Satzlänge`);
+      assert.equal(feld(x, 12, 7), '0765432', `${id}: OBUS`);
+      assert.equal(feld(x, 19, 2), '14', `${id}: VSTR`);
+    }
+    assert.equal(feld(satz, 1, 2), sart, `${id}: Satzart`);
+    assert.equal(feld(satz, 21, 10).trimEnd(), GEBAUT.get('S30').ctx.konto('A', { traeger: '14' }).bknr);
+  }
+  const s30 = saetze(GEBAUT.get('S30').ergebnis.inhalt);
+  assert.equal(feld(s30[0], 23, 2), 'VR', 'S30: BEST');
+  assert.equal(feld(s30[1], 1, 2), 'M3', 'S30: Satzart');
+  const fh = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
+  assert.equal(wert(FELDER_E12, fh('S31'), 'KART'), '04');
+  assert.equal(wert(FELDER_E12, fh('S31'), 'STSL'), 'AUT');
+  assert.equal(wert(FELDER_E12, fh('S31'), 'WORT').trimEnd(), 'Wien');
+  assert.equal(wert(FELDER_E12, fh('S31'), 'ADAT'), ttmmjjjj(zrDatum('di-vm')));
+  assert.equal(wert(FELDER_E12, fh('S32'), 'ADAT'), '31032025');
+  assert.equal(wert(FELDER_E12, fh('S32'), 'GESL'), '0');
+  assert.equal(wert(FELDER_E12, fh('S33'), 'KART'), '09');
+  const sm = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
+  assert.equal(wert(FELDER_E22, sm('S40'), 'JAHR'), '2025');
+  assert.equal(feld(sm('S40'), 502, 10), '4 01012801');
+  assert.equal(feld(sm('S42'), 502, 2), '3 ');
+  assert.equal(feld(sm('S43'), 502, 2), '01');
+  assert.equal(wert(FELDER_E22, sm('S40'), 'REFN').trimEnd(), GEBAUT.get('S40').ergebnis.referenzwerte[0]);
+});
+
 test('S-Fälle: Bestand VS bzw. AV (S11 ist eine Anmeldung, VR), TM, Seriennummer, Träger', () => {
   const BEST = { S10: 'VS', S11: 'VR', S12: 'VS', S13: 'VS', S20: 'AV', S21: 'AV' };
   for (const [id, best] of Object.entries(BEST)) {
@@ -271,7 +323,10 @@ test('S11 meldet ohne VSNR, mit Geburtsdatum und REFV = Referenzwert von S10', (
   const m3 = saetze(GEBAUT.get('S11').ergebnis.inhalt)[1];
   assert.equal(feld(m3, f('VSNR').pos, f('VSNR').laenge), '0000000000');
   assert.equal(feld(m3, f('GEBD').pos, f('GEBD').laenge), '14031998');
-  assert.equal(feld(m3, f('REFV').pos, f('REFV').laenge).trimEnd(), GEBAUT.get('S10').ergebnis.referenzwerte[0]);
+  assert.equal(
+    feld(m3, f('REFV').pos, f('REFV').laenge).trimEnd(),
+    GEBAUT.get('S10').ergebnis.referenzwerte[0],
+  );
 });
 
 test('Negativtests S13 und S21 ändern genau ein Feld des gültigen Satzes', () => {
@@ -286,4 +341,49 @@ test('Negativtests S13 und S21 ändern genau ein Feld des gültigen Satzes', () 
   assert.equal(s21[1].length, 416);
   assert.equal(feld(s21[1], wkfz.pos, wkfz.laenge), 'A  ');
   assert.equal(feld(saetze(GEBAUT.get('S20').ergebnis.inhalt)[1], wkfz.pos, wkfz.laenge), 'D  ');
+});
+
+test('ES-Fälle: Bestand ES, Version 08, TM, Satzart und Träger; Negativfälle weichen genau an einer Stelle ab', () => {
+  const { FELDER_E27 } = require('../../../dist/felder-e27.js');
+  const pos = (name) => FELDER_E27.find((f) => f.name === name);
+  const erwartet = {
+    S50: ['E1', '14'],
+    S51: ['E5', '15'],
+    S52: ['E2', '15'],
+    S53: ['E1', '14'],
+    S54: ['E1', '14'],
+    S55: ['E1', '14'],
+  };
+  for (const [id, [sart, vstr]] of Object.entries(erwartet)) {
+    const { ergebnis, ctx } = GEBAUT.get(id);
+    const s = saetze(ergebnis.inhalt);
+    assert.equal(s.length, 3, `${id}: Vorlauf, Antrag, Schluss`);
+    const [vorlauf, antrag] = s;
+    assert.equal(feld(vorlauf, 21, 2), 'TM', `${id}: PROJ`);
+    assert.equal(feld(vorlauf, 23, 2), 'ES', `${id}: BEST`);
+    assert.equal(feld(vorlauf, 150, 2), '08', `${id}: VERS`);
+    assert.equal(feld(vorlauf, 31, 8), ttmmjjjj(ctx.zr), `${id}: EDAT`);
+    assert.equal(antrag.length, 9028, `${id}: Satzlänge`);
+    assert.equal(feld(antrag, 1, 2), sart, `${id}: Satzart`);
+    for (const satz of s) {
+      assert.equal(feld(satz, 12, 7), '0765432', `${id}: OBUS`);
+      assert.equal(feld(satz, 19, 2), vstr, `${id}: VSTR`);
+    }
+    const uidm = feld(antrag, pos('UIDM').pos, 40).trimEnd();
+    assert.equal(uidm, ergebnis.referenzwerte[0], `${id}: UIDM als Referenzwert protokolliert`);
+  }
+  const antragVon = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
+  // Storno verweist über UIDU auf S50.
+  assert.equal(feld(antragVon('S53'), pos('UIDU').pos, 40).trimEnd(), GEBAUT.get('S50').ergebnis.referenzwerte[0]);
+  assert.equal(feld(antragVon('S53'), 21, 2), '02');
+  // S54: nur AGSTAAT auf AT geändert.
+  const agstaat = pos('AGSTAAT');
+  assert.equal(feld(antragVon('S54'), agstaat.pos, 2), 'AT');
+  assert.equal(feld(antragVon('S50'), agstaat.pos, 2), 'DE');
+  // S55: Dienstgeber-Platz 2 ist eine Kopie von Platz 1.
+  const p1 = pos('DGNA_1').pos;
+  const p2 = pos('DGNA_2').pos;
+  const a = antragVon('S55');
+  assert.equal(a.slice(p2 - 1, p2 - 1 + 399), a.slice(p1 - 1, p1 - 1 + 399));
+  assert.notEqual(a.slice(p2 - 1, p2 - 1 + 399).trim(), '');
 });

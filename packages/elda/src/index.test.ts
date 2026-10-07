@@ -52,6 +52,17 @@ test('index exportiert die Meldungs-Builder', () => {
     'erstelleVsnrAnforderungBestand',
     'adresseVersicherter',
     'erstelleAdressmeldungBestand',
+    'familienhospizAnmeldung',
+    'familienhospizAbmeldung',
+    'familienhospizAenderungsmeldung',
+    'familienhospizStornoAnmeldung',
+    'familienhospizStornoAbmeldung',
+    'familienhospizRichtigstellungAnmeldung',
+    'familienhospizRichtigstellungAbmeldung',
+    'erstelleFamilienhospizBestand',
+    'schwerarbeitsmeldung',
+    'stornoSchwerarbeitsmeldung',
+    'erstelleSchwerarbeitBestand',
   ]) {
     assert.equal(typeof (elda as Record<string, unknown>)[name], 'function', name);
   }
@@ -65,6 +76,8 @@ test('index exportiert die Bestandsbezeichnungen aus Kapitel B.3', () => {
   assert.equal(elda.BEST_MBGM, 'MB');
   assert.equal(elda.BEST_VSNR_ANFORDERUNG, 'VS');
   assert.equal(elda.BEST_ADRESSE_VERSICHERTER, 'AV');
+  assert.equal(elda.BEST_FAMILIENHOSPIZ, 'FH');
+  assert.equal(elda.BEST_SCHWERARBEIT, 'SM');
 });
 
 test('index exportiert Pflichtstufen und Staatencode-Tabelle, aber keine Feldtabellen von E.30/E.31', () => {
@@ -76,6 +89,25 @@ test('index exportiert Pflichtstufen und Staatencode-Tabelle, aber keine Feldtab
     'FELDER_E31',
     'pruefeVsnrAnforderungInhalt',
     'pruefeAdressmeldungInhalt',
+  ]) {
+    assert.equal((elda as Record<string, unknown>)[intern], undefined, `sollte intern sein: ${intern}`);
+  }
+});
+
+test('index exportiert Codelisten und Matrizen von Familienhospiz und Schwerarbeit, aber keine Prüfinterna', () => {
+  assert.equal(elda.KARENZART.PFLEGEKARENZ, '04');
+  assert.equal(elda.TAETIGKEIT.SCHICHT_ODER_WECHSELDIENST, '1');
+  assert.ok(elda.PFLICHT_E12['80']);
+  assert.ok(elda.PFLICHT_E22['65']);
+  assert.equal(elda.SATZART_TEXT_FH['80'], 'Anmeldung');
+  assert.equal(elda.SATZART_TEXT_SM['66'], 'Storno Schwerarbeitsmeldung');
+  assert.ok(elda.FELDGRUPPEN_E12.length > 0);
+  for (const intern of [
+    'FELDER_E12',
+    'FELDER_E22',
+    'pruefeFamilienhospiz',
+    'pruefeSchwerarbeit',
+    'pruefeAllgemein',
   ]) {
     assert.equal((elda as Record<string, unknown>)[intern], undefined, `sollte intern sein: ${intern}`);
   }
@@ -127,6 +159,21 @@ test('index exportiert das Lesen von Rücksendungen', () => {
 
 test('index exportiert die Beitragsberechnung nach D.62', () => {
   assert.equal(elda.berechneBeitragCent(95_000, 28.45), 27_028);
+});
+
+test('index exportiert den Antrag auf zwischenstaatliche Bescheinigung (E.27)', () => {
+  for (const name of ['antragZwischenstaatlich', 'stornoAntragZwischenstaatlich', 'erstelleEsBestand']) {
+    assert.equal(typeof (elda as Record<string, unknown>)[name], 'function', name);
+  }
+  assert.equal(elda.BEST_ZWISCHENSTAATLICH, 'ES');
+  assert.equal(elda.VERSION_ZWISCHENSTAATLICH, '08');
+  assert.deepEqual(Object.keys(elda.E27_SATZART_TEXT), ['E1', 'E2', 'E3', 'E4', 'E5', 'EA']);
+  assert.equal(elda.PFLICHT_E27.E1.AGSTAAT, 'Z');
+  assert.equal(elda.PFLICHT_E27_STORNO.E1.UIDU, 'Z');
+  assert.ok(elda.STAATEN_E5.has('QU'));
+  for (const intern of ['FELDER_E27', 'pruefePflichtE27', 'pruefeInhaltE27']) {
+    assert.equal((elda as Record<string, unknown>)[intern], undefined, `sollte intern sein: ${intern}`);
+  }
 });
 
 test('index exportiert den Lohnzettel Finanz (L16)', () => {

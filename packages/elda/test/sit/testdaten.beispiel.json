@@ -93,7 +93,14 @@
       "vorname": "Rita",
       "geburtsdatum": "07071970",
       "geschlecht": "w",
-      "vsnr": "7890070770"
+      "vsnr": "7890070770",
+      "staatsangehoerigkeit": "AUT",
+      "anschrift": {
+        "kfz": "A",
+        "plz": "1010",
+        "ort": "Wien",
+        "strasse": "Musterweg 3/4"
+      }
     },
     "reserve_2": {
       "familienname": "Muster",

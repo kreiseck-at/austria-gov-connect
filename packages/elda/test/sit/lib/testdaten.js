@@ -65,6 +65,19 @@ function pruefeTestdaten(roh) {
     verlange(/^\d{8}$/.test(p.geburtsdatum ?? ''), `Rolle ${rolle}: geburtsdatum muss TTMMJJJJ sein`);
     verlange(['m', 'w', 'x'].includes(p.geschlecht), `Rolle ${rolle}: geschlecht muss m, w oder x sein`);
     verlange(/^\d{10}$/.test(p.vsnr ?? ''), `Rolle ${rolle}: vsnr muss zehnstellig sein`);
+    // Optional, für die Anmeldung zur Familienhospizkarenz (E.12): Staatsangehörigkeit
+    // als ISO-A3-Code (D.11) und Wohnanschrift (D.12).
+    if (p.staatsangehoerigkeit !== undefined) {
+      verlange(
+        /^[A-Z]{3}$/.test(p.staatsangehoerigkeit),
+        `Rolle ${rolle}: staatsangehoerigkeit muss ein ISO-A3-Code sein (z. B. AUT)`,
+      );
+    }
+    if (p.anschrift !== undefined) {
+      for (const f of ['kfz', 'plz', 'ort', 'strasse']) {
+        verlange(nichtLeer(p.anschrift?.[f]), `Rolle ${rolle}: anschrift.${f} fehlt`);
+      }
+    }
   }
 
   function dienstgeber(dg) {

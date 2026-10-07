@@ -23,6 +23,8 @@ const { redigiereGeheimnisse } = require('../../dist/redigieren.js');
 const { FELDER_E29 } = require('../../dist/felder-e29.js');
 const { FELDER_E30 } = require('../../dist/felder-e30.js');
 const { FELDER_E31 } = require('../../dist/felder-e31.js');
+const { FELDER_E12 } = require('../../dist/felder-e12.js');
+const { FELDER_E22 } = require('../../dist/felder-e22.js');
 const {
   FENSTER,
   GUELTIG_BIS,
@@ -275,7 +277,13 @@ const VORLAUF = [
 const stueck = (satz, pos, laenge) => satz.slice(pos - 1, pos - 1 + laenge);
 
 /** Feldtabelle je Satzart für die Anzeige; die Versichertenmeldung ist der Normalfall. */
-const FELDER_JE_SATZART = { VS: FELDER_E30, AV: FELDER_E31 };
+const FELDER_JE_SATZART = {
+  VS: FELDER_E30,
+  AV: FELDER_E31,
+  ...Object.fromEntries(['80', '81', '82', '83', '84', '85', '86'].map((sa) => [sa, FELDER_E12])),
+  65: FELDER_E22,
+  66: FELDER_E22,
+};
 
 function zeigeBestand(inhalt) {
   const text = inhalt.toString('latin1');
