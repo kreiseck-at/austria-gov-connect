@@ -14,8 +14,9 @@ reduziert** (Kapitel E.29 der Organisationsbeschreibung) — Anmeldung, Abmeldun
 Datenbestand, siehe „Meldungen erzeugen" unten. Andere Meldungsarten, insbesondere die
 monatliche Beitragsgrundlagenmeldung (mBGM) ist seit 0.6.0 als Satzschicht
 enthalten — Feldtabellen, Pflichtmatrix, Codekataloge und der Zusammenbau für
-beide Verfahren (Selbstabrechnung und Vorschreibung). Der Lohnzettel Finanz
-(L16, Kapitel E.13/E.14) ist **nicht** enthalten.
+beide Verfahren (Selbstabrechnung und Vorschreibung). Dazu kommen die
+**VSNR-Anforderung** (Kapitel E.30) und die **Adresse Versicherter** (Kapitel
+E.31). Der Lohnzettel Finanz (L16, Kapitel E.13/E.14) ist **nicht** enthalten.
 
 ## Reifegrad
 
@@ -1084,6 +1085,101 @@ Ergänzung ist bei allen ÖGK-Landesstellen auch die 10-stellige Form gültig
 Tarifgruppen liefert das Paket bewusst nicht mit — er ändert sich laufend
 (siehe `codes-e32.ts`).
 
+### VSNR-Anforderung und Adresse Versicherter
+
+Zwei Meldungen mit je einer Satzart und einem eigenen Bestand:
+
+| Builder | Satzart | Bestand | Kapitel | Satzlänge |
+| ------- | ------- | ------- | ------- | --------- |
+| `vsnrAnforderung` → `erstelleVsnrAnforderungBestand` | `VS` | `VS`, Version `01` | E.30 | 688 |
+| `adresseVersicherter` → `erstelleAdressmeldungBestand` | `AV` | `AV`, Version `01` | E.31 | 416 |
+
+Beide Kapitel sind in der 42. und 43. Ergänzung wortgleich (Seiten 329–336
+bzw. 340–347). Die Builder prüfen die Pflichtstufen aus E.30.1/E.31.1 — ein
+leeres Pflichtfeld trägt den Code, mit dem der Prüfkatalog es abweist — und die
+Katalogregeln mit Status `N`, die sich aus den Feldwerten entscheiden lassen.
+Ein Bestand nimmt nur Sätze seiner eigenen Satzart auf (Kapitel C.1).
+
+**VSNR-Anforderung (E.30.2, Seite 343).** Hat eine anzumeldende Person noch
+keine Versicherungsnummer, fordert der Dienstgeber eine an — vorab oder
+spätestens zeitgleich mit der Anmeldung. Die Anmeldung geht als eigener
+`VR`-Bestand, mit Geburtsdatum statt VSNR und dem Referenzwert der Anforderung
+in `REFV`:
+
+```ts
+const vs = vsnrAnforderung({
+  REFW: 'VS-2026-0001',
+  BKNR: '4711815',
+  DGNA: 'Bäckerei Kornblum',
+  GEBD: '14031998',
+  FANA: 'Weinzierl',
+  VONA: 'Mirela',
+  GESL: '2',
+  STSL: 'AUT',
+  WKFZ: 'A',
+  PLZL: '5020',
+  WORT: 'Salzburg',
+  WSTR: 'Musterweg',
+  WHNR: '1',
+});
+const m3 = anmeldung({
+  REFW: 'M3-2026-0001',
+  BKNR: '4711815',
+  DGNA: 'Bäckerei Kornblum',
+  GEBD: '14031998',
+  REFV: 'VS-2026-0001',
+  FANA: 'Weinzierl',
+  VONA: 'Mirela',
+  ADAT: '12102026',
+  BBER: '02',
+  GERF: 'N',
+  FRDV: 'N',
+  VWAZ: wochenarbeitszeit(40),
+});
+await elda.senden({ dateiName: 'vs.dat', inhalt: erstelleVsnrAnforderungBestand([vs], opt) });
+await elda.senden({ dateiName: 'vr.dat', inhalt: erstelleBestand([m3], opt) });
+```
+
+Die vergebene Nummer kommt laut E.30.2 „über das externe Clearingsystem mit dem
+Referenzwert der VSNR – Anforderung" zurück (`liesClearing`); danach gilt für
+alle weiteren Meldungen die VSNR (D.45). Ist die Nummer nur unbekannt, aber
+vergeben, kann sie im WEB-BE-Kunden-Portal abgefragt werden.
+
+Geprüft werden:
+
+| Code | Prüft |
+| ---- | ----- |
+| `F6500`–`F6586` (leer) | Pflichtfelder laut E.30.1; `F6520` (Dienstgebername) steht nur auf dem Blatt `FC-Texte` |
+| `F6531` | Geburtsdatum `TTMMJJJJ`, `00MMJJJJ` oder `0000JJJJ` |
+| `F6541`, `F6551` | Familien- und Vorname gegen die „Prüfvorschriften" aus D.8/D.9: zulässige Zeichen, vor jedem Sonderzeichen ein Buchstabe, nach Bindestrich (und beim Familiennamen Hochkomma) ein Buchstabe, Punkt im Familiennamen nur an letzter oder vorletzter Stelle |
+| `D.8` | dieselben Regeln für den früheren Familiennamen `FNA1`; der Katalog prüft ihn nicht |
+| `F6562` | Geschlecht 1, 2, 3, 4, 6 oder 7 (Feldtabelle E.30) |
+| `F6571` | Staatsangehörigkeit als ISOA3-Code der Staatencode-Tabelle (`STAATEN`, Stand 22.04.2026) |
+| `F6512` | beim Träger ÖGK-V keine Beitragskontonummer mit führendem Leerzeichen (beim Bau des Bestands) |
+
+Die Groß- und Kleinschreibung der Namen prüft das Paket nicht: D.8 nennt
+Ausnahmen (Vorsilben, nachgewiesene Großschrift), die sich aus dem Namen nicht
+entscheiden lassen.
+
+**Adresse Versicherter (E.31.2.1, Seite 346).** An die ÖGK geht die Meldung
+**nur für einen ausländischen Hauptwohnsitz** — inländische Adressen holt die ÖGK
+aus dem zentralen Melderegister. Pflicht ist sie bei der ersten Beschäftigung mit
+bekannter VSNR, bei einer Wiederanmeldung mit neuem Wohnsitz im Ausland und bei
+einem Umzug ins Ausland während des Dienstverhältnisses; nicht nötig, wenn eine
+VSNR-Anforderung die Adresse schon trägt.
+
+| Code | Prüft |
+| ---- | ----- |
+| `F8000`–`F8070` (leer) | Pflichtfelder laut E.31.1 |
+| `F8031` | Versicherungsnummer in der Form `LLLPTTMMJJ` (die Prüfziffer nicht) |
+| `F8041` | `WKFZ` ist nicht `A` |
+| `F8012` | wie `F6512` |
+
+`STAATEN` und `STAATSANGEHOERIGKEITEN` geben die Staatencode-Tabelle der ÖGK
+(elda.at, Downloads) als Daten heraus. Das KFZ-Kennzeichen des Wohnorts wird
+nicht gegen sie geprüft: D.12 nennt „weitere KFZ-Kennzeichen" in einem
+Verzeichnis, das nur den Versicherungsträgern zugänglich ist.
+
 ### Zeitstempel im Bestand: Wiener Ortszeit
 
 `BestandOptionen.erstellt` ist ein echter Zeitpunkt (typischerweise das
@@ -1106,10 +1202,14 @@ gedacht.
   Feldtabelle, Pflichtmatrix, Erstellvorschriften mit Beispielen), D.22
   (Abmeldegrund-Codeliste samt Abhängigkeitstabelle auf Seite 96), D.6
   (Aufbau der Versicherungsnummer), D.39 (Beschäftigungsbereich-Codeliste),
-  D.41 (freier Dienstvertrag), D.43 (Referenzwert), D.47 (betriebliche
-  Vorsorge), E.30.2 (VSNR-Anforderung).
-- Prüfkatalog zur 43. Ergänzung (Version 43.1.0.0), Blätter `VR` und
-  `mBGM Paket` (Kapitel H.23).
+  D.41 (freier Dienstvertrag), D.43 (Referenzwert), D.45 (Referenzwert der
+  VSNR-Anforderung), D.47 (betriebliche Vorsorge), D.7–D.12 (Geburtsdatum,
+  Namen, akademischer Grad, Staatenschlüssel, Wohnort), E.30 (VSNR-Anforderung),
+  E.31 (Adresse Versicherter).
+- Prüfkatalog zur 43. Ergänzung (Version 43.1.0.0), Blätter `VR`, `VS`, `AV`,
+  `FC-Texte` und `mBGM Paket` (Kapitel H.23).
+- Staatencode-Tabelle der ÖGK, Stand 22.04.2026 (elda.at, Downloads
+  Dienstgeber).
 
 **Seitenangaben.** Gegenüber der 42. Ergänzung hat die 43. Inhalt nur in
 D.5 (10-stellige ÖGK-Beitragskontonummer), D.54 (Verrechnungsgrundlage bei
@@ -1117,7 +1217,8 @@ Verrechnung mit und ohne Zeit), D.60 (Abschläge ALT/NEU, `Z15`/`Z16` bei
 Sonderzahlungen) sowie in Kapiteln geändert, die dieses Paket nicht abbildet
 (E.10, E.13/E.14, E.16, E.24, E.26, E.27). E.1–E.3, E.29 und E.32 sind
 inhaltlich gleich geblieben. `codes-e32.ts` zitiert die Seiten der 43.
-Ergänzung; die übrigen Seiten- und Fußnotenangaben im Code beziehen sich auf
+Ergänzung, ebenso `felder-e30.ts`, `felder-e31.ts` und die übrigen Dateien zu
+E.30/E.31; die übrigen Seiten- und Fußnotenangaben im Code beziehen sich auf
 die 42. In der 43. liegen D.61 bis E.10 zwei Seiten später, E.28 bis G.10 —
 also E.29 und E.32 — elf Seiten später; die Fußnoten ab D.61 sind um neun bis
 zehn verschoben.
@@ -1139,9 +1240,17 @@ wird nichts davon geraten:
 - **Lohnzettel Finanz** (L16, Kapitel E.13/E.14, Bestand `LF`): nicht
   enthalten; braucht seine eigene Spec-Grundlage. Die SIT-Plattform verarbeitet
   `LF` nicht, getestet werden kann er nur im Kundentest.
-- **Weitere Verarbeitungen, die die SIT kennt:** VSNR-Anforderung (`VS`),
-  Adressmeldung (`AV`), Familienhospiz (`FH`), Schwerarbeit (`SM`) — keine
-  Builder.
+- **Weitere Verarbeitungen, die die SIT kennt:** Familienhospiz (`FH`),
+  Schwerarbeit (`SM`) — keine Builder.
+- **VSNR-Anforderung und Adressmeldung:** nach DM-Org und Prüfkatalog gebaut,
+  gegen ELDA noch nie gesendet. Offen ist dort: ob ELDA beim Geschlecht `F6561`
+  („gültig 1,2") oder `F6562` („gültig 1,2,3,4,6,7") anwendet — beide Zeilen
+  stehen mit Status `N` im Katalog; ob `WKFZ = A` an einen anderen Träger als
+  die ÖGK zulässig ist (`F8041` sagt nein, die Feldtabelle schränkt nur die ÖGK
+  ein); woran ELDA eine „ungültige" Beitragskontonummer (`F6511`, `F8011`) und
+  Postleitzahl (`F6583`, `F8051`) erkennt; welche Regel hinter der Groß- und
+  Kleinschreibung von Ort und Straße steht (`F6585`, `F6587`, `F8061`,
+  `F8071`); und wie der Clearingfall mit der vergebenen VSNR aussieht.
 - **Mitteilung bei Abweisung:** nach dem Schema gelesen, auf der SIT aber nie
   beobachtet (alle Sendungen kamen `uebernommen`). Das Klartext-Protokoll
   (`mbd_…`) wird nicht ausgewertet.

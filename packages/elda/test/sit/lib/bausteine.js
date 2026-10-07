@@ -108,9 +108,28 @@ function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, o
   };
 }
 
+/**
+ * Überschreibt in einem fertigen Bestand ein Feld eines Satzes – für
+ * Negativtests mit Werten, die die Builder des Pakets zu Recht ablehnen. Der
+ * Bestand bleibt sonst byte-gleich; Länge und Position kommen aus der
+ * Feldtabelle, `wert` wird auf die Feldlänge aufgefüllt.
+ *
+ * @param satzNr 1 = Vorlaufsatz, 2 = erster Meldungssatz
+ * @param feld Eintrag der Feldtabelle ({ name, pos, laenge })
+ */
+function setzeFeld(inhalt, satzNr, feld, wert) {
+  if (wert.length > feld.laenge) throw new Error(`Wert für ${feld.name} ist länger als ${feld.laenge}.`);
+  const saetze = inhalt.toString('latin1').split('\r\n');
+  const satz = saetze[satzNr - 1];
+  if (satz === undefined) throw new Error(`Satz ${satzNr} gibt es im Bestand nicht.`);
+  saetze[satzNr - 1] =
+    satz.slice(0, feld.pos - 1) + wert.padEnd(feld.laenge, ' ') + satz.slice(feld.pos - 1 + feld.laenge);
+  return Buffer.from(saetze.join('\r\n'), 'latin1');
+}
+
 /** Satztrenner CRLF → LF, sonst byte-gleich. */
 function mitLf(inhalt) {
   return Buffer.from(inhalt.toString('latin1').replace(/\r\n/g, '\n'), 'latin1');
 }
 
-module.exports = { meldung, mbgmPaket, mitLf };
+module.exports = { meldung, mbgmPaket, mitLf, setzeFeld };
