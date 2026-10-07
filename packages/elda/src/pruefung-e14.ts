@@ -292,7 +292,7 @@ function leer(wert: string): boolean {
  * Prüfziffer der Versicherungsnummer `LLLPTTMMJJ` nach der Anfragebeantwortung
  * 4690/AB XXIII. GP (siehe Modulkopf). Ein Divisionsrest von 10 ist nie gültig.
  */
-export function vsnrPrueffzifferGueltig(vsnr: string): boolean {
+export function vsnrPruefzifferGueltig(vsnr: string): boolean {
   if (!/^\d{10}$/.test(vsnr)) return false;
   const z = [...vsnr].map(Number);
   const faktoren = [3, 7, 9, 0, 5, 8, 4, 2, 1, 6];
@@ -305,7 +305,7 @@ export function vsnrPrueffzifferGueltig(vsnr: string): boolean {
  * samt Prüfziffer) nach STUZZA „Finanzamtszahlung in MBS", Seite 8 (siehe
  * Modulkopf).
  */
-export function steuernummerPrueffzifferGueltig(steuernummer: string): boolean {
+export function steuernummerPruefzifferGueltig(steuernummer: string): boolean {
   if (!/^\d{9}$/.test(steuernummer)) return false;
   const z = [...steuernummer].map(Number);
   let summe = 0;
@@ -857,7 +857,7 @@ const REGELN: Readonly<Record<string, (k: Kontext) => boolean>> = {
   // --- Arbeitnehmer und Partner ---------------------------------------------
   F2000: (k) => geburtsdatumUngueltig(n(k, 'AVLN'), s(k, 'AGBD')),
   // „#19 > 1000 und Prüfung valide SVNR false"
-  F2001: (k) => n(k, 'AVLN') > 1000 && !vsnrPrueffzifferGueltig(s(k, 'AVLN') + s(k, 'AGBD')),
+  F2001: (k) => n(k, 'AVLN') > 1000 && !vsnrPruefzifferGueltig(s(k, 'AVLN') + s(k, 'AGBD')),
   F2100: (k) => !imVorrat(k.w.ANAM ?? '', 'personenname'),
   F2300: (k) => !imVorrat(k.w.AADR ?? '', 'unternehmen'),
   // „zulässig laut DM-Org: alphabetisch"
@@ -971,7 +971,7 @@ const REGELN: Readonly<Record<string, (k: Kontext) => boolean>> = {
   F9992: (k) => s(k, 'STNRA').length < 8 || !/^\d+$/.test(s(k, 'STNRA')),
   F9991: (k) => {
     const stnr = s(k, 'STNRA');
-    return /^\d{8,9}$/.test(stnr) && !steuernummerPrueffzifferGueltig(stnr.padStart(9, '0'));
+    return /^\d{8,9}$/.test(stnr) && !steuernummerPruefzifferGueltig(stnr.padStart(9, '0'));
   },
 
   // --- Aushilfskräfte (Katalog 140 = RESE_141) --------------------------------
@@ -1044,7 +1044,7 @@ const KINDREGELN: Readonly<Record<string, (k: Kontext, f: (name: string) => stri
   KA00: (k, f) => !imVorrat(k.w[f('KFAM')] ?? '', 'personenname'),
   KA05: (k, f) => !imVorrat(k.w[f('KVON')] ?? '', 'personenname'),
   // „Ungültige SVNR Prüfziffer" — nur, wenn eine Nummer angegeben ist.
-  KA20: (k, f) => !leer(s(k, f('KVSNR'))) && !vsnrPrueffzifferGueltig(s(k, f('KVSNR'))),
+  KA20: (k, f) => !leer(s(k, f('KVSNR'))) && !vsnrPruefzifferGueltig(s(k, f('KVSNR'))),
   // „ungültiges Datum": Das DM-Org nennt für KGEBD kein Format. Gemeldet wird nur,
   // was weder als TTMMJJJJ (wie GEBD/GEBP) noch als JJJJMMTT ein Datum ist.
   KA25: (k, f) => {

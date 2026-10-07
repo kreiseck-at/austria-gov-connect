@@ -1027,9 +1027,13 @@ Mitteilungssätzen (Satzart `L1`, Satzlänge 3500).
   Verfahren nicht. Geprüft wird bei der Versichertenmeldung nur die
   Stellenfolge `LLLPTTMMJJ` aus Kapitel D.6 (siehe `F7020` oben). Das
   Verfahren selbst steht in der Anfragebeantwortung 4690/AB XXIII. GP (siehe
-  Quellen); der Lohnzettel prüft damit (`F2001`, `vsnrPrueffzifferGueltig`).
+  Quellen); der Lohnzettel prüft damit (`F2001`, `vsnrPruefzifferGueltig`).
   Die Versicherungsnummer des Beispiels in D.43 (`1234010180`), die die
-  Beispiele hier verwenden, besteht diese Prüfung übrigens nicht.
+  Beispiele hier verwenden, besteht diese Prüfung übrigens nicht. Ob ELDA bei
+  der Versichertenmeldung die Prüfziffer unter `F7020` („ungültig") mitprüft,
+  ist unbelegt; das klärt der SIT-Fall `V21` (Anmeldung mit verfälschter
+  Prüfziffer). Bis dahin weist der Builder eine falsche Prüfziffer nicht ab —
+  wer sicher gehen will, prüft vorher selbst mit `vsnrPruefzifferGueltig`.
 - Die **trägerabhängige Länge der Beitragskontonummer** — im Prüfkatalog nur
   als Warnung geführt, nicht als harter Fehler.
 - Die inhaltliche **Schreibweise von Namen** (`F7036`/`F7038`) — sie verlangt
@@ -1488,8 +1492,8 @@ Darunter:
 - Namen und Anschrift gegen den Zeichenvorrat des Zeichensatz-Dokuments
   (`F2100`, `F2300`–`F2600`, `KA00`, `KA05`);
 - die **Prüfziffern** der Versicherungsnummer (`F2001`, `KA20`;
-  `vsnrPrueffzifferGueltig`) und der Steuernummer (`F9991`;
-  `steuernummerPrueffzifferGueltig`), Quellen unten;
+  `vsnrPruefzifferGueltig`) und der Steuernummer (`F9991`;
+  `steuernummerPruefzifferGueltig`), Quellen unten;
 - die Summenregeln (`F4800` KZ 230, `F6201` KZ 243, `F6401` KZ 245, `F7004`
   KZ 260), die Einschränkungen je Lohnzettelart, Höchstbeträge, die
   Kinderblöcke (`KA…` für Kind 1, `KB…` für Kind 2 usw.);

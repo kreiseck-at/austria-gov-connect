@@ -7,9 +7,9 @@ import {
   L16_OFFEN,
   NUMERISCH_KATALOG,
   pruefeLohnzettel,
-  steuernummerPrueffzifferGueltig,
+  steuernummerPruefzifferGueltig,
   VORZEICHEN_KATALOG,
-  vsnrPrueffzifferGueltig,
+  vsnrPruefzifferGueltig,
   type LohnzettelPruefOptionen,
 } from './pruefung-e14';
 import { L16_PRUEFKATALOG } from './pruefkatalog-l16';
@@ -206,18 +206,18 @@ test('Versicherungsnummer: Geburtsdatum (F2000) und Prüfziffer (F2001)', () => 
 });
 
 test('Prüfziffer der Versicherungsnummer nach der Anfragebeantwortung 4690/AB', () => {
-  assert.ok(vsnrPrueffzifferGueltig('1237010180'));
-  assert.ok(!vsnrPrueffzifferGueltig('1234010180'));
+  assert.ok(vsnrPruefzifferGueltig('1237010180'));
+  assert.ok(!vsnrPruefzifferGueltig('1234010180'));
   // Laufnummer 100 mit 01.01.80 ergibt Rest 10 — keine Prüfziffer ist gültig.
-  for (let p = 0; p <= 9; p++) assert.ok(!vsnrPrueffzifferGueltig(`100${p}010180`), `P = ${p}`);
-  assert.ok(!vsnrPrueffzifferGueltig('123701018'));
+  for (let p = 0; p <= 9; p++) assert.ok(!vsnrPruefzifferGueltig(`100${p}010180`), `P = ${p}`);
+  assert.ok(!vsnrPruefzifferGueltig('123701018'));
 });
 
 test('Prüfziffer der Steuernummer nach STUZZA „Finanzamtszahlung in MBS"', () => {
   // Beispiel des Dokuments: 26–913572–9
-  assert.ok(steuernummerPrueffzifferGueltig('269135729'));
-  assert.ok(!steuernummerPrueffzifferGueltig('269135728'));
-  assert.ok(steuernummerPrueffzifferGueltig('911234565'), 'Ersatz-Steuernummer 91-123/4565');
+  assert.ok(steuernummerPruefzifferGueltig('269135729'));
+  assert.ok(!steuernummerPruefzifferGueltig('269135728'));
+  assert.ok(steuernummerPruefzifferGueltig('911234565'), 'Ersatz-Steuernummer 91-123/4565');
   assert.ok(roh({ STNRA: '911234566' }).includes('F9991'));
   assert.ok(!roh({}).includes('F9991'));
   // Achtstellig: die führende 0 des Finanzamts wird vorangestellt
