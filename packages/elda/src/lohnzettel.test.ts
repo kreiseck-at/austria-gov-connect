@@ -159,7 +159,7 @@ test('Kinderblock: bis zu 15 Kinder, Felder mit Kindnummer', () => {
     KFAM: 'Weinzierl',
     KVON: 'Livia',
     KSTAAT: 'A',
-    KVSNR: '1234010180',
+    KVSNR: '1235150315',
     KAFBZ: 'J',
     KBGFP: '01',
     KEGFP: '12',
