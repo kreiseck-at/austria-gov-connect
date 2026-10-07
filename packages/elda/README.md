@@ -82,12 +82,14 @@ Ebenfalls live beantwortet:
 - Die `md5`-Prüfung gegen die **dekodierten Bytes** hält: drei abgeholte
   Rücksendungen sind ohne `MD5-Abweichung` durchgelaufen.
 
-Offen bleibt: ob `<messages>` mehrfach vorkommen kann; ob `datei.dateiTyp`
-numerisch kommt (so die Tabelle in Abschnitt 4.2) oder als Text wie `XML` (so
-die Beispiel-Ausgabe in Abschnitt 7.4.3.3 desselben Dokuments — das Dokument
+Auf der SIT-Plattform beantwortet (Oktober 2026, siehe „Was die SIT-Plattform
+gezeigt hat"): `<messages>` kommt **mehrfach** vor — eine Fehlerantwort trägt
+den Text und daneben `requestId:<Base64>`; `LF` als Satztrenner wird dort
+**genauso angenommen** wie `CRLF`. Offen bleibt, ob `datei.dateiTyp` numerisch
+kommt (so die Tabelle in Abschnitt 4.2) oder als Text wie `XML` (so die
+Beispiel-Ausgabe in Abschnitt 7.4.3.3 desselben Dokuments — das Dokument
 widerspricht sich hier selbst, deshalb reicht dieses Paket den Wert unverändert
-als `string` durch); und ob das Trennzeichen zwingend `CRLF` ist oder `LF`
-genauso angenommen würde — verifiziert ist nur, dass `CRLF` funktioniert.
+als `string` durch).
 
 Status `404` bei `empfangen` ist **keine** offene Frage mehr: Die Status-Tabelle
 in Abschnitt 6 führt den Code für `EmpfangenResult` ausdrücklich als nicht
@@ -113,22 +115,10 @@ genannten Werten bestückt. Eine Fehldeutung der Spezifikation, die bereits im
 Dokument selbst durchgerechnet ist, würde also auffallen; eine Fehldeutung an
 einer Stelle, die keines der 28 Beispiele berührt, bliebe dagegen unentdeckt.
 
-Ungeklärt bleibt insbesondere: ob ELDA die Meldungssätze innerhalb eines
-Bestands tatsächlich ohne Trennzeichen aneinandergereiht erwartet (so baut es
-`erstelleBestand` — Fixlängensätze ohne Satztrenner, wie es die
-Identifikationsteil-Konvention aus Kapitel E.1 nahelegt, aber kein Beispiel des
-Dokuments zeigt einen kompletten Bestand als Byte-Strom). Das ist die offenste
-Stelle des Meldungsbaus, und es gibt eine deutliche Gegenanzeige: Kapitel C.1
-sagt auf Seite 49 wörtlich „**Die Übermittlung erfolgt in variabler
-Satzlänge**". Eine variable Satzlänge lässt sich ohne Satztrenner (oder ein
-Längenpräfix) gar nicht auflösen — der Satz spricht also eher für einen Trenner
-als dagegen, auch wenn das Dokument an keiner Stelle sagt, welcher. Innerhalb
-eines Bestands sind unterschiedliche Satzlängen ausdrücklich vorgesehen —
-Kapitel E.2 regelt sie eigens (siehe unten) —, aufgelöst werden sie über die
-Satzart in den ersten zwei Stellen jedes Satzes (Identifikationsteil, Kapitel
-E.1). **Das gehört als Erstes in den Kundentest**: denselben Bestand einmal
-ohne Trenner und einmal mit `\n` bzw. `\r\n` hochladen und die Mitteilungsfiles
-vergleichen. Weiter ungeklärt: ob
+Die früher offenste Stelle — ob die Sätze eines Bestands ohne Trenner
+aneinandergereiht erwartet werden — ist seit August 2026 beantwortet (siehe
+„Reifegrad"): Sätze werden durch `CRLF` getrennt, jeder in seiner eigenen
+Länge; die SIT-Plattform nimmt auch `LF` an. Weiter ungeklärt: ob
 MTOM/XOP-Fragen
 aus der Transport-Schicht (siehe oben) sich auf einen Meldungsbestand als
 Anhang genauso auswirken; und ob die in diesem Paket ergänzte Regel zu `REFV`
@@ -303,6 +293,26 @@ zeigt, wo ein Code bei `senden`/`empfangen`/`ruecksendungenAuflisten` als
 | `407` | Keine Berechtigung, Datei zu empfangen (Seriennummer stimmt nicht überein) | wirft (nur bei `empfangen` relevant) |
 | `408` | Datei laut Protokollnummer wurde bereits empfangen                   | `empfangen`: `bereitsEmpfangen` |
 
+Beobachtet auf der SIT-Plattform (Oktober 2026):
+
+- `551` heißt wörtlich „created älter als **60 Sekunden**". Geht die Uhr des
+  Rechners mehr als eine Minute falsch, scheitert jeder Aufruf damit — der
+  Zeitstempel wird bei jedem Aufruf neu gesetzt, das Problem ist die Uhr.
+- Ein leeres `created` beantwortet ELDA nicht mit `555`, sondern mit einem
+  SOAP-Fault „Ungueltiger Request: java.lang.IllegalArgumentException"
+  (`FonSoapFaultError`).
+- `500` kam dort bei `ruecksendungenAuflisten` mit **leerer** Outbox — laut
+  ELDA ein Fehler der SIT, behoben mit der Testversion Oktober 2026, in
+  Produktion nicht vorhanden. Die Antwort trug neben dem Text eine zweite
+  `<messages>` mit `requestId:<Base64>`; darin stehen eine UUID, die
+  Seriennummer und eine Zahl — wer Mitschnitte speichert, schwärzt sie.
+- `405` (Duplikat) kam **nie**: Dieselbe Datei, byte-gleich mit derselben
+  Datenträgernummer und denselben Referenzwerten, wurde zweimal mit `000`
+  angenommen, und auch das Clearing meldete nichts. Gegen Doppelversand schützt
+  sich der Absender selbst.
+- `559` kam nie: ELDA nimmt die Anfrage auch mit `Content-Type: application/xml`
+  an.
+
 ## Fehler oder Zustand?
 
 Nur die Codes, die ein Aufrufer sinnvoll und ohne Rückfrage weiterverarbeiten
@@ -378,8 +388,154 @@ Ergebnisobjekt am Fehler (`err.ergebnis`, ggf. mit `ergebnis.datei`) — der
 Inhalt ist damit aus dem Fehler selbst wiederherstellbar. Ein erneuter Aufruf
 von `empfangen` ist dagegen **kein** verlässlicher Weg, den Inhalt zu holen:
 `empfangen` ist einmalig, die Rücksendung gilt bereits als abgeholt, und ein
-zweiter Versuch liefert typischerweise nur noch `nichtVorhanden` oder
-`bereitsEmpfangen` — ohne die Datei.
+zweiter Versuch liefert nur noch `bereitsEmpfangen` — ohne die Datei. Auf der
+SIT-Plattform belegt (07.10.2026): Ein zweites `empfangen` derselben
+Protokollnummer antwortet mit `408` „Rücksendung … wurde bereits abgeholt."
+Wer eine Rücksendung verliert, findet sie danach nur noch in ELDA-Online.
+
+## Rücksendungen lesen
+
+Zu jeder angenommenen Sendung stellt ELDA **nach wenigen Sekunden** zwei
+Rücksendungen ein, eine je Sendung, nicht je Meldung:
+
+| Datei | Art | Inhalt |
+|---|---|---|
+| `mitteilung_<Protokollnummer>.xml` | `mitteilung` | ob ELDA die Meldungen **formal** übernommen hat — je Bestand und je Meldung (Referenznummer, Zeile) |
+| `mbd_<Protokollnummer>_<Beitragskontonummer>` | `protokoll` | dasselbe als Klartext-Protokoll (ISO-8859-15) mit Beträgen, Beschäftigtengruppe, Verrechnungsbasis; bei der Versichertenmeldung zusätzlich eine Bestätigung für Dienstgeber und Dienstnehmer |
+| `cm_<Nummer>.xml` | `clearing` | **erst nach der fachlichen Verarbeitung** beim Träger, wenn etwas zu klären ist: Clearing-Datensatz 2.0 |
+
+```ts
+import { artDerRuecksendung, liesMitteilung, liesClearing, MELDUNG_STATUS } from '@kreiseck/elda';
+
+const art = artDerRuecksendung(eintrag.dateiName);
+const datei = (await elda.empfangen(eintrag.protokollnummer)).datei; // vorher sichern!
+
+if (art.art === 'mitteilung') {
+  const m = liesMitteilung(datei.inhalt);
+  // m.status 'uebernommen' | 'teilweise_uebernommen' | 'nicht_uebernommen' | 'offen'
+  for (const meldung of m.meldungen) {
+    for (const c of meldung.codes) console.log(meldung.referenznummer, c.typ, c.code, c.text);
+  }
+}
+if (art.art === 'clearing') {
+  for (const fall of liesClearing(datei.inhalt)) {
+    const status = fall.meldung.inhalt?.meldungStatus; // 'VA' → MELDUNG_STATUS.VA = 'verarbeitet'
+    for (const info of fall.meldung.inhalt?.informationen ?? []) {
+      console.log(fall.referenzwert, info.code, info.text); // z. B. VW1942 „Die Abmeldung wurde nicht verarbeitet …"
+    }
+  }
+}
+```
+
+**`uebernommen` heißt nicht „verarbeitet".** Die Mitteilung sagt nur, dass ELDA
+die Meldung formal angenommen hat. Ob der Träger sie fachlich verarbeitet hat,
+steht allein im Clearing — eine Abmeldung kam auf der SIT als `uebernommen`
+zurück und einen Tag später als Clearingfall `VW1942` „nicht verarbeitet".
+Wer nur Mitteilungen auswertet, zeigt Meldungen als erledigt an, die es nicht
+sind.
+
+**Zuordnung.** Mitteilung und Protokoll tragen die Protokollnummer der eigenen
+Sendung im Dateinamen — dafür ist `findeRuecksendung` da. Ein Clearing-Datensatz
+trägt dagegen seine **eigene** Nummer; er gehört über `Dialogfall.referenzwert`
+zu einer Meldung (dem `REFW`, mit dem sie gesendet wurde). Clearingfälle, die
+der Träger selbst anlegt (Mahnung, mBGM von Amts wegen), tragen einen internen
+Referenzwert und keinen der eigenen Meldungen.
+
+**Clearing-Datensatz 2.0.** Je Datei eine `dialogfallListe` mit bis zu 1000
+Dialogfällen; jeder trägt die Meldungsinfo und einen Base64-kodierten Inhalt
+(`MVB_CLEARING_2_0_0`) mit Status und einer oder mehreren
+Clearing-Informationen. `liesClearing` dekodiert ihn; eine andere
+Inhaltsversion bleibt roh in `meldung.inhaltRoh`. Die Bedeutungen:
+
+| Feld | Werte |
+|---|---|
+| `zustellungsgrund` | `M` gemeldet, `U` urgiert, `O` obsolet gesetzt |
+| `dringlichkeit` | `D` dringend, Handlung nötig · `K` Kontrollfall, Meldung kontrollieren · `N` nicht dringend |
+| `meldungStatus` | `NV` nicht verarbeitet · `IA` in Arbeit · `VA` verarbeitet · `ST` storniert |
+| `meldungStatusZusatz` | Selbstabrechnung: `NB` nicht verbucht, `OB` noch nicht verbucht, `VB` verbucht, `TB` teilweise verbucht · Vorschreibung: `NV`, `OV`, `VV` (Verrechnung nicht / noch nicht / möglich) |
+
+Den Rückfragetext liefert der Datensatz selbst (`informationTextFachsystem`),
+die eingesetzten Werte stehen in `daten`. Die vollständige Liste aller Codes
+samt Dringlichkeit und empfohlener Handlung führt die ÖGK als Excel-Datei
+(„SV-Clearing-Rückmeldungen"); dieses Paket liefert sie nicht mit, weil sie
+sich ändert. Quellen: ÖGK, [SV-Clearingsystem:
+Clearing-Datensatz](https://www.gesundheitskasse.at/cdscontent/?contentid=10007.905521&portal=oegkdgportal)
+(XML-Schemas, Beispiele, Code-Liste); DM-Org Kapitel J.
+
+**Mitteilung.** `liesMitteilung` folgt dem Schema `elda_mitteilung-3.0.xsd`
+(ELDA, Downloads für Dienstgeber, „Mitteilungsfiles"; die `schemaLocation` in
+der Datei selbst ist nicht abrufbar). Das Schema kennt vier Werte für den
+Status der Sendung (`MITTEILUNG_STATUS`):
+
+| `status` | Bedeutung laut Schema |
+|---|---|
+| `uebernommen` | alle Meldungen übernommen |
+| `teilweise_uebernommen` | mindestens eine Meldung nicht übernommen — die nicht übernommenen korrigiert neu senden |
+| `nicht_uebernommen` | keine Meldung übernommen, etwa weil der Projektcode nicht erkannt wird oder der Bestand in einer ungültigen Version kommt |
+| `offen` | ELDA hat die Datei empfangen, die Verarbeitung ist aber noch nicht abgeschlossen — **eine weitere Mitteilung folgt** |
+
+Je Meldung stehen `status` (`uebernommen` / `nicht_uebernommen`),
+Referenznummer, Zeilennummer (Leerzeilen zählt ELDA nicht mit) und die `codes`
+mit `code` (z. B. `E17`), `text` (der fertige Fehlertext), `typ` (`fehler` /
+`warnung`) und `zeilennummer`. Codes, die keiner Meldung zuzuordnen sind — das
+Schema nennt `E17`, Mehrfachübermittlung einer Datei —, stehen in
+`Mitteilung.codes`. Den Klartext aller `E`-/`W`-Codes führt Kapitel H.22
+„ELDA-FC". Elemente außerhalb des Schemas landen in `weitere`. Auf der SIT kam
+bisher nur `uebernommen`; Codes und die anderen Status sind nach dem Schema
+gelesen, nicht beobachtet.
+
+## Was die SIT-Plattform gezeigt hat
+
+Die Systemintegrationstest-Plattform der Sozialversicherung (SIT) verarbeitet
+Meldungen wie die Produktion, mit synthetischen Testdaten und einer
+„Zeitreise" über simulierte Monate. Ein Testzyklus vom 05. bis 07.10.2026 mit
+Versichertenmeldungen und mBGM hat Folgendes gezeigt — was dort beobachtet ist,
+muss für die Produktion nicht ebenso gelten:
+
+- **Rücksendungen kommen sofort**, nicht erst nach der Verarbeitung: Mitteilung
+  und Protokoll lagen nach unter einer Minute bereit. Clearing kam erst nach
+  der Sammelverarbeitung (in der Produktion: dem täglichen Datenpaket an den
+  Träger).
+- **Fehlt die mBGM**, mahnt der Träger je Beitragskonto und Monat (`BW1930`,
+  dringend) und erstellt die mBGM **von Amts wegen** — nur für den Bereich SV
+  (`BW1916`). Eine Betriebliche Vorsorge legt die amtswegige mBGM nicht an.
+- Eine **Abmeldung mit BV-Ende**, zu der keine BV-Zeit gespeichert ist, kommt
+  als `VW1942` (dringend, Status `IA` in Arbeit) zurück; die Code-Liste der ÖGK
+  nennt als Handlung „Richtigstellung der Abmeldung". Beide Fälle hatten eine
+  Ursache in den Testdaten: Einmal lag das BV-Ende **vor** dem Anmeldedatum,
+  einmal endete die Beschäftigung mit dem **ersten Monat**. Dass im ersten
+  Monat keine BV-Zeit entsteht, ist naheliegend — die DM-Org verweist beim Feld
+  `BVAB` darauf, dass der BV-Beginn wegen § 6 Abs. 1 BMSVG vom Beginn der
+  Pflichtversicherung abweichen kann —, aber von der SIT nicht ausdrücklich
+  bestätigt.
+- Eine **mBGM für Monate vor der Anmeldung** wird übernommen und verbucht; der
+  BV-Teil aber nicht: `BW1871` (dringend) „keine entsprechende
+  Versicherungszeit BV vorhanden. Die Grundlage … wurde nicht gespeichert."
+  Andere Codes zur fehlenden Versicherungszeit kamen nicht.
+- `BVAB` gehört **nicht** in jede Anmeldung: Laut DM-Org (E.29.2, „Anmeldung
+  zur Betrieblichen Vorsorge ohne Sozialversicherungszeit") ist es nur dann
+  anzugeben, wenn eine BV-Zeit ohne SV-Zeit gemeldet wird. Die Anmeldungen der
+  SIT trugen kein `BVAB`; das war nicht die Ursache der fehlenden BV-Zeit.
+- **Lehrlinge** mit der allgemeinen AV-Minderung `A01`–`A03`: `BW1838`
+  (Kontrollfall) und `BW1850` (Beitragssumme weicht ab) — die Meldung wird
+  verarbeitet und verbucht, aber zu niedrig; Handlung „ggf. Storno und
+  Neumeldung". Richtig sind `A04`/`A05`. Dazu kommt `BW1842` (nicht dringend):
+  „Der Abschlag Minderung AV auf 0% (Lg.) wäre für die gemeldete
+  Verrechnungsbasis … möglich". `pruefeMbgmPaket` meldet die falsche Minderung
+  seither als Fehler `BW1838` (siehe „Prüfung der mBGM").
+- **Rundung auf den Cent:** `BW1917` (nicht dringend) „Zur Verrechnungsposition
+  Standard-Tarifgruppenverrechnung (T01) wurde im Unterschied zum gemeldeten
+  Beitrag € 270,27 der Beitrag in der Höhe von € 270,28 verbucht." Gemeldet war
+  eine Beitragsgrundlage von € 950,00 bei 28,45 %, also genau € 270,275. Der
+  Träger rundet kaufmännisch auf. In JavaScript ergibt `0.2845 * 95000`
+  `27027.499999999996`, und `Math.round` macht daraus 27027 Cent. Wer Beiträge
+  berechnet, muss in ganzen Zahlen rechnen (Prozentsatz in Hundertstelprozent ×
+  Cent) und erst dann runden. `pruefeMbgmPaket` rechnet Beiträge nicht nach.
+- Eine **verspätete mBGM** (nach dem 15. des Folgemonats) wurde angenommen und
+  verarbeitet; einen eigenen Clearing-Code für die Verspätung gab es nicht.
+- **Formal nicht geprüft** wurden dort: der Projektcode (`DM` statt `TM` wurde
+  angenommen), das Erstellungsdatum gegen das simulierte Datum, der
+  Content-Type und Duplikate (siehe „Status-Codes").
 
 ## Fehlerbehandlung
 
@@ -880,6 +1036,29 @@ Vorsorge AB" (`BVAB`) unbelegt, **storniert** das laut Dokument die Zeit der
 betrieblichen Vorsorge — ein leeres `BVAB` ist dort also keine „keine
 Änderung", sondern eine aktive Löschung.
 
+### Prüfung der mBGM
+
+`erstelleMbgmPaket` wirft bei allem, was sich beim Bau entscheiden lässt
+(Pflichtfelder, zulässige Verrechnungspositionen je Basis nach D.60,
+Höchstanzahlen). `pruefeMbgmPaket(saetze)` prüft das fertige Paket und liefert
+Befunde mit `schwere: 'fehler' | 'warnung'` — ein Fehler heißt: so nicht
+senden.
+
+| Code | Prüft |
+| ---- | ----- |
+| `F9000`, `F9070` | Aufbau des Pakets (Kopf, Ende, Satzfolge; Abfolgeregeln aus E.32.2.2.6, auch einzeln als `pruefeAbfolge`) |
+| `F9010`, `F9020` | Beitragskontonummer und Dienstgebername belegt |
+| `F9030`, `F9031`, `F9040`, `F9050`, `F9051`, `F9060` | Felder des Pakets laut Prüfkatalog |
+| `F9072` | Höchstanzahl der Sätze je Art (Warnung) |
+| `FAK-3.1.11` | mehr als ein Tarifblock bei regelmäßiger Beschäftigung (Warnung) |
+| `BW1838` | Lehrlinge (`B044`, `B045`) mit der allgemeinen AV-Minderung `A01`–`A03` statt `A04`/`A05` (Fehler; Tarifsystem, Clearing auf der SIT) |
+
+`pruefeBeitragskontonummer(bknr, traeger)` prüft die Länge der
+Beitragskontonummer gegen den zuständigen Träger (`F9012`–`F9019`,
+`F9080`–`F9082`); der Träger geht aus der Meldung nicht hervor. Den Katalog der
+Tarifgruppen liefert das Paket bewusst nicht mit — er ändert sich laufend
+(siehe `codes-e32.ts`).
+
 ### Zeitstempel im Bestand: Wiener Ortszeit
 
 `BestandOptionen.erstellt` ist ein echter Zeitpunkt (typischerweise das
@@ -906,13 +1085,40 @@ gedacht.
 - Prüfkatalog zur 42. Ergänzung, Blatt `VR`.
 - Das separate Zeichensatz-Dokument (Zeichenvorrat Personennamen bzw.
   Unternehmensnamen/Adressen in ISO-8859-15).
+- Rücksendungen: `elda_mitteilung-3.0.xsd` (ELDA, „Mitteilungsfiles") und
+  „Änderungen im Mitteilungsfile Version 3.0"; die XML-Schemas, Beispiele und
+  die Code-Liste des Clearing-Datensatzes 2.0 (ÖGK, „SV-Clearingsystem:
+  Clearing-Datensatz"); das Tarifsystem (Stand 19.09.2025) für die
+  Lehrlings-Abschläge.
 
 ## Ausblick
 
-Abgedeckt sind die Versichertenmeldung reduziert (Kapitel E.29) und die
-monatliche Beitragsgrundlagenmeldung (Kapitel E.32). Der Lohnzettel Finanz
-(L16, Kapitel E.13/E.14, Bestandsbezeichnung `LF`) ist noch nicht enthalten und
-benötigt seine eigene Spec-Grundlage.
+Abgedeckt sind die Versichertenmeldung reduziert (Kapitel E.29), die
+monatliche Beitragsgrundlagenmeldung (Kapitel E.32) und das Lesen der
+Rücksendungen (Mitteilung, Clearing-Datensatz 2.0). Noch offen — ohne Beleg
+wird nichts davon geraten:
+
+- **Lohnzettel Finanz** (L16, Kapitel E.13/E.14, Bestand `LF`): nicht
+  enthalten; braucht seine eigene Spec-Grundlage. Die SIT-Plattform verarbeitet
+  `LF` nicht, getestet werden kann er nur im Kundentest.
+- **Weitere Verarbeitungen, die die SIT kennt:** VSNR-Anforderung (`VS`),
+  Adressmeldung (`AV`), Familienhospiz (`FH`), Schwerarbeit (`SM`) — keine
+  Builder.
+- **Mitteilung bei Abweisung:** nach dem Schema gelesen, auf der SIT aber nie
+  beobachtet (alle Sendungen kamen `uebernommen`). Das Klartext-Protokoll
+  (`mbd_…`) wird nicht ausgewertet.
+- **Beitragshöhe:** `pruefeMbgmPaket` rechnet Beiträge nicht aus
+  Beitragsgrundlage und Prozentsatz nach; Rundungsfehler (`BW1917`) und falsche
+  Sätze (`BW1850`) erkennt erst der Träger.
+- **Lehrlingsregel:** belegt nur für die Beschäftigtengruppen `B044`/`B045`.
+  Ob `A04`/`A05` umgekehrt bei anderen Gruppen unzulässig sind, steht nicht
+  ausdrücklich in den Quellen und wird nicht geprüft.
+- **BV-Zeit im ersten Monat:** dass `VW1942` bei einer Beschäftigung von genau
+  einem Monat aus § 6 Abs. 1 BMSVG folgt, ist nicht bestätigt (siehe „Was die
+  SIT-Plattform gezeigt hat"). Das Paket prüft Abmeldungen nicht gegen den
+  BV-Beginn.
+- **Status `206`** („Limit an Rücksendungen erreicht", Schnittstellenbeschreibung
+  09/2026) ist noch nie aufgetreten und nicht eingeordnet.
 
 ## Lizenz
 
