@@ -66,6 +66,8 @@ const REFU_AUS = { V09: 'V02', V11: 'V05', V19: 'V15', V20: 'V12' };
 const ersterFenster = (fall) => (fall.fenster === 'jedes' ? 'mo-vm' : fall.fenster[0]);
 
 const ABLAGE = erstelleAblage(fs.mkdtempSync(path.join(WURZEL, 'sit-faelle-')));
+// Eine erfundene, schon abgeholte Rücksendung für T15.
+ABLAGE.protokolliere({ art: 'ruecksendung', protokollnummer: '155000001', dateiName: 'probe.xml' });
 
 /**
  * Baut alle Fälle in Abhängigkeitsreihenfolge und tut so, als sei jeder
@@ -232,7 +234,7 @@ test(
   'mBGM-Fälle: Bestand MB, TM, simuliertes Datum, Seriennummer, ein Paket je Konto',
   { skip: !verfuegbar() && 'braucht KASSENECK_PFAD' },
   () => {
-    for (const id of ['M03', 'M13', 'M14']) {
+    for (const id of ['M03', 'M13', 'M14', 'M34']) {
       const { ergebnis, ctx } = GEBAUT.get(id);
       const s = saetze(ergebnis.inhalt);
       const [vorlauf] = s;

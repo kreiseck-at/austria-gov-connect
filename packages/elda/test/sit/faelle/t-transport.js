@@ -27,6 +27,20 @@ module.exports = [
     baue: (ctx) => ({ ...ctx.bestandVon('V01'), referenzwerte: [] }),
   },
   {
+    id: 'T15',
+    titel: 'eine schon abgeholte Rücksendung ein zweites Mal empfangen',
+    zweck:
+      'Ob eine Rücksendung nach dem Abholen weiter abrufbar ist – entscheidet, ob ein ' +
+      'abgebrochenes Abholen (Absturz nach dem Empfang, vor dem Speichern) die Datei kostet.',
+    quelle: 'Schnittstellenbeschreibung V4 (empfangen, Status 406)',
+    erwartung: '? (000 mit derselben Datei oder 406)',
+    fenster: 'jedes',
+    gefahr: null,
+    abhaengig: [],
+    aktion: 'empfangen',
+    baue: (ctx) => ({ protokollnummer: ctx.letzteRuecksendung() }),
+  },
+  {
     id: 'T14',
     titel: 'empfangen mit einer Protokollnummer, die es nicht gibt',
     zweck: 'Zeigt die Antwort auf eine unbekannte Protokollnummer (Beispiel der Schnittstellenbeschreibung).',

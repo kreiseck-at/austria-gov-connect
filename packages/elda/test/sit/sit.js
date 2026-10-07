@@ -419,6 +419,8 @@ function befehlGeneralprobe() {
   const sn = seriennummer({ pflicht: false });
   try {
     const probe = erstelleAblage(ordner);
+    // Wie die Läufe: eine erfundene Rücksendung, damit T15 („nochmal abholen“) baut.
+    probe.protokolliere({ art: 'ruecksendung', protokollnummer: '155000001', dateiName: 'probe.xml' });
     const heute = wienerZeit(offlineJetzt());
     const montag = plusTage(heute.datum, 1 - heute.wochentag);
     const zeitpunkt = (fenster) => {
