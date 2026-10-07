@@ -72,7 +72,7 @@ function tageImMonat(mm: number, jjjj: number): number {
  * der Tag gegen die tatsächliche Länge des Monats geprüft (inklusive Schaltjahr) — die
  * Sonderformen mit Tag `00` bleiben davon unberührt.
  */
-function gueltigesGeburtsdatum(gebd: string): boolean {
+export function gueltigesGeburtsdatum(gebd: string): boolean {
   if (!/^\d{8}$/.test(gebd)) return false;
   const tt = Number(gebd.slice(0, 2));
   const mm = Number(gebd.slice(2, 4));
@@ -121,7 +121,7 @@ function gueltigesDatum(wert: string): boolean {
  * Prüfziffer würde gültige Versicherungsnummern abweisen. ELDA prüft sie serverseitig
  * (Prüfkatalog F7020).
  */
-function gueltigeVsnrStruktur(vsnr: string): boolean {
+export function gueltigeVsnrStruktur(vsnr: string): boolean {
   if (!/^\d{10}$/.test(vsnr)) return false;
   const tt = Number(vsnr.slice(4, 6));
   const mm = Number(vsnr.slice(6, 8));

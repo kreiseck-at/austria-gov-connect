@@ -99,15 +99,22 @@ export interface RohSatz {
  * ab, er liefert sie an der falschen Verarbeitung ab.
  *
  * Deshalb steht der Wert nicht mehr fest im Bestandsbau, sondern kommt von der
- * Funktion, die die Sätze baut: `erstelleBestand` (Versichertenmeldungen) und
- * `erstelleMbgmBestand` (monatliche Beitragsgrundlagenmeldung) setzen ihn je
- * selbst. Ein Aufrufer kann ihn damit weder vergessen noch verwechseln.
+ * Funktion, die die Sätze baut: `erstelleBestand` (Versichertenmeldungen),
+ * `erstelleMbgmBestand` (monatliche Beitragsgrundlagenmeldung),
+ * `erstelleVsnrAnforderungBestand` und `erstelleAdressmeldungBestand` setzen
+ * ihn je selbst. Ein Aufrufer kann ihn damit weder vergessen noch verwechseln.
  */
 /** Versichertenmeldung reduziert, ab 01.01.2019 (Kapitel B.3 Punkt 2, E.29). */
 export const BEST_VERSICHERTENMELDUNG = 'VR';
 
 /** Monatliche Beitragsgrundlagenmeldung, für Zeiträume ab 01.01.2019 (Kapitel B.3 Punkt 7, E.32). */
 export const BEST_MBGM = 'MB';
+
+/** VSNR-Anforderung, ab 01.07.2018 (Kapitel B.3 Punkt 3, E.30). */
+export const BEST_VSNR_ANFORDERUNG = 'VS';
+
+/** Adresse Versicherter, ab 01.01.2019 (Kapitel B.3 Punkt 4, E.31). */
+export const BEST_ADRESSE_VERSICHERTER = 'AV';
 
 /** Lohnzettel Finanz (Kapitel B.3 Punkt 11, E.13/E.14 — dazu E.16, E.24, E.26). */
 export const BEST_LOHNZETTEL_FINANZ = 'LF';
@@ -132,6 +139,12 @@ export const VERSION_VERSICHERTENMELDUNG = '03';
 
 /** Kapitelkopf E.32 „Monatliche Beitragsgrundlagenmeldung": Version 02, zwingend ab 01.02.2021. */
 export const VERSION_MBGM = '02';
+
+/** Kapitelkopf E.30 „VSNR Anforderung": Version 01, zwingend ab 01.07.2018. */
+export const VERSION_VSNR_ANFORDERUNG = '01';
+
+/** Kapitelkopf E.31 „Adresse Versicherter": Version 01, zwingend ab 01.01.2019. */
+export const VERSION_ADRESSE_VERSICHERTER = '01';
 
 /**
  * Datenübernehmender Versicherungsträger (Feld UVST, Kapitel D.2).

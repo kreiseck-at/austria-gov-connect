@@ -138,7 +138,7 @@ test('der Katalog lädt und jeder Fall mit baue ist gebaut worden', () => {
 
 test('jeder Sendefall: drei Sätze, VR, TM, simuliertes Erstellungsdatum, Seriennummer, Träger, Satzart', () => {
   for (const [id, { ergebnis, ctx }] of GEBAUT) {
-    if (!Buffer.isBuffer(ergebnis.inhalt) || id.startsWith('M')) continue;
+    if (!Buffer.isBuffer(ergebnis.inhalt) || /^[MS]/.test(id)) continue;
     const s = saetze(ergebnis.inhalt, id === 'B03' ? '\n' : '\r\n');
     assert.equal(s.length, 3, `${id}: Vorlauf, Meldung, Schluss`);
     const [vorlauf, meldungssatz] = s;
@@ -246,3 +246,44 @@ test(
     }
   },
 );
+
+test('S-Fälle: Bestand VS bzw. AV (S11 ist eine Anmeldung, VR), TM, Seriennummer, Träger', () => {
+  const BEST = { S10: 'VS', S11: 'VR', S12: 'VS', S13: 'VS', S20: 'AV', S21: 'AV' };
+  for (const [id, best] of Object.entries(BEST)) {
+    const { ergebnis, ctx } = GEBAUT.get(id);
+    const s = saetze(ergebnis.inhalt);
+    assert.equal(s.length, 3, `${id}: Vorlauf, Meldung, Schluss`);
+    const [vorlauf, meldungssatz] = s;
+    assert.equal(feld(vorlauf, 21, 2), 'TM', `${id}: PROJ`);
+    assert.equal(feld(vorlauf, 23, 2), best, `${id}: BEST`);
+    assert.equal(feld(vorlauf, 31, 8), ttmmjjjj(ctx.zr), `${id}: EDAT`);
+    for (const satz of s) {
+      assert.equal(feld(satz, 12, 7), '0765432', `${id}: OBUS`);
+      assert.equal(feld(satz, 19, 2), id === 'S21' ? '15' : '14', `${id}: VSTR`);
+    }
+    assert.equal(feld(meldungssatz, 1, 2), best === 'VR' ? 'M3' : best, `${id}: Satzart`);
+  }
+});
+
+test('S11 meldet ohne VSNR, mit Geburtsdatum und REFV = Referenzwert von S10', () => {
+  const { FELDER_E29 } = require('../../../dist/felder-e29.js');
+  const f = (name) => FELDER_E29.find((x) => x.name === name);
+  const m3 = saetze(GEBAUT.get('S11').ergebnis.inhalt)[1];
+  assert.equal(feld(m3, f('VSNR').pos, f('VSNR').laenge), '0000000000');
+  assert.equal(feld(m3, f('GEBD').pos, f('GEBD').laenge), '14031998');
+  assert.equal(feld(m3, f('REFV').pos, f('REFV').laenge).trimEnd(), GEBAUT.get('S10').ergebnis.referenzwerte[0]);
+});
+
+test('Negativtests S13 und S21 ändern genau ein Feld des gültigen Satzes', () => {
+  const { FELDER_E30 } = require('../../../dist/felder-e30.js');
+  const { FELDER_E31 } = require('../../../dist/felder-e31.js');
+  const gesl = FELDER_E30.find((x) => x.name === 'GESL');
+  const wkfz = FELDER_E31.find((x) => x.name === 'WKFZ');
+  const s13 = saetze(GEBAUT.get('S13').ergebnis.inhalt);
+  assert.equal(s13[1].length, 688);
+  assert.equal(feld(s13[1], gesl.pos, gesl.laenge), '5');
+  const s21 = saetze(GEBAUT.get('S21').ergebnis.inhalt);
+  assert.equal(s21[1].length, 416);
+  assert.equal(feld(s21[1], wkfz.pos, wkfz.laenge), 'A  ');
+  assert.equal(feld(saetze(GEBAUT.get('S20').ergebnis.inhalt)[1], wkfz.pos, wkfz.laenge), 'D  ');
+});
