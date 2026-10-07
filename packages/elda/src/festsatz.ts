@@ -43,8 +43,14 @@ export interface Feld {
    * `MMJJJJ` kommt beim Beitragszeitraum der mBGM hinzu (Kapitel E.32,
    * Seite 339). Dieselbe Begründung in kleinerem Maßstab: `'12026'` würde ohne
    * Marker zu `'012026'` — Jänner 2026 statt eines erkennbaren Tippfehlers.
+   *
+   * Der Lohnzettel Finanz (Kapitel E.13/E.14) druckt weitere Stellenfolgen ab:
+   * `JJJJMMTT` beim Übermittlungsdatum, `HHMMSS` bei der Uhrzeit, `TTMM` bei
+   * Beginn und Ende des Lohnzahlungszeitraums, `JJJJ` beim Jahr, `LLLP` und
+   * `TTMMJJ` bei den beiden Hälften der Versicherungsnummer. Dieselbe Folge:
+   * `'108'` würde sonst zu `'0108'` (01.08.) statt zum erkennbaren Fehler.
    */
-  format?: 'TTMMJJJJ' | 'LLLPTTMMJJ' | 'MMJJJJ';
+  format?: 'TTMMJJJJ' | 'LLLPTTMMJJ' | 'MMJJJJ' | 'JJJJMMTT' | 'HHMMSS' | 'TTMM' | 'JJJJ' | 'LLLP' | 'TTMMJJ';
 }
 
 /** Werte je Feldname. Ein fehlender oder `undefined`-Wert bedeutet Grundstellung. */
