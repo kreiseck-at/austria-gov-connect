@@ -124,6 +124,9 @@ export const BEST_SCHWERARBEIT = 'SM';
 /** Antrag auf zwischenstaatliche Bescheinigung (Kapitel B.3 Punkt 20, E.27). */
 export const BEST_ZWISCHENSTAATLICH = 'ES';
 
+/** Lohnzettel Finanz (Kapitel B.3 Punkt 11, E.13/E.14 — dazu E.16, E.24, E.26). */
+export const BEST_LOHNZETTEL_FINANZ = 'LF';
+
 /**
  * Versionsnummer der Satzstrukturen (Feld VERS, Kapitel D.26).
  *
@@ -190,15 +193,18 @@ const SART_VORLAUFSATZ = '00';
 const SART_SCHLUSSSATZ = '99';
 
 /** Zeitzone für EDAT/EZEI, sofern `BestandOptionen.zeitzone` nicht abweicht. */
-const ZEITZONE_STANDARD = 'Europe/Vienna';
+export const ZEITZONE_STANDARD = 'Europe/Vienna';
 
 /**
  * Zerlegt einen Zeitpunkt in die Wanduhrzeit-Bestandteile einer Zeitzone —
  * Grundlage für EDAT/EZEI. Verwendet `Intl.DateTimeFormat`, das die
  * IANA-Zeitzonendatenbank auswertet (Sommerzeit inklusive) und nicht von
  * `process.env.TZ` abhängt; Node 22 bringt die dafür nötigen ICU-Daten mit.
+ *
+ * Exportiert für den Lohnzettel Finanz: Dessen Sätze tragen Datum und Uhrzeit
+ * der Übermittlung (DTUE/ZTUE, Kapitel E.13/E.14) noch einmal selbst.
  */
-function wanduhrzeit(
+export function wanduhrzeit(
   zeitpunkt: Date,
   zeitzone: string,
 ): { tag: string; monat: string; jahr: string; stunde: string; minute: string; sekunde: string } {

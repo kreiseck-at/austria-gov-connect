@@ -175,3 +175,19 @@ test('index exportiert den Antrag auf zwischenstaatliche Bescheinigung (E.27)', 
     assert.equal((elda as Record<string, unknown>)[intern], undefined, `sollte intern sein: ${intern}`);
   }
 });
+
+test('index exportiert den Lohnzettel Finanz (L16)', () => {
+  for (const name of [
+    'erstelleLohnzettelBestand',
+    'lohnzettelSaetze',
+    'pruefeLohnzettel',
+    'jahressteuerNachRechenblatt2026',
+    'kindfeld',
+  ]) {
+    assert.equal(typeof (elda as Record<string, unknown>)[name], 'function', name);
+  }
+  assert.equal(elda.BEST_LOHNZETTEL_FINANZ, 'LF');
+  assert.equal(elda.VSTR_LOHNZETTEL, '94');
+  assert.deepEqual(Object.keys(elda.LOHNZETTELVERSION), ['28', '29']);
+  assert.ok(elda.L16_PRUEFKATALOG.has('F7004'));
+});

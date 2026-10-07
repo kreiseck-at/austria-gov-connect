@@ -47,8 +47,13 @@ export interface Feld {
    * `JJJJ` und `TTMM` stammen aus der Schwerarbeitsmeldung (Kapitel E.22,
    * Seite 267 der 43. Ergänzung): Tätigkeitsjahr sowie Beginn und Ende einer Tätigkeit. Aus
    * `'103'` würde ohne Marker `'0103'` — der 1. März statt des 10. März.
+   *
+   * Der Lohnzettel Finanz (Kapitel E.13/E.14) kommt mit `JJJJMMTT` beim
+   * Übermittlungsdatum, `HHMMSS` bei der Uhrzeit sowie `LLLP` und `TTMMJJ` bei
+   * den beiden Hälften der Versicherungsnummer dazu; `TTMM` und `JJJJ` trägt er
+   * beim Lohnzahlungszeitraum.
    */
-  format?: 'TTMMJJJJ' | 'LLLPTTMMJJ' | 'MMJJJJ' | 'JJJJ' | 'TTMM';
+  format?: 'TTMMJJJJ' | 'LLLPTTMMJJ' | 'MMJJJJ' | 'JJJJ' | 'TTMM' | 'JJJJMMTT' | 'HHMMSS' | 'LLLP' | 'TTMMJJ';
 }
 
 /** Werte je Feldname. Ein fehlender oder `undefined`-Wert bedeutet Grundstellung. */
