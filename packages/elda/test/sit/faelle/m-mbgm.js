@@ -58,6 +58,29 @@ module.exports = [
       }),
   }),
   fall({
+    id: 'M34',
+    titel: 'verspätete mBGM Februar 2026 für beide Lehrlinge (kasseneck)',
+    zweck:
+      'Gesendet am simulierten 01.04.2026, Frist war der 15.03.2026. Zeigt, was die ÖGK bei ' +
+      'Verspätung meldet (Säumniszuschlag?) – ohne vorherige Mahnung, weil die SIT 02/2026 überspringt.',
+    quelle: 'E.32; § 34 Abs 2 ASVG (Frist 15. des Folgemonats), § 113 ASVG (Säumniszuschlag)',
+    erwartung: 'übernommen; Clearing zur Verspätung?',
+    fenster: ['mi-vm'],
+    abhaengig: ['V03', 'V04'],
+    baue: (ctx) =>
+      mbgmPaket(ctx, {
+        fall: 'M34',
+        dg: 'A',
+        traeger: '14',
+        monat: '2026-02',
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          { rolle: 'arbeiterlehrling', mitarbeiter: lehrling(ctx, 'arbeiter', 90000) },
+          { rolle: 'angestelltenlehrling', mitarbeiter: lehrling(ctx, 'angestellter', 95000) },
+        ],
+      }),
+  }),
+  fall({
     id: 'M13',
     titel: 'mBGM April 2026, Konto A/14: Arbeiter Vollzeit + Angestelltenlehrling (kasseneck)',
     zweck: 'Neu eingetretener Arbeiter (erster Monat, BV beitragsfrei) neben einem laufenden Lehrling.',

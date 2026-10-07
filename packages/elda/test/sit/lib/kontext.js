@@ -71,6 +71,12 @@ function baueKontext({
       if (!wert) throw new Error(`${fallId} hat keinen Referenzwert protokolliert.`);
       return wert;
     },
+    /** Protokollnummer der zuletzt abgeholten Rücksendung (für den Test „nochmal abholen“). */
+    letzteRuecksendung() {
+      const r = ereignisse.filter((e) => e.art === 'ruecksendung' && !e.ausFehler).at(-1);
+      if (!r) throw new Error('Noch keine Rücksendung abgeholt – erst `abholen --ja`.');
+      return r.protokollnummer;
+    },
     protokollnummerVon(fallId) {
       return letzterErfolg(fallId).protokollnummer;
     },
