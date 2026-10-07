@@ -25,6 +25,12 @@ import { L16_PRUEFKATALOG, type L16Regel } from './pruefkatalog-l16';
  *   Die Verfahren stehen in keiner der verwendeten Quellen.
  * - `F7011`/`F7012`: ob sie `F7002`/`F7003` ersetzen oder ergänzen, sagt der
  *   Katalog nicht.
+ * - `F6202`: Die Regel steht bei KZ 243, ihre Summe geht aber nur auf, wenn
+ *   sie den Betrag für Entwicklungshelfer*innen (Feld 127) meint; welches Feld
+ *   verglichen wird, sagt die Zeile nicht.
+ * - `F9573`: siehe den Kommentar bei `F9574`.
+ * - `F4400`: Bedingung („Feld 40 und Feld 42 gleich 'blank' oder 0") und
+ *   Fehlertext („KZ 220 und KZ 225 gleich 0") nennen verschiedene Felder.
  *
  * **Bezugsdatum.** Regeln, die vom „laufenden Jahr" oder vom „aktuellen Datum
  * bei ELDA Eingang" sprechen (`F1702`, `F1703`, `F1705`, `F1706`), rechnen hier
@@ -247,8 +253,11 @@ function belegt(k: Kontext, name: string): boolean {
 const REGELN: Readonly<Record<string, (k: Kontext) => boolean>> = {
   // Referenznummer: „'blank'"
   F1000: (k) => s(k, 'REFN') === '',
-  // „Feld 99 ^=09 und Feld 100 ^= 5314563" — Steuernummer der BUAK
-  F1101: (k) => s(k, 'STNRA') !== '095314563',
+  // „Feld 99 ^=09 und Feld 100 ^= 5314563" — Finanzamt und Steuernummer, wörtlich mit „und"
+  F1101: (k) => {
+    const stnr = s(k, 'STNRA').padStart(9, '0');
+    return stnr.slice(0, 2) !== '09' && stnr.slice(2) !== '5314563';
+  },
   F1500: (k) => {
     const t = Number(s(k, 'BELZ').slice(0, 2));
     return !(t >= 1 && t <= 31);
@@ -335,8 +344,8 @@ const REGELN: Readonly<Record<string, (k: Kontext) => boolean>> = {
     b(k, 'B220') > (b(k, 'B210') - b(k, 'B220') - b(k, 'BSTF') - b(k, 'BSOB')) / 6 + euro(100),
   F4201: (k) => belegt(k, 'BIEB'),
   F4202: (k) => b(k, 'BIEB') < b(k, 'B225') + b(k, 'B226'),
-  // Regeln zu Feld 44 (KZ 225) — sie setzen eine belegte KZ 225 voraus.
-  F4400: (k) => belegt(k, 'B225') && !belegt(k, 'B220') && !belegt(k, 'BIEB'),
+  // Regeln zu Feld 44 (KZ 225) — laut Fehlertext setzen sie eine belegte KZ 225 voraus
+  // („KZ 225 vorhanden und …").
   F4405: (k) => belegt(k, 'B225') && !belegt(k, 'BIEB'),
   F4402: (k) => belegt(k, 'B225'),
   F4600: (k) => belegt(k, 'B226') && !belegt(k, 'BIEB'),
@@ -613,7 +622,12 @@ const KINDREGELN: Readonly<Record<string, (k: Kontext, f: (name: string) => stri
 };
 
 /** Codes des Katalogs, die `pruefeLohnzettel` nachrechnet. */
-export const L16_GEPRUEFT: readonly string[] = [...Object.keys(REGELN), ...Object.keys(KINDREGELN)];
+export const L16_GEPRUEFT: readonly string[] = [
+  // `F1100` hat keine Bedingungsfunktion: `pruefeLohnzettel` prüft die Lohnzettelart vorab.
+  'F1100',
+  ...Object.keys(REGELN),
+  ...Object.keys(KINDREGELN),
+];
 
 /** Codes des Katalogs, die `pruefeLohnzettel` nicht nachrechnet. */
 export const L16_NICHT_GEPRUEFT: readonly string[] = [...L16_PRUEFKATALOG.keys()].filter(

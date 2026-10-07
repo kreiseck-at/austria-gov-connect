@@ -16,7 +16,8 @@ monatliche Beitragsgrundlagenmeldung (mBGM) ist seit 0.6.0 als Satzschicht
 enthalten — Feldtabellen, Pflichtmatrix, Codekataloge und der Zusammenbau für
 beide Verfahren (Selbstabrechnung und Vorschreibung). Dazu kommen die
 **VSNR-Anforderung** (Kapitel E.30) und die **Adresse Versicherter** (Kapitel
-E.31). Der Lohnzettel Finanz (L16, Kapitel E.13/E.14) ist **nicht** enthalten.
+E.31) und der **Lohnzettel Finanz** (L16, Kapitel E.13/E.14) samt den Regeln
+des Prüfkatalogs L16.
 
 ## Reifegrad
 
@@ -1180,6 +1181,124 @@ VSNR-Anforderung die Adresse schon trägt.
 nicht gegen sie geprüft: D.12 nennt „weitere KFZ-Kennzeichen" in einem
 Verzeichnis, das nur den Versicherungsträgern zugänglich ist.
 
+### Lohnzettel Finanz (L16)
+
+Der Jahreslohnzettel L16 geht über ELDA als Bestand `LF`: ein
+**Informationssatz** (`I1`, Kapitel E.13, 1100 Zeichen) für den Arbeitgeber,
+danach je Lohnzettel ein **Mitteilungssatz** (`L1`, Kapitel E.14, 3500
+Zeichen). ELDA prüft die Sätze nach den Regeln des Finanzministeriums und
+leitet sie weiter; Fehler kommen mit dessen Fehlercodes zurück (E.13.2). Die
+Lohnzettel eines Jahres sind bis Ende Februar des Folgejahres zu übermitteln
+(§ 84 Abs. 1 Z 2 EStG).
+
+```ts
+import { erstelleLohnzettelBestand, lohnzettelSaetze, pruefeLohnzettel } from '@kreiseck/elda';
+
+const uebermittlung = {
+  version: '28' as const, // Lohnzettel 2026
+  jahr: 2026,
+  arbeitgeber: {
+    STNRA: '911234565', // Steuernummer samt Finanzamt, 9 Stellen
+    ANAM: 'Bäckerei Kornblum',
+    AADR: 'Musterweg 1',
+    ALKZ: 'A',
+    APLZ: '5020',
+    AORT: 'Salzburg',
+    GESA: 1, // Gesamtanzahl der Lohnzettel des Jahres
+  },
+  lohnzettel: [
+    {
+      felder: {
+        REFN: 'DV-2026-0001', // je Arbeitgeber, Jahr und Dienstverhältnis eindeutig
+        ARTL: '01', BELZ: '0101', ENLZ: '3112', SOZS: '3',
+        AVLN: '1234', AGBD: '010180',
+        ANAM: 'Weinzierl Mirela', AADR: 'Musterweg 1', ALKZ: 'A', APLZ: '5020', AORT: 'Salzburg',
+        GESW: 'J', VOLL: 'J',
+      },
+      // Cent, ganzzahlig, mit Vorzeichen; das Vorzeichenfeld setzt der Bau
+      betraege: {
+        B210: 4_200_000, B220: 600_000, BIEB: 790_000, B225: 105_000, B230: 685_000,
+        B245: 2_915_000, BIEL: 356_220, B260: 356_220,
+      },
+    },
+  ],
+};
+
+const befunde = pruefeLohnzettel(lohnzettelSaetze(uebermittlung, new Date()), '28');
+const datei = erstelleLohnzettelBestand(uebermittlung, bestandOptionen); // ohne versicherungstraeger
+```
+
+Was der Bau selbst setzt:
+
+- **Zuständiger Versicherungsträger `94`** (Bundesrechenzentrum) im
+  Identifikationsteil — D.4 lässt ihn nur für die Finanzsatzarten zu, der
+  ELDA-Fehlerkatalog verlangt ihn (`W8`: „Wert muss 94 ( = BRZ) statt <v2>
+  sein").
+- **Lohnzettelversion** im Vorlaufsatz (Feld VERS). Sie ist für alle
+  Finanzsatzarten eines Bestands einheitlich (B.3).
+- `FSART`, `ARTD = LZ`, `STVE = 03`, `JAHR`, `ANZA`, und in jedem Lohnzettel
+  `JALZ` und `STNRA` aus dem Informationssatz — der Prüfkatalog verlangt
+  Gleichheit (`F1704`, `F9900`, `F9990`).
+- `DTUE`/`ZTUE` aus dem Erstellungszeitpunkt, in Wiener Ortszeit und in allen
+  Sätzen gleich (E.13: „Datum und Uhrzeit in den Mitteilungssätzen … müssen
+  gleich dem Datum und der Uhrzeit im zugehörigen Informationssatz sein").
+- Die **Vorzeichenfelder**: blank bei 0, sonst `+` oder `-` — `-` nur, wo die
+  Feldtabelle es zulässt; sonst wirft der Bau.
+
+**Zwei Versionen.** Version 28 (42. Ergänzung) gilt fachlich für Zeiträume ab
+2024, Version 29 (43. Ergänzung) für Zeiträume ab 2027, zwingend ab
+01.03.2027. Lohnzettel 2026 sind also Version 28. Version 29 lässt bei
+`VIEL`, `VABL` und `V260` auch „-" zu, bringt Felder für Sachbezug Kfz 0,375 %,
+Telearbeitsvereinbarung und Aktivitätsfreibetrag (§ 105a) und teilt den
+Familienbonus Plus im Kinderblock in 100/50/25/75 % und variabel.
+
+**Feldnamen** sind die der Feldtabelle. Wo das Dokument einen Namen mehrfach
+vergibt, steht die Feldnummer dahinter: `REFN` ist Feld 11 (Referenznummer
+Finanz), `REFN_175` die Referenznummer des Softwareherstellers, die in der
+Rückantwort zurückkommt; Reservefelder heißen `RESE_51` usw. Die 15 Kinder
+werden als Liste übergeben (`kinder: [{ KFAM, KVON, KSTAAT, KVSNR, … }]`) und
+im Satz zu `KFAM_K1` bis `KFAM_K15`.
+
+**Pflichtangaben.** Der Bau weist leere Pflichtfelder (`REFN`, `ARTL`, `BELZ`,
+`ENLZ`, `AGBD`, Name und Anschrift) und belegte „keine Angabe"-Felder zurück.
+Einige `Z`-Angaben der Tabelle E.14.1 lassen sich nicht durchsetzen: `FIND`
+(das Feld erklärt einen Lohnzettel trotz Hinweis für richtig — „kann", nicht
+„muss"), die Versicherungsnummer des Partners (nur bei
+Alleinverdienerabsetzbetrag nötig, `F3101`) und numerische Felder, bei denen 0
+ein gültiger Wert ist. Die Tabelle E.14.1 selbst schreibt sechs Feldnamen
+anders als die Feldtabelle (`PGDB`, `BVSV`, `HTOA` …); maßgeblich ist hier die
+Feldnummer.
+
+**Prüfkatalog.** `pruefeLohnzettel` rechnet die Regeln des Prüfkatalogs L16
+(Finanzministerium, Version 09 vom 17.02.2026, „für Lohnzettel mit Zeitraum ab
+1.1.2026", elda.at) nach, deren Bedingung eindeutig ist — derzeit 208 von 333
+Codes, aufgelistet in `L16_GEPRUEFT` und `L16_NICHT_GEPRUEFT`. Darunter die
+Summenregeln (`F4800` KZ 230, `F6201` KZ 243, `F6401` KZ 245, `F7004` KZ 260),
+die Einschränkungen je Lohnzettelart, Höchstbeträge, die Kinderblöcke (`KA…`
+für Kind 1, `KB…` für Kind 2 usw.) und das Rechenblatt `FC 7002, 7003 für KJ
+2026`, das die Lohnsteuer gegen eine „Jahressteuer nach Tarif" hält
+(`jahressteuerNachRechenblatt2026`, getestet mit dem Beispiel des Blatts).
+
+| Befundfeld | Inhalt |
+| ---------- | ------ |
+| `code` | Fehlercode des Katalogs; ELDA meldet ihn vierstellig ohne `F` |
+| `status`, `indikation` | Fehlerstatus und Fehlerindikation, wörtlich (`N`, `P`, `G`, `P (I)` …) |
+| `meldung` | Fehlertext aus dem Blatt `Fehlertexte` |
+
+Eine Legende zu Fehlerstatus und Fehlerindikation enthält der Katalog nicht;
+das DM-Org erklärt nur `G` (D.32: übernommen, aber „mit dem Fehlerstatus „G"
+gekennzeichnet"). Das Paket deutet die Buchstaben deshalb nicht. Nicht
+nachgerechnet werden unter anderem Regeln mit „auf Monate aliquotiert" (wie
+der Katalog aliquotiert, steht nicht dabei), Prüfziffern von
+Versicherungs- und Steuernummer und drei Zeilen, deren Wortlaut sich selbst
+widerspricht (`F4400`, `F6202`, `F9573`; Begründung im Code). Regeln zum
+„laufenden Jahr" rechnen mit dem Übermittlungsdatum `DTUE`. Für Version 29
+gibt es noch keinen Katalog — `pruefeLohnzettel` lehnt sie ab.
+
+**Getestet** ist der Lohnzettel bisher nur hier: Die SIT-Plattform verarbeitet
+den Bestand `LF` nicht (ÖGK, „LSWH-Test – Regelbetrieb", 10/2023), testen
+lässt er sich nur im Kundentest. Gesendet wurde noch keiner.
+
 ### Zeitstempel im Bestand: Wiener Ortszeit
 
 `BestandOptionen.erstellt` ist ein echter Zeitpunkt (typischerweise das
@@ -1205,20 +1324,27 @@ gedacht.
   D.41 (freier Dienstvertrag), D.43 (Referenzwert), D.45 (Referenzwert der
   VSNR-Anforderung), D.47 (betriebliche Vorsorge), D.7–D.12 (Geburtsdatum,
   Namen, akademischer Grad, Staatenschlüssel, Wohnort), E.30 (VSNR-Anforderung),
-  E.31 (Adresse Versicherter).
+  E.31 (Adresse Versicherter), D.31–D.33 (Art des Lohnzettels,
+  Lohnzahlungszeitraum, soziale Stellung), E.13/E.14 (Lohnzettel Finanz) in
+  Version 28 (42. Ergänzung) und 29 (43. Ergänzung).
 - Prüfkatalog zur 43. Ergänzung (Version 43.1.0.0), Blätter `VR`, `VS`, `AV`,
   `FC-Texte` und `mBGM Paket` (Kapitel H.23).
 - Staatencode-Tabelle der ÖGK, Stand 22.04.2026 (elda.at, Downloads
   Dienstgeber).
+- Prüfkatalog L16 des Finanzministeriums, „für Lohnzettel mit Zeitraum ab
+  1.1.2026", Version 09 vom 17.02.2026 (elda.at, Downloads Dienstgeber), mit
+  den Blättern `FC 6201`, `FC 7002, 7003 für KJ 2026` und `Fehlertexte`.
 
 **Seitenangaben.** Gegenüber der 42. Ergänzung hat die 43. Inhalt nur in
 D.5 (10-stellige ÖGK-Beitragskontonummer), D.54 (Verrechnungsgrundlage bei
 Verrechnung mit und ohne Zeit), D.60 (Abschläge ALT/NEU, `Z15`/`Z16` bei
 Sonderzahlungen) sowie in Kapiteln geändert, die dieses Paket nicht abbildet
-(E.10, E.13/E.14, E.16, E.24, E.26, E.27). E.1–E.3, E.29 und E.32 sind
+(E.10, E.16, E.24, E.26, E.27) oder als eigene Version führt (E.13/E.14:
+Lohnzettelversion 29). E.1–E.3, E.29 und E.32 sind
 inhaltlich gleich geblieben. `codes-e32.ts` zitiert die Seiten der 43.
 Ergänzung, ebenso `felder-e30.ts`, `felder-e31.ts` und die übrigen Dateien zu
-E.30/E.31; die übrigen Seiten- und Fußnotenangaben im Code beziehen sich auf
+E.30/E.31; die Dateien zu E.13/E.14 nennen die Seiten beider Ergänzungen;
+die übrigen Seiten- und Fußnotenangaben im Code beziehen sich auf
 die 42. In der 43. liegen D.61 bis E.10 zwei Seiten später, E.28 bis G.10 —
 also E.29 und E.32 — elf Seiten später; die Fußnoten ab D.61 sind um neun bis
 zehn verschoben.
@@ -1233,13 +1359,20 @@ zehn verschoben.
 ## Ausblick
 
 Abgedeckt sind die Versichertenmeldung reduziert (Kapitel E.29), die
-monatliche Beitragsgrundlagenmeldung (Kapitel E.32) und das Lesen der
-Rücksendungen (Mitteilung, Clearing-Datensatz 2.0). Noch offen — ohne Beleg
+monatliche Beitragsgrundlagenmeldung (Kapitel E.32), der Lohnzettel Finanz
+(Kapitel E.13/E.14) und das Lesen der Rücksendungen (Mitteilung, Clearing-Datensatz 2.0). Noch offen — ohne Beleg
 wird nichts davon geraten:
 
-- **Lohnzettel Finanz** (L16, Kapitel E.13/E.14, Bestand `LF`): nicht
-  enthalten; braucht seine eigene Spec-Grundlage. Die SIT-Plattform verarbeitet
-  `LF` nicht, getestet werden kann er nur im Kundentest.
+- **Lohnzettel Finanz:** nach DM-Org und Prüfkatalog gebaut, gegen ELDA noch
+  nie gesendet — die SIT-Plattform verarbeitet `LF` nicht, nur der Kundentest.
+  Offen: was gilt, wenn ein Lohnzettel 2026 nach dem 01.03.2027 berichtigt wird
+  (Version 29 dann zwingend, fachlich aber erst ab 2027 gültig — das Paket lässt
+  dafür Version 28 zu); ob ein eintägiger Lohnzahlungszeitraum zulässig ist (D.32
+  verlangt ein Ende „größer" als den Beginn, die Katalogzeile `F1603` ist
+  mehrdeutig); was das Feld `CLADR` tragen muss (E.14.1: keine Angabe, der
+  Katalog prüft `F0200` „ungleich RADAUS oder OESTAT"); die Bedeutung von
+  Fehlerstatus und Fehlerindikation; die übrigen Finanzsatzarten des Bestands
+  (`W1`, `A1`, `B1`) und ein Prüfkatalog für Version 29.
 - **Weitere Verarbeitungen, die die SIT kennt:** Familienhospiz (`FH`),
   Schwerarbeit (`SM`) — keine Builder.
 - **VSNR-Anforderung und Adressmeldung:** nach DM-Org und Prüfkatalog gebaut,

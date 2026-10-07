@@ -132,3 +132,38 @@ export {
   VERSION_ADRESSE_VERSICHERTER,
 } from './bestand';
 export { STAATEN, STAATEN_STAND, STAATSANGEHOERIGKEITEN, type Staat } from './staaten';
+
+// --- Lohnzettel Finanz L16 (Kapitel E.13/E.14) ---------------------------------
+export {
+  erstelleLohnzettelBestand,
+  lohnzettelSaetze,
+  VSTR_LOHNZETTEL,
+  type Lohnzettel,
+  type LohnzettelArbeitgeber,
+  type LohnzettelFelder,
+  type LohnzettelUebermittlung,
+  type LohnzettelBestandOptionen,
+} from './lohnzettel';
+export {
+  FELDER_L1,
+  SATZLAENGE_L1,
+  LOHNZETTELVERSION,
+  KINDERBLOECKE,
+  KINDFELDER,
+  VORZEICHEN_L1,
+  BETRAEGE_OHNE_VORZEICHEN,
+  kindfeld,
+  type Lohnzettelversion,
+  type Vorzeichenregel,
+} from './felder-e14';
+export { FELDER_I1, SATZLAENGE_I1 } from './felder-e13';
+export { PFLICHT_I1, PFLICHT_L1, PFLICHT_KIND } from './pflicht-e14';
+export {
+  pruefeLohnzettel,
+  jahressteuerNachRechenblatt2026,
+  L16_GEPRUEFT,
+  L16_NICHT_GEPRUEFT,
+  type LohnzettelBefund,
+} from './pruefung-e14';
+export { L16_PRUEFKATALOG, L16_PRUEFKATALOG_QUELLE, type L16Regel } from './pruefkatalog-l16';
+export { BEST_LOHNZETTEL_FINANZ } from './bestand';

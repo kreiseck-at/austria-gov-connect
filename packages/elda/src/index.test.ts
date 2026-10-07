@@ -128,3 +128,19 @@ test('index exportiert das Lesen von Rücksendungen', () => {
 test('index exportiert die Beitragsberechnung nach D.62', () => {
   assert.equal(elda.berechneBeitragCent(95_000, 28.45), 27_028);
 });
+
+test('index exportiert den Lohnzettel Finanz (L16)', () => {
+  for (const name of [
+    'erstelleLohnzettelBestand',
+    'lohnzettelSaetze',
+    'pruefeLohnzettel',
+    'jahressteuerNachRechenblatt2026',
+    'kindfeld',
+  ]) {
+    assert.equal(typeof (elda as Record<string, unknown>)[name], 'function', name);
+  }
+  assert.equal(elda.BEST_LOHNZETTEL_FINANZ, 'LF');
+  assert.equal(elda.VSTR_LOHNZETTEL, '94');
+  assert.deepEqual(Object.keys(elda.LOHNZETTELVERSION), ['28', '29']);
+  assert.ok(elda.L16_PRUEFKATALOG.has('F7004'));
+});
