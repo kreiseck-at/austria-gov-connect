@@ -109,6 +109,9 @@ export const BEST_VERSICHERTENMELDUNG = 'VR';
 /** Monatliche Beitragsgrundlagenmeldung, für Zeiträume ab 01.01.2019 (Kapitel B.3 Punkt 7, E.32). */
 export const BEST_MBGM = 'MB';
 
+/** Antrag auf zwischenstaatliche Bescheinigung (Kapitel B.3 Punkt 20, E.27). */
+export const BEST_ZWISCHENSTAATLICH = 'ES';
+
 /**
  * Versionsnummer der Satzstrukturen (Feld VERS, Kapitel D.26).
  *
@@ -129,6 +132,9 @@ export const VERSION_VERSICHERTENMELDUNG = '03';
 
 /** Kapitelkopf E.32 „Monatliche Beitragsgrundlagenmeldung": Version 02, zwingend ab 01.02.2021. */
 export const VERSION_MBGM = '02';
+
+/** Kapitelkopf E.27 „Antrag auf zwischenstaatliche Bescheinigung": Version 08, zwingend ab 01.02.2025. */
+export const VERSION_ZWISCHENSTAATLICH = '08';
 
 /**
  * Datenübernehmender Versicherungsträger (Feld UVST, Kapitel D.2).

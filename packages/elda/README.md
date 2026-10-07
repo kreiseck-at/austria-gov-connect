@@ -14,8 +14,9 @@ reduziert** (Kapitel E.29 der Organisationsbeschreibung) — Anmeldung, Abmeldun
 Datenbestand, siehe „Meldungen erzeugen" unten. Andere Meldungsarten, insbesondere die
 monatliche Beitragsgrundlagenmeldung (mBGM) ist seit 0.6.0 als Satzschicht
 enthalten — Feldtabellen, Pflichtmatrix, Codekataloge und der Zusammenbau für
-beide Verfahren (Selbstabrechnung und Vorschreibung). Der Lohnzettel Finanz
-(L16, Kapitel E.13/E.14) ist **nicht** enthalten.
+beide Verfahren (Selbstabrechnung und Vorschreibung). Dazu kommt der **Antrag
+auf zwischenstaatliche Bescheinigung** (Entsendung, PD A1; Kapitel E.27, Bestand
+`ES`). Der Lohnzettel Finanz (L16, Kapitel E.13/E.14) ist **nicht** enthalten.
 
 ## Reifegrad
 
@@ -1071,6 +1072,76 @@ Ergänzung ist bei allen ÖGK-Landesstellen auch die 10-stellige Form gültig
 Tarifgruppen liefert das Paket bewusst nicht mit — er ändert sich laufend
 (siehe `codes-e32.ts`).
 
+### Antrag auf zwischenstaatliche Bescheinigung (Kapitel E.27)
+
+Anträge auf Entsendung und auf Feststellung der anzuwendenden
+Rechtsvorschriften gehen laut ÖGK ausschließlich über ELDA. Die ÖGK (bzw. die
+BVAEB, bei der Telearbeit der Dachverband) entscheidet und stellt
+gegebenenfalls die Bescheinigung PD A1 aus (E.27.3, Seite 304).
+
+| Satzart | Antrag | Zuständig (VSTR) |
+| ------- | ------ | ---------------- |
+| `E1` | Entsendung in einen anderen Staat (EU/EWR/CH/GB) | ÖGK `11`–`19`, BVAEB-EB `05` |
+| `E2` | Beschäftigung für einen Arbeitgeber in mehreren Staaten | ÖGK |
+| `E3` | Beschäftigung für mehrere Arbeitgeber in mehreren Staaten | ÖGK |
+| `E4` | Selbständige und unselbständige Tätigkeit in verschiedenen Staaten | ÖGK |
+| `E5` | Entsendung in einen Staat mit bilateralem Abkommen | ÖGK |
+| `EA` | Ausnahmevereinbarung grenzüberschreitende Telearbeit | Dachverband `99` |
+
+```ts
+import { randomUUID } from 'node:crypto';
+import { antragZwischenstaatlich, erstelleEsBestand } from '@kreiseck/elda';
+
+const antrag = antragZwischenstaatlich('E1', {
+  UIDM: randomUUID(),
+  VONA: 'Mirela', FANA: 'Weinzierl', GESL: '2', GEBD: '01011980', VSNR: '1234010180',
+  STSL: 'AT', STRA: 'Musterstraße 1', WKFZ: 'AT', PLZL: '5020', WORT: 'Salzburg',
+  dienstgeber: [{
+    DGNA: 'Max Hollerer GmbH', BKNR: '4711815', VTBK: '15',
+    DGSTR: 'Hauptplatz 3', DGKFZ: 'AT', DGPLZ: '8010', DGORT: 'Graz',
+    DGWS: '04', BBEG: '01032027', BEND: '30062027',
+  }],
+  DGPS: 'J', AGSTAAT: 'DE', BFEST: 'N', ANABL: 'N', BUEL: 'N', ANFL: 'N',
+});
+const inhalt = erstelleEsBestand([antrag], { ...bestandOptionen, versicherungstraeger: '15' });
+```
+
+Der Satz ist 9028 Zeichen lang (Version 08, zwingend ab 01.02.2025) und hat
+drei Wiederholungsblöcke: bis zu 5 Dienstgeber (`dienstgeber`), bis zu 3
+selbständige Tätigkeiten (`selbstaendig`, nur E4) und bis zu 32 Arbeitsorte
+(`arbeitsorte`, E2–E4 und EA). Im Satz heißen ihre Felder `DGNA_1`…`DGNA_5`
+usw. — dieselbe Zählung wie in den Fehlercodes des Prüfkatalogs (`F7500_1`).
+Statt eines Referenzwerts trägt der Antrag eine UUID (`UIDM`, Kapitel D.68);
+das Storno (`stornoAntragZwischenstaatlich`, Meldeart `02`) verweist über
+`UIDU` auf den Antrag und lässt alles andere in Grundstellung (E.27.2, neu in
+der 43. Ergänzung).
+
+Geprüft wird beim Bau:
+
+- die Pflichtmatrix je Satzart (E.27.1/E.27.2) samt Blockanzahl: Dienstgeber
+  bei E1, E2, E5 und EA genau einmal, bei E3 zwei- bis fünfmal; selbständige
+  Tätigkeit nur bei E4; Arbeitsorte bei E2–E4 und EA mindestens einmal;
+- die Regeln mit Status `N` aus dem Prüfkatalog 43.1.0.0, Blatt `ES` und
+  `Allgemein`, mit ihrem Fehlercode in der Meldung — u. a. Staatenlisten aus
+  Kapitel D.36 (`STAATEN_E1_BIS_E4`, `STAATEN_E5`; bei E1 nicht `AT`,
+  F7611), Japan erst ab Beginn 01.12.2025 (F7527), `ANATJ = J` verlangt einen
+  Arbeitsort in Österreich (F7650), Länge der Beitragskontonummer je
+  beitragskontoführendem Träger (F0162–F0171), `NEU` als Beitragskontonummer
+  nur bei E1, E2, E5 (F0011), `VTBK` 05 nur bei E1 (F7660/F7661), Pflicht von
+  Beitragskontonummer und Träger bei Sitz in Österreich (F0183, F7661, F7664),
+  Geschlecht 1, 2, 3, 4, 6, 7 (F0082), UUID-Form (F7662);
+- im Bestand: der zuständige Träger passt zur Satzart (`99` nur und immer bei
+  EA, Kapitel D.4; `05` nur bei E1, Fußnote 69) und keine UIDM kommt doppelt
+  vor (F7634).
+
+Nicht geprüft werden Regeln mit Status `W`, die Prüfziffer der
+Versicherungsnummer, F7665 (EA-Antragsbeginn höchstens drei Monate zurück —
+hängt vom Prüftag ab) und die Zeilen des Prüfkatalogs zu Feldern, die die
+Version 08 nicht mehr hat (DGP, BKFZ, AGKFZ, BFRIST, BBEGIN, BZEIT, ANAT,
+BSTAAT, STAB, STSTAAT, STEND, BART). Ein abgedrucktes Beispiel für E.27 gibt es
+weder in der Organisationsbeschreibung noch auf den Seiten von ÖGK und ELDA;
+die Tests arbeiten mit erfundenen Daten gegen Feldtabelle und Prüfkatalog.
+
 ### Zeitstempel im Bestand: Wiener Ortszeit
 
 `BestandOptionen.erstellt` ist ein echter Zeitpunkt (typischerweise das
@@ -1095,17 +1166,24 @@ gedacht.
   (Aufbau der Versicherungsnummer), D.39 (Beschäftigungsbereich-Codeliste),
   D.41 (freier Dienstvertrag), D.43 (Referenzwert), D.47 (betriebliche
   Vorsorge), E.30.2 (VSNR-Anforderung).
-- Prüfkatalog zur 43. Ergänzung (Version 43.1.0.0), Blätter `VR` und
-  `mBGM Paket` (Kapitel H.23).
+- Prüfkatalog zur 43. Ergänzung (Version 43.1.0.0), Blätter `VR`,
+  `mBGM Paket` (Kapitel H.23), `ES` und `Allgemein`.
+- Antrag auf zwischenstaatliche Bescheinigung: Kapitel E.27 (Seiten 290–306
+  der 43. Ergänzung — `felder-e27.ts`, `pflicht-e27.ts` und `pruefung-e27.ts`
+  zitieren diese Seiten), D.4, D.12, D.36, D.65, D.68, D.69; ÖGK
+  „Zwischenstaatliche Anträge: Rasches Service via ELDA"; ÖGK-Präsentation zum
+  6. ELDA-LSWH-Online-Event am 09.10.2025 (Seite 24: Erweiterung des LSWH-Tests
+  um E1–E5).
 
 **Seitenangaben.** Gegenüber der 42. Ergänzung hat die 43. Inhalt nur in
 D.5 (10-stellige ÖGK-Beitragskontonummer), D.54 (Verrechnungsgrundlage bei
 Verrechnung mit und ohne Zeit), D.60 (Abschläge ALT/NEU, `Z15`/`Z16` bei
-Sonderzahlungen) sowie in Kapiteln geändert, die dieses Paket nicht abbildet
-(E.10, E.13/E.14, E.16, E.24, E.26, E.27). E.1–E.3, E.29 und E.32 sind
+Sonderzahlungen), E.27 (Code `05` für die BVAEB-EB im Feld `VTBK`, eigene
+Pflichtmatrix für das Storno) sowie in Kapiteln geändert, die dieses Paket
+nicht abbildet (E.10, E.13/E.14, E.16, E.24, E.26). E.1–E.3, E.29 und E.32 sind
 inhaltlich gleich geblieben. `codes-e32.ts` zitiert die Seiten der 43.
-Ergänzung; die übrigen Seiten- und Fußnotenangaben im Code beziehen sich auf
-die 42. In der 43. liegen D.61 bis E.10 zwei Seiten später, E.28 bis G.10 —
+Ergänzung, ebenso die Dateien zu E.27; die übrigen Seiten- und
+Fußnotenangaben im Code beziehen sich auf die 42. In der 43. liegen D.61 bis E.10 zwei Seiten später, E.28 bis G.10 —
 also E.29 und E.32 — elf Seiten später; die Fußnoten ab D.61 sind um neun bis
 zehn verschoben.
 - Das separate Zeichensatz-Dokument (Zeichenvorrat Personennamen bzw.
@@ -1119,7 +1197,8 @@ zehn verschoben.
 ## Ausblick
 
 Abgedeckt sind die Versichertenmeldung reduziert (Kapitel E.29), die
-monatliche Beitragsgrundlagenmeldung (Kapitel E.32) und das Lesen der
+monatliche Beitragsgrundlagenmeldung (Kapitel E.32), der Antrag auf
+zwischenstaatliche Bescheinigung (Kapitel E.27) und das Lesen der
 Rücksendungen (Mitteilung, Clearing-Datensatz 2.0). Noch offen — ohne Beleg
 wird nichts davon geraten:
 
@@ -1148,6 +1227,18 @@ wird nichts davon geraten:
   BV-Beginn.
 - **Status `206`** („Limit an Rücksendungen erreicht", Schnittstellenbeschreibung
   09/2026) ist noch nie aufgetreten und nicht eingeordnet.
+- **Antrag auf zwischenstaatliche Bescheinigung (`ES`):** nie gegen ELDA
+  gesendet. Ob die SIT-Plattform `ES` verarbeitet, ist offen — angekündigt war
+  es für Ende 2025 (E1–E5, ohne EA). Ebenfalls offen: Der Prüfkatalog führt
+  `VSNA`, `APNR` und `AAKT` bei E5 als „leer" = Fehler (F7595–F7597), die
+  Matrix auf Seite 298 als optional, und D.65 lässt es vom Abkommen abhängen —
+  das Paket verlangt sie nicht. Beim Storno nennt der Prüfkatalog keine
+  Ausnahme von F7610 („Block 1 leer"), die Storno-Matrix lässt den
+  Dienstgeber-Block aber leer; das Paket folgt der Matrix. Die Matrix verlangt
+  `VSNR` bei allen Satzarten, der Prüfkatalog nur bei E1 und E5 (F0031) —
+  das Paket folgt der Matrix. Welcher Staat bei E1 bzw. E5 für Dänemark und
+  die Schweiz je nach Staatsangehörigkeit gilt (D.36, Fußnoten 35/36/38/39),
+  prüft das Paket nicht.
 
 ## Lizenz
 

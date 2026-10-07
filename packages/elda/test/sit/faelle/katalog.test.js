@@ -138,7 +138,7 @@ test('der Katalog lädt und jeder Fall mit baue ist gebaut worden', () => {
 
 test('jeder Sendefall: drei Sätze, VR, TM, simuliertes Erstellungsdatum, Seriennummer, Träger, Satzart', () => {
   for (const [id, { ergebnis, ctx }] of GEBAUT) {
-    if (!Buffer.isBuffer(ergebnis.inhalt) || id.startsWith('M')) continue;
+    if (!Buffer.isBuffer(ergebnis.inhalt) || /^[MS]/.test(id)) continue;
     const s = saetze(ergebnis.inhalt, id === 'B03' ? '\n' : '\r\n');
     assert.equal(s.length, 3, `${id}: Vorlauf, Meldung, Schluss`);
     const [vorlauf, meldungssatz] = s;
@@ -246,3 +246,48 @@ test(
     }
   },
 );
+
+test('ES-Fälle: Bestand ES, Version 08, TM, Satzart und Träger; Negativfälle weichen genau an einer Stelle ab', () => {
+  const { FELDER_E27 } = require('../../../dist/felder-e27.js');
+  const pos = (name) => FELDER_E27.find((f) => f.name === name);
+  const erwartet = {
+    S05: ['E1', '14'],
+    S051: ['E5', '15'],
+    S052: ['E2', '15'],
+    S053: ['E1', '14'],
+    S054: ['E1', '14'],
+    S055: ['E1', '14'],
+  };
+  for (const [id, [sart, vstr]] of Object.entries(erwartet)) {
+    const { ergebnis, ctx } = GEBAUT.get(id);
+    const s = saetze(ergebnis.inhalt);
+    assert.equal(s.length, 3, `${id}: Vorlauf, Antrag, Schluss`);
+    const [vorlauf, antrag] = s;
+    assert.equal(feld(vorlauf, 21, 2), 'TM', `${id}: PROJ`);
+    assert.equal(feld(vorlauf, 23, 2), 'ES', `${id}: BEST`);
+    assert.equal(feld(vorlauf, 150, 2), '08', `${id}: VERS`);
+    assert.equal(feld(vorlauf, 31, 8), ttmmjjjj(ctx.zr), `${id}: EDAT`);
+    assert.equal(antrag.length, 9028, `${id}: Satzlänge`);
+    assert.equal(feld(antrag, 1, 2), sart, `${id}: Satzart`);
+    for (const satz of s) {
+      assert.equal(feld(satz, 12, 7), '0765432', `${id}: OBUS`);
+      assert.equal(feld(satz, 19, 2), vstr, `${id}: VSTR`);
+    }
+    const uidm = feld(antrag, pos('UIDM').pos, 40).trimEnd();
+    assert.equal(uidm, ergebnis.referenzwerte[0], `${id}: UIDM als Referenzwert protokolliert`);
+  }
+  const antragVon = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
+  // Storno verweist über UIDU auf S05.
+  assert.equal(feld(antragVon('S053'), pos('UIDU').pos, 40).trimEnd(), GEBAUT.get('S05').ergebnis.referenzwerte[0]);
+  assert.equal(feld(antragVon('S053'), 21, 2), '02');
+  // S054: nur AGSTAAT auf AT geändert.
+  const agstaat = pos('AGSTAAT');
+  assert.equal(feld(antragVon('S054'), agstaat.pos, 2), 'AT');
+  assert.equal(feld(antragVon('S05'), agstaat.pos, 2), 'DE');
+  // S055: Dienstgeber-Platz 2 ist eine Kopie von Platz 1.
+  const p1 = pos('DGNA_1').pos;
+  const p2 = pos('DGNA_2').pos;
+  const a = antragVon('S055');
+  assert.equal(a.slice(p2 - 1, p2 - 1 + 399), a.slice(p1 - 1, p1 - 1 + 399));
+  assert.notEqual(a.slice(p2 - 1, p2 - 1 + 399).trim(), '');
+});
