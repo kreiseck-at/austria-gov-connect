@@ -50,7 +50,7 @@ function normalisiertNumerisch(wert: string | undefined): string | undefined {
 }
 
 /** Wandelt ein Datum der Form TTMMJJJJ in eine vergleichbare Zahl JJJJMMTT. */
-function alsZahl(datum: string): number {
+export function alsZahl(datum: string): number {
   return Number(datum.slice(4, 8) + datum.slice(2, 4) + datum.slice(0, 2));
 }
 
@@ -85,7 +85,7 @@ export function gueltigesGeburtsdatum(gebd: string): boolean {
 }
 
 /** Prüft ein vollständiges Datum der Form TTMMJJJJ gegen die tatsächliche Monatslänge. */
-function gueltigesDatum(wert: string): boolean {
+export function gueltigesDatum(wert: string): boolean {
   if (!/^\d{8}$/.test(wert)) return false;
   const tt = Number(wert.slice(0, 2));
   const mm = Number(wert.slice(2, 4));

@@ -116,6 +116,9 @@ export const BEST_VSNR_ANFORDERUNG = 'VS';
 /** Adresse Versicherter, ab 01.01.2019 (Kapitel B.3 Punkt 4, E.31). */
 export const BEST_ADRESSE_VERSICHERTER = 'AV';
 
+/** Antrag auf zwischenstaatliche Bescheinigung (Kapitel B.3 Punkt 20, E.27). */
+export const BEST_ZWISCHENSTAATLICH = 'ES';
+
 /**
  * Versionsnummer der Satzstrukturen (Feld VERS, Kapitel D.26).
  *
@@ -142,6 +145,9 @@ export const VERSION_VSNR_ANFORDERUNG = '01';
 
 /** Kapitelkopf E.31 „Adresse Versicherter": Version 01, zwingend ab 01.01.2019. */
 export const VERSION_ADRESSE_VERSICHERTER = '01';
+
+/** Kapitelkopf E.27 „Antrag auf zwischenstaatliche Bescheinigung": Version 08, zwingend ab 01.02.2025. */
+export const VERSION_ZWISCHENSTAATLICH = '08';
 
 /**
  * Datenübernehmender Versicherungsträger (Feld UVST, Kapitel D.2).

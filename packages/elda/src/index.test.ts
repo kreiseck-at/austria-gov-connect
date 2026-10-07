@@ -128,3 +128,18 @@ test('index exportiert das Lesen von Rücksendungen', () => {
 test('index exportiert die Beitragsberechnung nach D.62', () => {
   assert.equal(elda.berechneBeitragCent(95_000, 28.45), 27_028);
 });
+
+test('index exportiert den Antrag auf zwischenstaatliche Bescheinigung (E.27)', () => {
+  for (const name of ['antragZwischenstaatlich', 'stornoAntragZwischenstaatlich', 'erstelleEsBestand']) {
+    assert.equal(typeof (elda as Record<string, unknown>)[name], 'function', name);
+  }
+  assert.equal(elda.BEST_ZWISCHENSTAATLICH, 'ES');
+  assert.equal(elda.VERSION_ZWISCHENSTAATLICH, '08');
+  assert.deepEqual(Object.keys(elda.E27_SATZART_TEXT), ['E1', 'E2', 'E3', 'E4', 'E5', 'EA']);
+  assert.equal(elda.PFLICHT_E27.E1.AGSTAAT, 'Z');
+  assert.equal(elda.PFLICHT_E27_STORNO.E1.UIDU, 'Z');
+  assert.ok(elda.STAATEN_E5.has('QU'));
+  for (const intern of ['FELDER_E27', 'pruefePflichtE27', 'pruefeInhaltE27']) {
+    assert.equal((elda as Record<string, unknown>)[intern], undefined, `sollte intern sein: ${intern}`);
+  }
+});
