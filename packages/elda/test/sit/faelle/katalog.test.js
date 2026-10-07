@@ -59,6 +59,7 @@ const SART = {
   B11: 'M3',
   B12: 'M3',
   T02: 'M3',
+  S40: 'M3',
 };
 const VSTR = { V02: '15', V09: '15', V13: '15', B03: '15', B11: '15', B12: '15', V06: '15' };
 const REFU_AUS = { V09: 'V02', V11: 'V05', V19: 'V15', V20: 'V12' };
@@ -138,7 +139,8 @@ test('der Katalog lädt und jeder Fall mit baue ist gebaut worden', () => {
 
 test('jeder Sendefall: drei Sätze, VR, TM, simuliertes Erstellungsdatum, Seriennummer, Träger, Satzart', () => {
   for (const [id, { ergebnis, ctx }] of GEBAUT) {
-    if (!Buffer.isBuffer(ergebnis.inhalt) || id.startsWith('M')) continue;
+    if (!Buffer.isBuffer(ergebnis.inhalt) || id.startsWith('M') || (id.startsWith('S') && id !== 'S40'))
+      continue;
     const s = saetze(ergebnis.inhalt, id === 'B03' ? '\n' : '\r\n');
     assert.equal(s.length, 3, `${id}: Vorlauf, Meldung, Schluss`);
     const [vorlauf, meldungssatz] = s;
@@ -246,3 +248,52 @@ test(
     }
   },
 );
+
+test('FH- und SM-Fälle: Bestand, Version, Satzlänge, Satzart, Abwandlung nur im Negativtest', () => {
+  const { FELDER_E12 } = require('../../../dist/felder-e12.js');
+  const { FELDER_E22 } = require('../../../dist/felder-e22.js');
+  const wert = (tabelle, satz, name) => {
+    const f = tabelle.find((x) => x.name === name);
+    return feld(satz, f.pos, f.laenge);
+  };
+  const erwartet = {
+    S04: ['FH', '03', 850, '80'],
+    S41: ['FH', '03', 850, '81'],
+    S42: ['FH', '03', 850, '80'],
+    S03: ['SM', '02', 800, '65'],
+    S31: ['SM', '02', 800, '66'],
+    S32: ['SM', '02', 800, '65'],
+    S33: ['SM', '02', 800, '65'],
+  };
+  for (const [id, [best, vers, laenge, sart]] of Object.entries(erwartet)) {
+    const { ergebnis, ctx } = GEBAUT.get(id);
+    const s = saetze(ergebnis.inhalt);
+    assert.equal(s.length, 3, id);
+    const [vorlauf, satz] = s;
+    assert.equal(feld(vorlauf, 21, 2), 'TM', `${id}: PROJ`);
+    assert.equal(feld(vorlauf, 23, 2), best, `${id}: BEST`);
+    assert.equal(feld(vorlauf, 150, 2), vers, `${id}: VERS`);
+    assert.equal(feld(vorlauf, 31, 8), ttmmjjjj(ctx.zr), `${id}: EDAT`);
+    for (const x of s) {
+      assert.equal(x.length, laenge, `${id}: Satzlänge`);
+      assert.equal(feld(x, 12, 7), '0765432', `${id}: OBUS`);
+      assert.equal(feld(x, 19, 2), '14', `${id}: VSTR`);
+    }
+    assert.equal(feld(satz, 1, 2), sart, `${id}: Satzart`);
+    assert.equal(feld(satz, 21, 10).trimEnd(), GEBAUT.get('S40').ctx.konto('A', { traeger: '14' }).bknr);
+  }
+  const fh = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
+  assert.equal(wert(FELDER_E12, fh('S04'), 'KART'), '04');
+  assert.equal(wert(FELDER_E12, fh('S04'), 'STSL'), 'AUT');
+  assert.equal(wert(FELDER_E12, fh('S04'), 'WORT').trimEnd(), 'Wien');
+  assert.equal(wert(FELDER_E12, fh('S04'), 'ADAT'), ttmmjjjj(zrDatum('di-vm')));
+  assert.equal(wert(FELDER_E12, fh('S41'), 'ADAT'), '31032025');
+  assert.equal(wert(FELDER_E12, fh('S41'), 'GESL'), '0');
+  assert.equal(wert(FELDER_E12, fh('S42'), 'KART'), '09');
+  const sm = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
+  assert.equal(wert(FELDER_E22, sm('S03'), 'JAHR'), '2025');
+  assert.equal(feld(sm('S03'), 502, 10), '4 01012801');
+  assert.equal(feld(sm('S32'), 502, 2), '3 ');
+  assert.equal(feld(sm('S33'), 502, 2), '01');
+  assert.equal(wert(FELDER_E22, sm('S03'), 'REFN').trimEnd(), GEBAUT.get('S03').ergebnis.referenzwerte[0]);
+});

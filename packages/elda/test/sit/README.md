@@ -29,6 +29,9 @@ nicht im Trockenlauf.
 1. Testdaten und Ablage **außerhalb jedes Checkouts** anlegen – ein entfernter Worktree nimmt gitignorierte Dateien
    kommentarlos mit, und das Laufprotokoll muss die ganze Kampagne überleben. Die Testdaten nach dem Muster von
    `testdaten.beispiel.json` aus dem Stammdaten-Basispaket (Rollen → Testpersonen, Dienstgeber mit Konten je Träger).
+   Optional je Rolle: `staatsangehoerigkeit` (ISO-A3, sonst `AUT`) und `anschrift` (`kfz`, `plz`, `ort`, `strasse`) –
+   die Anmeldung zur Familienhospizkarenz (S04) schickt sie mit; ohne Anschrift erwartet der Prüfkatalog nur
+   Warnungen.
 2. Kundenpasswort, API-Key und Seriennummer im Schlüsselbund ablegen (`elda-sit-kundenpasswort`, `elda-sit-api-key`,
    `elda-sit-seriennummer`).
 3. Paket bauen: `npm run build -w @kreiseck/finanzonline-core && npm run build -w @kreiseck/elda`.

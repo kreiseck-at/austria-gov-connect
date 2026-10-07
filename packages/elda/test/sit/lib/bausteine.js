@@ -108,9 +108,105 @@ function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, o
   };
 }
 
+/** Geschlecht der Testdaten (m, w, x) als Code laut Kapitel E.12, Feld GESL. */
+const GESL = { m: '1', w: '2', x: '3' };
+
+/**
+ * Ein gebauter Satz mit geänderten Werten – NUR für Negativtests. Der Builder
+ * des Pakets hat den Satz vorher vollständig geprüft; geändert wird danach
+ * genau das, was ELDA abweisen soll. Der Bestandsbau prüft nicht noch einmal.
+ */
+function abgewandelt(satz, aenderungen) {
+  return Object.freeze({ ...satz, werte: Object.freeze({ ...satz.werte, ...aenderungen }) });
+}
+
+/**
+ * Eine Meldung Familienhospizkarenz/Pflegekarenz (E.12) für eine Rolle, als
+ * fertiger Bestand FH. Bei der Anmeldung (80) kommen Geschlecht und
+ * Staatsangehörigkeit dazu – die Staatsangehörigkeit aus der Rolle
+ * (`staatsangehoerigkeit`) oder `AUT`; eine Wohnanschrift nur, wenn die Rolle
+ * eine `anschrift` hat (der Prüfkatalog warnt bei fehlender nur).
+ *
+ * @param a.art Builder des Pakets, z. B. familienhospizAnmeldung
+ * @param a.felder übrige Felder (ADAT, KART, …)
+ * @param a.aendern Werte, die NACH der Prüfung gesetzt werden (Negativtest)
+ */
+function familienhospiz(ctx, { fall, art, rolle, dg, traeger, felder, aendern }) {
+  const bauer = ctx.elda[art];
+  if (typeof bauer !== 'function') throw new Error(`Unbekannte Satzart-Funktion '${art}'.`);
+  const person = ctx.rolle(rolle);
+  const konto = ctx.konto(dg, { traeger });
+  const refn = ctx.referenzwert(fall);
+  const anmeldung = art === 'familienhospizAnmeldung';
+  const anschrift = person.anschrift;
+  let satz = bauer({
+    BKNR: konto.bknr,
+    DGNA: ctx.dienstgeber(dg).name,
+    VSNR: person.vsnr,
+    FANA: person.familienname,
+    VONA: person.vorname,
+    ...(anmeldung
+      ? {
+          GESL: GESL[person.geschlecht],
+          STSL: person.staatsangehoerigkeit ?? 'AUT',
+          ...(anschrift
+            ? { WKFZ: anschrift.kfz, PLZL: anschrift.plz, WORT: anschrift.ort, STRA: anschrift.strasse }
+            : {}),
+        }
+      : {}),
+    REFN: refn,
+    ...felder,
+  });
+  if (aendern) satz = abgewandelt(satz, aendern);
+  return {
+    inhalt: ctx.elda.erstelleFamilienhospizBestand([satz], ctx.bestandOptionen({ dg, traeger })),
+    dateiName: ctx.dateiName(fall),
+    referenzwerte: [refn],
+  };
+}
+
+/**
+ * Eine Schwerarbeitsmeldung (E.22) für eine Rolle, als fertiger Bestand SM.
+ * Die Anschrift des Dienstgebers kommt aus den Testdaten.
+ *
+ * @param a.art schwerarbeitsmeldung oder stornoSchwerarbeitsmeldung
+ * @param a.jahr Tätigkeitsjahr JJJJ
+ * @param a.taetigkeiten [{ art, von, bis }]
+ * @param a.aendern Werte, die NACH der Prüfung gesetzt werden (Negativtest)
+ */
+function schwerarbeit(ctx, { fall, art, rolle, dg, traeger, jahr, taetigkeiten, aendern }) {
+  const bauer = ctx.elda[art];
+  if (typeof bauer !== 'function') throw new Error(`Unbekannte Satzart-Funktion '${art}'.`);
+  const person = ctx.rolle(rolle);
+  const konto = ctx.konto(dg, { traeger });
+  const d = ctx.dienstgeber(dg);
+  const refn = ctx.referenzwert(fall);
+  let satz = bauer({
+    BKNR: konto.bknr,
+    DGNA: d.name,
+    DKFZ: d.anschrift.kfz,
+    DPLZ: d.anschrift.plz,
+    DORT: d.anschrift.ort,
+    DSTR: d.anschrift.strasse,
+    VSNR: person.vsnr,
+    GEBD: person.geburtsdatum,
+    FANA: person.familienname,
+    VONA: person.vorname,
+    JAHR: jahr,
+    REFN: refn,
+    taetigkeiten,
+  });
+  if (aendern) satz = abgewandelt(satz, aendern);
+  return {
+    inhalt: ctx.elda.erstelleSchwerarbeitBestand([satz], ctx.bestandOptionen({ dg, traeger })),
+    dateiName: ctx.dateiName(fall),
+    referenzwerte: [refn],
+  };
+}
+
 /** Satztrenner CRLF → LF, sonst byte-gleich. */
 function mitLf(inhalt) {
   return Buffer.from(inhalt.toString('latin1').replace(/\r\n/g, '\n'), 'latin1');
 }
 
-module.exports = { meldung, mbgmPaket, mitLf };
+module.exports = { meldung, mbgmPaket, familienhospiz, schwerarbeit, abgewandelt, mitLf };

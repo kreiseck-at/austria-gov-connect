@@ -63,6 +63,8 @@ export { PFLICHT_E29, SATZART_TEXT, ALTERNATIVGRUPPEN, type Satzart, type Pflich
 export {
   BEST_VERSICHERTENMELDUNG,
   BEST_MBGM,
+  BEST_FAMILIENHOSPIZ,
+  BEST_SCHWERARBEIT,
   VERSION_VERSICHERTENMELDUNG,
   VERSION_MBGM,
   UVST_ELDA,
@@ -114,3 +116,30 @@ export {
   type Schwere,
 } from './pruefung-e32';
 export { pruefeAbfolge, ABFOLGE } from './abfolge-e32';
+
+// --- Familienhospizkarenz/Pflegekarenz (Kapitel E.12) ------------------------
+export {
+  familienhospizAnmeldung,
+  familienhospizAbmeldung,
+  familienhospizAenderungsmeldung,
+  familienhospizStornoAnmeldung,
+  familienhospizStornoAbmeldung,
+  familienhospizRichtigstellungAnmeldung,
+  familienhospizRichtigstellungAbmeldung,
+  erstelleFamilienhospizBestand,
+  type FamilienhospizFelder,
+} from './familienhospiz';
+export { KARENZART, type Karenzart } from './pruefung-e12';
+export { PFLICHT_E12, SATZART_TEXT_FH, FELDGRUPPEN_E12, type SatzartFH } from './pflicht-e12';
+
+// --- Schwerarbeitsmeldung (Kapitel E.22) ------------------------------------
+export {
+  schwerarbeitsmeldung,
+  stornoSchwerarbeitsmeldung,
+  erstelleSchwerarbeitBestand,
+  type SchwerarbeitsFelder,
+  type Schwerarbeitszeit,
+} from './schwerarbeit';
+export { TAETIGKEIT, type Taetigkeit } from './pruefung-e22';
+export { PFLICHT_E22, SATZART_TEXT_SM, type SatzartSM } from './pflicht-e22';
+export { type Stufe } from './pflichtmatrix';

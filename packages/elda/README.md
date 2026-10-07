@@ -1071,6 +1071,122 @@ Ergänzung ist bei allen ÖGK-Landesstellen auch die 10-stellige Form gültig
 Tarifgruppen liefert das Paket bewusst nicht mit — er ändert sich laufend
 (siehe `codes-e32.ts`).
 
+### Familienhospizkarenz/Pflegekarenz (Kapitel E.12)
+
+Sieben Satzarten, Bestand `FH`, Version 03, Satzlänge 850 — als eigene
+Builder, weil die Felder mit gleichem Namen andere Positionen haben als in der
+Versichertenmeldung:
+
+| Funktion | SART |
+| -------- | ---- |
+| `familienhospizAnmeldung` | 80 |
+| `familienhospizAbmeldung` | 81 (bei Wiederantritt bzw. Ende der Karenzierung) |
+| `familienhospizAenderungsmeldung` | 82 (berichtigt die Karenzart) |
+| `familienhospizStornoAnmeldung` / `familienhospizStornoAbmeldung` | 83 / 84 |
+| `familienhospizRichtigstellungAnmeldung` / `…Abmeldung` | 85 / 86 (`ADAT` alt, `RDAT` richtig) |
+
+```ts
+import { familienhospizAnmeldung, erstelleFamilienhospizBestand, KARENZART } from '@kreiseck/elda';
+
+const satz = familienhospizAnmeldung({
+  BKNR: '4711815',
+  DGNA: 'Melisse Nails e.U.',
+  VSNR: '7890030990',
+  FANA: 'Lindmayr',
+  VONA: 'Livia',
+  GESL: '2',
+  STSL: 'AUT',
+  WKFZ: 'A',
+  PLZL: '5020',
+  WORT: 'Salzburg',
+  STRA: 'Rosengasse 3/2',
+  ADAT: '01032026', // Beginn der Karenz
+  KART: KARENZART.PFLEGEKARENZ, // '04'
+});
+const inhalt = erstelleFamilienhospizBestand([satz], bestandOptionen);
+```
+
+Welche Meldung wann (E.12.2): Bei **Freistellung gegen Entfall des Entgelts**
+nur Anmeldung (Karenzart 03, 04 oder 07) und bei Wiederantritt die Abmeldung —
+alles Weitere am Versicherungsverlauf übernimmt der Krankenversicherungsträger.
+Bei **Herabsetzung der Arbeitszeit** nur dann, wenn das reduzierte Entgelt
+unter der Geringfügigkeitsgrenze liegt (Karenzart 05 oder 06); die Beiträge
+laufen in beiden Teilzeit-Fällen unverändert über die mBGM. Für
+**geringfügig Beschäftigte** gibt es keine Familienhospiz-Meldung. Eine
+Referenz wie `REFU` kennt die Satzart nicht; Storno und Richtigstellung
+nennen laut D.13 das `ADAT` der Meldung, auf die sie sich beziehen.
+
+Geprüft wird beim Bau mit den Codes des Prüfkatalogs (Blatt `Allgemein` und
+`FH`, nur Status N), danach die Pflichtmatrix aus E.12.1:
+
+| Code | Prüft |
+| ---- | ----- |
+| `F0010`, `F0011` | Beitragskontonummer belegt, nur Buchstaben und Ziffern, nicht `NEU` |
+| `F0020` | Dienstgebername belegt |
+| `F0030`, `F0040`, `F0050` | Versicherungsnummer oder Geburtsdatum; Stellenfolge (D.6) bzw. Datum |
+| `F0060`, `F0070` | Familien- und Vorname belegt |
+| `F0080`, `F0082`, `F0090` | bei 80: Geschlecht (1, 2, 3, 4, 6, 7) und Staatsangehörigkeit belegt |
+| `F0140`, `F0141`, `F0160`, `F0161` | `ADAT` und bei 85/86 `RDAT` belegt und gültig |
+| `F3000`, `F3001` | Karenzart belegt und `01`–`07` (`KARENZART`) |
+| `F3010`, `F3020` | bei 80: Entgelt vor der Karenz bei Karenzart 01/02, Entgelt während bei 02 |
+
+Drei Zellen der Matrix fassen mehrere Felder zusammen (`FELDGRUPPEN_E12`):
+`BKNR`/`DGNA` (beide einzeln zwingend, F0010 und F0020), `VSNR`/`GEBD` (eines
+genügt, F0030) und bei der Anmeldung die Wohnanschrift `WKFZ`/`PLZL`/`WORT`/
+`STRA`. Für die Anschrift prüft der Katalog nur mit Warnungen (F0100–F0130);
+erzwungen wird sie deshalb nicht.
+
+### Schwerarbeitsmeldung (Kapitel E.22)
+
+`schwerarbeitsmeldung` (SART 65) und `stornoSchwerarbeitsmeldung` (66), Bestand
+`SM`, Version 02, Satzlänge 800. Ein Satz trägt die Tätigkeiten **eines
+Kalenderjahres** für eine Person in bis zu 26 Blöcken (`TART`, `TVON`,
+`TBIS`); das Paket verteilt die Liste `taetigkeiten` der Reihe nach.
+
+```ts
+import { schwerarbeitsmeldung, erstelleSchwerarbeitBestand, TAETIGKEIT } from '@kreiseck/elda';
+
+const satz = schwerarbeitsmeldung({
+  BKNR: '4711815',
+  DGNA: 'Bäckerei Kornblum',
+  DKFZ: 'A',
+  DPLZ: '5020',
+  DORT: 'Salzburg',
+  DSTR: 'Mühlgasse 7',
+  VSNR: '4563120581',
+  GEBD: '12051981',
+  FANA: 'Weinzierl',
+  VONA: 'Mirela',
+  JAHR: '2026',
+  taetigkeiten: [{ art: TAETIGKEIT.SCHICHT_ODER_WECHSELDIENST, von: '0101', bis: '3006' }],
+});
+const inhalt = erstelleSchwerarbeitBestand([satz], bestandOptionen);
+```
+
+Die Tätigkeitsart ist die Ziffer von § 1 Abs. 1 der Schwerarbeitsverordnung
+(`TAETIGKEIT`: 1, 2, 4, 5, 6). Zu melden ist laut E.22.2: Schicht- oder
+Wechseldienst (Z 1) erst ab sechs Arbeitstagen im Monat mit Nachtarbeit
+(6 Stunden zwischen 22 und 6 Uhr), Z 2, 4 und 5 erst ab 15 Arbeitstagen im
+Monat; Z 3 nie, Z 6 freiwillig; bei geringfügiger Beschäftigung nichts. Laut
+§ 5 Abs. 1 der Schwerarbeitsverordnung (BGBl. II Nr. 413/2019) gilt die
+Meldepflicht für Männer ab dem vollendeten 40. und Frauen ab dem vollendeten
+35. Lebensjahr, Frist ist **Ende Februar des Folgejahres**. Diese Bedingungen
+kennt das Paket nicht — es baut, was es bekommt.
+
+| Code | Prüft |
+| ---- | ----- |
+| `F0010`–`F0070` | wie bei der Familienhospiz-Meldung (ohne Geschlecht, Staatsangehörigkeit, Datum) |
+| `F5500`, `F5501` | Tätigkeitsjahr belegt, `JJJJ` |
+| `F5511_n`, `F5521_n` | Beginn bzw. Ende in Block `n` ist ein Tag (`TTMM`) im Tätigkeitsjahr |
+| `F5530_n` | Block `n` unvollständig (nur ein Feld, nur Beginn oder nur Ende) oder Beginn nach Ende |
+| `F5580_n` | Tätigkeitsart nicht 1, 2, 4, 5 oder 6 |
+
+Strenger als der Prüfkatalog, weil die Matrix (E.22.1) es so verlangt:
+Versicherungsnummer **und** Geburtsdatum sind beide zwingend, ebenso die
+Anschrift des Dienstgebers (`DKFZ`, `DPLZ`, `DORT`, `DSTR`; im Katalog nur
+Warnungen). Nicht geprüft werden Warnungen: Tätigkeitsart leer (`F5579`) und
+überschneidende Zeiträume gleicher Tätigkeit (`F5581`).
+
 ### Zeitstempel im Bestand: Wiener Ortszeit
 
 `BestandOptionen.erstellt` ist ein echter Zeitpunkt (typischerweise das
@@ -1089,14 +1205,21 @@ gedacht.
 - Organisationsbeschreibung „Datenaustausch mit Dienstgebern", 43. Ergänzung,
   Version 43.1.0 (09/2026, wirksam ab 01.12.2026), abgeglichen gegen die 42.
   Ergänzung (Version 42.7.0, 07/2026): Kapitel E.1 (Identifikationsteil), E.2
-  (Vorlaufsatz), E.3 (Schlusssatz), E.29 (Versichertenmeldung reduziert:
+  (Vorlaufsatz), E.3 (Schlusssatz), E.12 (Familienhospizkarenz/Pflegekarenz),
+  E.22 (Schwerarbeitsmeldung), E.29 (Versichertenmeldung reduziert:
   Feldtabelle, Pflichtmatrix, Erstellvorschriften mit Beispielen), D.22
   (Abmeldegrund-Codeliste samt Abhängigkeitstabelle auf Seite 96), D.6
   (Aufbau der Versicherungsnummer), D.39 (Beschäftigungsbereich-Codeliste),
   D.41 (freier Dienstvertrag), D.43 (Referenzwert), D.47 (betriebliche
   Vorsorge), E.30.2 (VSNR-Anforderung).
-- Prüfkatalog zur 43. Ergänzung (Version 43.1.0.0), Blätter `VR` und
-  `mBGM Paket` (Kapitel H.23).
+- Prüfkatalog zur 43. Ergänzung (Version 43.1.0.0), Blätter `VR`,
+  `mBGM Paket` (Kapitel H.23), `Allgemein` (H.1), `FH` (H.7) und `SM` (H.12)
+  samt `FC-Texte`.
+- Schwerarbeitsverordnung, § 5 (Meldepflicht, Frist).
+- Für E.12 und E.22 druckt die DM-Org keine Beispiele ab, und öffentliche
+  Beispieldateien von ÖGK oder ELDA gibt es nicht; die Tests prüfen deshalb
+  Feld für Feld gegen die Feldtabellen. Die Kapitel E.12 und E.22 sind in der
+  42. und 43. Ergänzung wortgleich; die Seitenangaben im Code nennen beide.
 
 **Seitenangaben.** Gegenüber der 42. Ergänzung hat die 43. Inhalt nur in
 D.5 (10-stellige ÖGK-Beitragskontonummer), D.54 (Verrechnungsgrundlage bei
@@ -1119,7 +1242,8 @@ zehn verschoben.
 ## Ausblick
 
 Abgedeckt sind die Versichertenmeldung reduziert (Kapitel E.29), die
-monatliche Beitragsgrundlagenmeldung (Kapitel E.32) und das Lesen der
+monatliche Beitragsgrundlagenmeldung (Kapitel E.32), Familienhospizkarenz/
+Pflegekarenz (E.12), die Schwerarbeitsmeldung (E.22) und das Lesen der
 Rücksendungen (Mitteilung, Clearing-Datensatz 2.0). Noch offen — ohne Beleg
 wird nichts davon geraten:
 
@@ -1127,8 +1251,22 @@ wird nichts davon geraten:
   enthalten; braucht seine eigene Spec-Grundlage. Die SIT-Plattform verarbeitet
   `LF` nicht, getestet werden kann er nur im Kundentest.
 - **Weitere Verarbeitungen, die die SIT kennt:** VSNR-Anforderung (`VS`),
-  Adressmeldung (`AV`), Familienhospiz (`FH`), Schwerarbeit (`SM`) — keine
-  Builder.
+  Adressmeldung (`AV`) — keine Builder.
+- **Familienhospiz und Schwerarbeit** sind gebaut, aber noch nie gesendet
+  worden (SIT-Fälle S03, S04, S31–S33, S40–S42). Offen bis dahin:
+  - Die Erstellvorschriften aus E.12.2 ohne eigene Katalogzeile (bei der
+    Anmeldung zur Freistellung nur 03, 04, 07, zur Teilzeit nur 05, 06; 07 erst
+    ab 01.11.2023; Entgelte nur bei 01/02) werden nicht geprüft.
+  - Für das Geschlecht bei SART 80 führt der Prüfkatalog zwei Zeilen mit
+    Status N, die sich widersprechen: `F0081` „gültig 1,2" und `F0082`
+    „gültig 1,2,3,4,6,7". Das Paket folgt der Feldtabelle (wie `F0082`).
+  - Die Tätigkeitsart ist zweistellig, die Codes sind einstellig abgedruckt.
+    Das Paket sendet `1 ` und weist `01` ab; ob ELDA `01` annimmt, klärt S33.
+  - Die Version der Schwerarbeitsmeldung ist laut Kapitelkopf `02`, die
+    Fehlertexte nennen „SM01".
+  - Wie ELDA einen Storno (66) der ursprünglichen Schwerarbeitsmeldung
+    zuordnet und was bei mehr als 26 Tätigkeiten im Jahr gilt, sagt E.22
+    nicht; mehr als 26 weist das Paket ab.
 - **Mitteilung bei Abweisung:** nach dem Schema gelesen, auf der SIT aber nie
   beobachtet (alle Sendungen kamen `uebernommen`). Das Klartext-Protokoll
   (`mbd_…`) wird nicht ausgewertet.

@@ -48,6 +48,17 @@ test('index exportiert die Meldungs-Builder', () => {
     'wochenarbeitszeit',
     'erstelleMbgmPaket',
     'erstelleMbgmBestand',
+    'familienhospizAnmeldung',
+    'familienhospizAbmeldung',
+    'familienhospizAenderungsmeldung',
+    'familienhospizStornoAnmeldung',
+    'familienhospizStornoAbmeldung',
+    'familienhospizRichtigstellungAnmeldung',
+    'familienhospizRichtigstellungAbmeldung',
+    'erstelleFamilienhospizBestand',
+    'schwerarbeitsmeldung',
+    'stornoSchwerarbeitsmeldung',
+    'erstelleSchwerarbeitBestand',
   ]) {
     assert.equal(typeof (elda as Record<string, unknown>)[name], 'function', name);
   }
@@ -59,6 +70,27 @@ test('index exportiert die Meldungs-Builder', () => {
 test('index exportiert die Bestandsbezeichnungen aus Kapitel B.3', () => {
   assert.equal(elda.BEST_VERSICHERTENMELDUNG, 'VR');
   assert.equal(elda.BEST_MBGM, 'MB');
+  assert.equal(elda.BEST_FAMILIENHOSPIZ, 'FH');
+  assert.equal(elda.BEST_SCHWERARBEIT, 'SM');
+});
+
+test('index exportiert Codelisten und Matrizen von Familienhospiz und Schwerarbeit, aber keine Prüfinterna', () => {
+  assert.equal(elda.KARENZART.PFLEGEKARENZ, '04');
+  assert.equal(elda.TAETIGKEIT.SCHICHT_ODER_WECHSELDIENST, '1');
+  assert.ok(elda.PFLICHT_E12['80']);
+  assert.ok(elda.PFLICHT_E22['65']);
+  assert.equal(elda.SATZART_TEXT_FH['80'], 'Anmeldung');
+  assert.equal(elda.SATZART_TEXT_SM['66'], 'Storno Schwerarbeitsmeldung');
+  assert.ok(elda.FELDGRUPPEN_E12.length > 0);
+  for (const intern of [
+    'FELDER_E12',
+    'FELDER_E22',
+    'pruefeFamilienhospiz',
+    'pruefeSchwerarbeit',
+    'pruefeAllgemein',
+  ]) {
+    assert.equal((elda as Record<string, unknown>)[intern], undefined, `sollte intern sein: ${intern}`);
+  }
 });
 
 test('index exportiert die Satzart-Tabellen, aber kein Innenleben der Versichertenmeldung', () => {

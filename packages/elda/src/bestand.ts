@@ -109,6 +109,12 @@ export const BEST_VERSICHERTENMELDUNG = 'VR';
 /** Monatliche Beitragsgrundlagenmeldung, für Zeiträume ab 01.01.2019 (Kapitel B.3 Punkt 7, E.32). */
 export const BEST_MBGM = 'MB';
 
+/** Familienhospiz (Kapitel B.3 Punkt 10, E.12). */
+export const BEST_FAMILIENHOSPIZ = 'FH';
+
+/** Schwerarbeitsmeldung (Kapitel B.3 Punkt 18, E.22). */
+export const BEST_SCHWERARBEIT = 'SM';
+
 /**
  * Versionsnummer der Satzstrukturen (Feld VERS, Kapitel D.26).
  *
@@ -129,6 +135,12 @@ export const VERSION_VERSICHERTENMELDUNG = '03';
 
 /** Kapitelkopf E.32 „Monatliche Beitragsgrundlagenmeldung": Version 02, zwingend ab 01.02.2021. */
 export const VERSION_MBGM = '02';
+
+/** Kapitelkopf E.12 „Familienhospizkarenz/Pflegekarenz": Version 03, zwingend ab 01.01.2014. */
+export const VERSION_FAMILIENHOSPIZ = '03';
+
+/** Kapitelkopf E.22 „Schwerarbeitsmeldung": Version 02, zwingend ab 17.01.2011. */
+export const VERSION_SCHWERARBEIT = '02';
 
 /**
  * Datenübernehmender Versicherungsträger (Feld UVST, Kapitel D.2).
