@@ -65,8 +65,10 @@ export {
   BEST_MBGM,
   BEST_FAMILIENHOSPIZ,
   BEST_SCHWERARBEIT,
+  BEST_ZWISCHENSTAATLICH,
   VERSION_VERSICHERTENMELDUNG,
   VERSION_MBGM,
+  VERSION_ZWISCHENSTAATLICH,
   UVST_ELDA,
   type BestandOptionen,
   type Hersteller,
@@ -161,3 +163,22 @@ export {
 export { TAETIGKEIT, type Taetigkeit } from './pruefung-e22';
 export { PFLICHT_E22, SATZART_TEXT_SM, type SatzartSM } from './pflicht-e22';
 export { type Stufe } from './pflichtmatrix';
+// --- Antrag auf zwischenstaatliche Bescheinigung (Kapitel E.27) ------------
+export {
+  antragZwischenstaatlich,
+  stornoAntragZwischenstaatlich,
+  erstelleEsBestand,
+  type AntragFelder,
+  type StornoAntragFelder,
+  type EsDienstgeber,
+  type EsSelbstaendig,
+  type EsArbeitsort,
+} from './zwischenstaatlich';
+export {
+  PFLICHT_E27,
+  PFLICHT_E27_STORNO,
+  E27_SATZART_TEXT,
+  type E27Satzart,
+  type E27Meldeart,
+} from './pflicht-e27';
+export { STAATEN_E1_BIS_E4, STAATEN_E5 } from './pruefung-e27';

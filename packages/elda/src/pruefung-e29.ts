@@ -50,7 +50,7 @@ export function normalisiertNumerisch(wert: string | undefined): string | undefi
 }
 
 /** Wandelt ein Datum der Form TTMMJJJJ in eine vergleichbare Zahl JJJJMMTT. */
-function alsZahl(datum: string): number {
+export function alsZahl(datum: string): number {
   return Number(datum.slice(4, 8) + datum.slice(2, 4) + datum.slice(0, 2));
 }
 

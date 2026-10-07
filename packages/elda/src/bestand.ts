@@ -121,6 +121,8 @@ export const BEST_FAMILIENHOSPIZ = 'FH';
 
 /** Schwerarbeitsmeldung (Kapitel B.3 Punkt 18, E.22). */
 export const BEST_SCHWERARBEIT = 'SM';
+/** Antrag auf zwischenstaatliche Bescheinigung (Kapitel B.3 Punkt 20, E.27). */
+export const BEST_ZWISCHENSTAATLICH = 'ES';
 
 /**
  * Versionsnummer der Satzstrukturen (Feld VERS, Kapitel D.26).
@@ -154,6 +156,8 @@ export const VERSION_FAMILIENHOSPIZ = '03';
 
 /** Kapitelkopf E.22 „Schwerarbeitsmeldung": Version 02, zwingend ab 17.01.2011. */
 export const VERSION_SCHWERARBEIT = '02';
+/** Kapitelkopf E.27 „Antrag auf zwischenstaatliche Bescheinigung": Version 08, zwingend ab 01.02.2025. */
+export const VERSION_ZWISCHENSTAATLICH = '08';
 
 /**
  * Datenübernehmender Versicherungsträger (Feld UVST, Kapitel D.2).
