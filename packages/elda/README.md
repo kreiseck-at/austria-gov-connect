@@ -50,7 +50,7 @@ drei Abweisungen kamen als Status `403` mit `nicht_uebernommen` und haben
 Daraus das **Bestandsformat, wie es tatsächlich erwartet wird**:
 
 - Die Sätze sind durch **CRLF** getrennt, **ohne** Trenner nach dem letzten.
-  Das Dokument sagt es nirgends; der Beleg steht im Fehlerkatalog (Kapitel H.22):
+  Das Dokument sagt es nirgends; der Beleg steht im Fehlerkatalog (Kapitel H.25):
   `W4` lautet „Leerzeile gefunden" — eine Leerzeile setzt zeilenweises Lesen
   voraus. Damit ist auch „Die Übermittlung erfolgt in variabler Satzlänge"
   (C.1) aufgelöst: variabel **innerhalb** eines Bestands.
@@ -62,7 +62,7 @@ Daraus das **Bestandsformat, wie es tatsächlich erwartet wird**:
 - Encoding **ISO-8859-15**: Kapitel C.2 führt es als Standard für Eingabedaten
   („Fixlängen-Dateien"). Der Dateiheader (C.1.1) ist damit entbehrlich.
 
-**Kapitel H.22 „ELDA-FC" ist die Fundstelle für alle `E`- und `W`-Codes der
+**Kapitel H.25 „ELDA-FC" ist die Fundstelle für alle `E`- und `W`-Codes der
 Datenübernahme** — im DM-ORG selbst stehen sie nicht, sondern in einem eigenen
 PDF (Kapitel H) auf elda.at. Wer eine Abweisung deuten muss, findet dort
 `E1`–`E38` und `W1`–`W13` im Klartext.
@@ -479,7 +479,7 @@ Referenznummer, Zeilennummer (Leerzeilen zählt ELDA nicht mit) und die `codes`
 mit `code` (z. B. `E17`), `text` (der fertige Fehlertext), `typ` (`fehler` /
 `warnung`) und `zeilennummer`. Codes, die keiner Meldung zuzuordnen sind — das
 Schema nennt `E17`, Mehrfachübermittlung einer Datei —, stehen in
-`Mitteilung.codes`. Den Klartext aller `E`-/`W`-Codes führt Kapitel H.22
+`Mitteilung.codes`. Den Klartext aller `E`-/`W`-Codes führt Kapitel H.25
 „ELDA-FC". Elemente außerhalb des Schemas landen in `weitere`. Auf der SIT kam
 bisher nur `uebernommen`; Codes und die anderen Status sind nach dem Schema
 gelesen, nicht beobachtet.
@@ -501,13 +501,11 @@ muss für die Produktion nicht ebenso gelten:
   (`BW1916`). Eine Betriebliche Vorsorge legt die amtswegige mBGM nicht an.
 - Eine **Abmeldung mit BV-Ende**, zu der keine BV-Zeit gespeichert ist, kommt
   als `VW1942` (dringend, Status `IA` in Arbeit) zurück; die Code-Liste der ÖGK
-  nennt als Handlung „Richtigstellung der Abmeldung". Beide Fälle hatten eine
-  Ursache in den Testdaten: Einmal lag das BV-Ende **vor** dem Anmeldedatum,
-  einmal endete die Beschäftigung mit dem **ersten Monat**. Dass im ersten
-  Monat keine BV-Zeit entsteht, ist naheliegend — die DM-Org verweist beim Feld
-  `BVAB` darauf, dass der BV-Beginn wegen § 6 Abs. 1 BMSVG vom Beginn der
-  Pflichtversicherung abweichen kann —, aber von der SIT nicht ausdrücklich
-  bestätigt.
+  nennt als Handlung „Richtigstellung der Abmeldung". Im einen Fall lag das
+  BV-Ende **vor** dem Anmeldedatum — ein Fehler der Testdaten. Im anderen
+  endete die Beschäftigung mit dem ersten Monat, und für diesen Monat war keine
+  mBGM gesendet (die amtswegige mBGM des Trägers umfasst nur die SV). Welcher
+  der beiden Umstände die BV-Zeit verhindert hat, ist offen.
 - Eine **mBGM für Monate vor der Anmeldung** wird übernommen und verbucht; der
   BV-Teil aber nicht: `BW1871` (dringend) „keine entsprechende
   Versicherungszeit BV vorhanden. Die Grundlage … wurde nicht gespeichert."
@@ -1017,7 +1015,8 @@ Mitteilungssätzen (Satzart `L1`, Satzlänge 3500).
   als Warnung geführt, nicht als harter Fehler.
 - Die inhaltliche **Schreibweise von Namen** (`F7036`/`F7038`) — sie verlangt
   eine manuelle fachliche Durchsicht, die sich nicht allein aus den Feldwerten
-  entscheiden lässt.
+  entscheiden lässt. Seit dem Prüfkatalog zur 43. Ergänzung sind beide nur noch
+  Warnungen (Status `W`).
 - Die **Formalprüfung der Beitragskontonummer** selbst (`F7001`/`F7002` und,
   wortgleich „Formalprüfung analog Feld BKNR", `F7110` für `ZKUM`) — welche Form
   gültig ist, sagt der Katalog nur über die trägerabhängigen Längenwarnungen.
@@ -1053,9 +1052,22 @@ senden.
 | `FAK-3.1.11` | mehr als ein Tarifblock bei regelmäßiger Beschäftigung (Warnung) |
 | `BW1838` | Lehrlinge (`B044`, `B045`) mit der allgemeinen AV-Minderung `A01`–`A03` statt `A04`/`A05` (Fehler; Tarifsystem, Clearing auf der SIT) |
 
+**AV-Minderung ab 2027 (43. Ergänzung, D.60, Seite 152).** Für die Minderung
+der AV bei geringem Einkommen zählt ab 01.01.2027 der Beginn des
+Dienstverhältnisses: Für zum 31.12.2026 aufrechte Dienstverhältnisse gelten
+die Abschläge „Mind. AV (ALT)" (`A01`–`A04`, bisher „Minderung AV auf 2 % / 1 %
+/ 0 % / 0 % (Lg.)"), für danach beginnende „Mind. AV (NEU)" (`A25` Bereich 1,
+`A26` Bereich 2, `A27` Bereich 1 (Lg.)). `A05` gilt nur bis 31.12.2026. Alle
+tragen laut Dokument ein Gültigkeitsende (`VPTY_CODES[…].einschraenkung`). Den
+Beginn des Dienstverhältnisses enthält die mBGM nicht; die Wahl zwischen ALT
+und NEU trifft der Aufrufer, das Paket prüft sie nicht. Die Einkommensgrenzen
+der Bereiche stehen nicht in der DM-Org.
+
 `pruefeBeitragskontonummer(bknr, traeger)` prüft die Länge der
 Beitragskontonummer gegen den zuständigen Träger (`F9012`–`F9019`,
-`F9080`–`F9082`); der Träger geht aus der Meldung nicht hervor. Den Katalog der
+`F9080`–`F9082`); der Träger geht aus der Meldung nicht hervor. Seit der 43.
+Ergänzung ist bei allen ÖGK-Landesstellen auch die 10-stellige Form gültig
+(D.5); ab 01.02.2027 vergibt die ÖGK nur mehr 10-stellige Nummern. Den Katalog der
 Tarifgruppen liefert das Paket bewusst nicht mit — er ändert sich laufend
 (siehe `codes-e32.ts`).
 
@@ -1074,15 +1086,28 @@ gedacht.
 
 ### Quellen
 
-- Organisationsbeschreibung „Datenaustausch mit Dienstgebern", 42. Ergänzung,
-  Version 42.7.0 (07/2026), Kapitel E.1 (Identifikationsteil), E.2
+- Organisationsbeschreibung „Datenaustausch mit Dienstgebern", 43. Ergänzung,
+  Version 43.1.0 (09/2026, wirksam ab 01.12.2026), abgeglichen gegen die 42.
+  Ergänzung (Version 42.7.0, 07/2026): Kapitel E.1 (Identifikationsteil), E.2
   (Vorlaufsatz), E.3 (Schlusssatz), E.29 (Versichertenmeldung reduziert:
   Feldtabelle, Pflichtmatrix, Erstellvorschriften mit Beispielen), D.22
   (Abmeldegrund-Codeliste samt Abhängigkeitstabelle auf Seite 96), D.6
   (Aufbau der Versicherungsnummer), D.39 (Beschäftigungsbereich-Codeliste),
   D.41 (freier Dienstvertrag), D.43 (Referenzwert), D.47 (betriebliche
   Vorsorge), E.30.2 (VSNR-Anforderung).
-- Prüfkatalog zur 42. Ergänzung, Blatt `VR`.
+- Prüfkatalog zur 43. Ergänzung (Version 43.1.0.0), Blätter `VR` und
+  `mBGM Paket` (Kapitel H.23).
+
+**Seitenangaben.** Gegenüber der 42. Ergänzung hat die 43. Inhalt nur in
+D.5 (10-stellige ÖGK-Beitragskontonummer), D.54 (Verrechnungsgrundlage bei
+Verrechnung mit und ohne Zeit), D.60 (Abschläge ALT/NEU, `Z15`/`Z16` bei
+Sonderzahlungen) sowie in Kapiteln geändert, die dieses Paket nicht abbildet
+(E.10, E.13/E.14, E.16, E.24, E.26, E.27). E.1–E.3, E.29 und E.32 sind
+inhaltlich gleich geblieben. `codes-e32.ts` zitiert die Seiten der 43.
+Ergänzung; die übrigen Seiten- und Fußnotenangaben im Code beziehen sich auf
+die 42. In der 43. liegen D.61 bis E.10 zwei Seiten später, E.28 bis G.10 —
+also E.29 und E.32 — elf Seiten später; die Fußnoten ab D.61 sind um neun bis
+zehn verschoben.
 - Das separate Zeichensatz-Dokument (Zeichenvorrat Personennamen bzw.
   Unternehmensnamen/Adressen in ISO-8859-15).
 - Rücksendungen: `elda_mitteilung-3.0.xsd` (ELDA, „Mitteilungsfiles") und
@@ -1110,11 +1135,15 @@ wird nichts davon geraten:
 - **Beitragshöhe:** `pruefeMbgmPaket` rechnet Beiträge nicht aus
   Beitragsgrundlage und Prozentsatz nach; Rundungsfehler (`BW1917`) und falsche
   Sätze (`BW1850`) erkennt erst der Träger.
-- **Lehrlingsregel:** belegt nur für die Beschäftigtengruppen `B044`/`B045`.
-  Ob `A04`/`A05` umgekehrt bei anderen Gruppen unzulässig sind, steht nicht
-  ausdrücklich in den Quellen und wird nicht geprüft.
-- **BV-Zeit im ersten Monat:** dass `VW1942` bei einer Beschäftigung von genau
-  einem Monat aus § 6 Abs. 1 BMSVG folgt, ist nicht bestätigt (siehe „Was die
+- **Lehrlingsregel:** belegt nur für die Beschäftigtengruppen `B044`/`B045`
+  und die Abschläge `A01`–`A03`. Ob `A04`/`A05`/`A27` umgekehrt bei anderen
+  Gruppen unzulässig sind und ob `A25`/`A26` bei Lehrlingen ebenso `BW1838`
+  auslösen, steht nicht in den Quellen und wird nicht geprüft.
+- **ALT oder NEU:** ob ein Dienstverhältnis am 31.12.2026 aufrecht war, kann das
+  Paket nicht wissen; es prüft die Wahl zwischen `A01`–`A04` und `A25`–`A27`
+  nicht, ebenso wenig die Gültigkeitsenden der Abschläge.
+- **`VW1942` nach einem Monat Beschäftigung:** ob die BV-Zeit am ersten Monat
+  oder an der fehlenden mBGM scheiterte, ist offen (siehe „Was die
   SIT-Plattform gezeigt hat"). Das Paket prüft Abmeldungen nicht gegen den
   BV-Beginn.
 - **Status `206`** („Limit an Rücksendungen erreicht", Schnittstellenbeschreibung
