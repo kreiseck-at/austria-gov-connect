@@ -4,7 +4,7 @@ import { VBTY_CODES, VPTY_CODES, KOMBINATION, EINS_ZU_EINS } from './codes-e32';
 
 test('die Kataloge haben den Umfang des Dokuments', () => {
   assert.equal(Object.keys(VBTY_CODES).length, 18, 'D.58, Seiten 139-140');
-  assert.equal(Object.keys(VPTY_CODES).length, 45, 'D.60, Seiten 148-149');
+  assert.equal(Object.keys(VPTY_CODES).length, 48, 'D.60, Seiten 149-150');
 });
 
 test('jede Kombination verweist auf existierende Codes', () => {
@@ -57,7 +57,7 @@ test('die SW-Entschaedigung ist der einzige Basistyp mit zwei Positionen', () =>
 
 test('Einschraenkungen sind als Daten hinterlegt, nicht in Code gegossen', () => {
   assert.equal(VPTY_CODES.A11?.einschraenkung?.text, 'Gültig bis 31.12.2025');
-  assert.equal(VPTY_CODES.A11?.einschraenkung?.fussnote, 44);
+  assert.equal(VPTY_CODES.A11?.einschraenkung?.fussnote, 49);
   assert.match(VPTY_CODES.P01?.einschraenkung?.text ?? '', /BVAEB/);
   assert.match(VPTY_CODES.A24?.einschraenkung?.text ?? '', /Wien/);
   assert.equal(VPTY_CODES.T01?.einschraenkung, undefined, 'der Regelfall traegt keine');
@@ -75,4 +75,25 @@ test('die Kataloge sind eingefroren', () => {
   assert.equal(Object.isFrozen(VPTY_CODES), true);
   assert.equal(Object.isFrozen(KOMBINATION), true);
   assert.equal(Object.isFrozen(KOMBINATION.AB), true);
+});
+
+test('43. Ergänzung: Mind. AV (ALT)/(NEU) mit Gültigkeit, Z15/Z16 auch bei Sonderzahlung', () => {
+  assert.equal(VPTY_CODES.A01?.bezeichnung, 'Mind. AV (ALT) – Bereich 3');
+  assert.equal(VPTY_CODES.A04?.bezeichnung, 'Mind. AV (ALT) – Bereich 1 (Lg.)');
+  assert.equal(VPTY_CODES.A05?.einschraenkung?.text, 'Gültig bis 31.12.2026');
+  for (const [code, bezeichnung, bis] of [
+    ['A25', 'Mind. AV (NEU) – Bereich 1', '31.12.2028'],
+    ['A26', 'Mind. AV (NEU) – Bereich 2', '31.12.2027'],
+    ['A27', 'Mind. AV (NEU) – Bereich 1 (Lg.)', '31.12.2027'],
+  ] as const) {
+    assert.equal(VPTY_CODES[code]?.bezeichnung, bezeichnung);
+    assert.equal(VPTY_CODES[code]?.art, 'abschlag');
+    assert.equal(VPTY_CODES[code]?.einschraenkung?.text, `Gültig bis ${bis}`);
+    for (const basis of ['AB', 'SZ', 'AZ', 'SA', 'UU']) {
+      assert.equal(KOMBINATION[basis]?.[code], 'Z1', `${basis}/${code}`);
+    }
+  }
+  assert.equal(KOMBINATION.SZ?.Z15, 'Z1');
+  assert.equal(KOMBINATION.SZ?.Z16, 'Z1');
+  assert.equal(VPTY_CODES.Z15?.einschraenkung?.text, 'Gültig für Beitragszeiträume ab 07/2026');
 });

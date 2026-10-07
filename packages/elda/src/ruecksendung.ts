@@ -92,7 +92,7 @@ export const MITTEILUNG_STATUS = {
   offen: 'Verarbeitung noch nicht abgeschlossen – eine weitere Mitteilung folgt',
 } as const;
 
-/** Ein Code der Mitteilung (`E…`/`W…`, Klartext in Kapitel H.22 „ELDA-FC“). */
+/** Ein Code der Mitteilung (`E…`/`W…`, Klartext in Kapitel H.25 „ELDA-FC“). */
 export interface MitteilungCode {
   /** `value`, z. B. `E17`. */
   code: string;

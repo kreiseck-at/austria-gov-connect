@@ -2,8 +2,8 @@ import type { RohSatz } from './bestand';
 import { pruefeAbfolge } from './abfolge-e32';
 
 /**
- * Prüfregeln des mBGM-Pakets aus dem Prüfkatalog der 42. Ergänzung,
- * Version 42.1.0.0.A7, Blatt `Paket` („H.20 mBGM – Paketsprüfungen").
+ * Prüfregeln des mBGM-Pakets aus dem Prüfkatalog der 43. Ergänzung,
+ * Version 43.1.0.0, Blatt `mBGM Paket` („H.23 mBGM – Paketsprüfungen").
  *
  * **Zum Umfang:** Der Prüfkatalog führt für die mBGM ausschließlich
  * Paketprüfungen. Eigene Feldprüfungen für die Satzarten `G`, `T`, `BS`/`BV`
@@ -69,20 +69,26 @@ export const HOECHSTANZAHL = {
  * Zulässige Länge der Beitragskontonummer je Versicherungsträger, laut den
  * Warnungen `F9013`–`F9019` und `F9080`–`F9082`.
  *
+ * Seit der 43. Ergänzung ist bei jeder ÖGK-Landesstelle zusätzlich die
+ * 10-stellige Form gültig (D.5, Seite 70: „N-stellig bzw. 10-stellig"). Seite
+ * 71: „Von der ÖGK werden ab 01.02.2027 nur mehr 10-stellige
+ * Beitragskontonummern vergeben." Das Prüfziffernverfahren der neuen Form
+ * beschreibt das Dokument nicht; geprüft wird nur die Länge.
+ *
  * Das ist eine **Warnung**, kein Fehler: Eine abweichende Länge weist ELDA
  * nicht zurück. Welcher Träger zuständig ist, weiß dieses Paket nicht — die
  * Prüfung steht deshalb als Werkzeug bereit und läuft nicht von selbst.
  */
 export const BKNR_LAENGE: Readonly<Record<string, readonly number[]>> = {
-  'ÖGK-W': [8],
-  'ÖGK-N': [9],
-  'ÖGK-B': [7],
+  'ÖGK-W': [8, 10],
+  'ÖGK-N': [9, 10],
+  'ÖGK-B': [7, 10],
   'ÖGK-O': [8, 10],
-  'ÖGK-ST': [7],
-  'ÖGK-K': [7],
-  'ÖGK-S': [7],
-  'ÖGK-T': [7],
-  'ÖGK-V': [6],
+  'ÖGK-ST': [7, 10],
+  'ÖGK-K': [7, 10],
+  'ÖGK-S': [7, 10],
+  'ÖGK-T': [7, 10],
+  'ÖGK-V': [6, 10],
   BVAEB: [5, 10],
 };
 
@@ -413,7 +419,11 @@ const LEHRLINGSGRUPPEN: Readonly<Record<string, string>> = {
   B045: 'Arbeiterlehrlinge',
 };
 
-/** Allgemeine AV-Minderung bei geringem Einkommen (D.60) und ihr Lehrlings-Gegenstück. */
+/**
+ * Allgemeine AV-Minderung bei geringem Einkommen (D.60) und ihr
+ * Lehrlings-Gegenstück — für zum 31.12.2026 aufrechte Dienstverhältnisse
+ * („Mind. AV (ALT)"). `A05` gilt laut D.60 nur bis 31.12.2026.
+ */
 const AV_MINDERUNG_LEHRLING: Readonly<Record<string, string>> = {
   A01: 'A04 oder A05',
   A02: 'A05',
@@ -432,6 +442,12 @@ const AV_MINDERUNG_LEHRLING: Readonly<Record<string, string>> = {
  * zulässig.“) und rechnet die Beiträge neu (BW1850) – beobachtet auf der
  * SIT-Plattform am 07.10.2026. Die Meldung wird zwar übernommen, muss aber
  * storniert und neu gemeldet werden.
+ *
+ * Seit der 43. Ergänzung heißen A01–A04 „Mind. AV (ALT) – Bereich …“. Für
+ * Dienstverhältnisse, die nach dem 31.12.2026 beginnen, gibt es A25/A26 und als
+ * Lehrlings-Gegenstück A27 („Mind. AV (NEU) – Bereich 1 (Lg.)“). Ob A25/A26 bei
+ * den Lehrlingsgruppen ebenso unzulässig sind, sagt keine Quelle; das wird
+ * nicht geprüft.
  *
  * Geprüft wird nur, wo die Beschäftigtengruppe als Lehrlingsgruppe belegt ist
  * ({@link LEHRLINGSGRUPPEN}); den vollständigen Tarifgruppen-Katalog liefert
@@ -471,7 +487,7 @@ function pruefeLehrlingsAbschlag(saetze: readonly RohSatz[]): Befund[] {
  * Versicherungsträger (`F9013`–`F9019`, `F9080`–`F9082`).
  *
  * Getrennt von {@link pruefeMbgmPaket}, weil der Träger nicht aus der Meldung
- * hervorgeht. Für Salzburg gilt `'ÖGK-S'` mit sieben Stellen.
+ * hervorgeht. Für Salzburg gilt `'ÖGK-S'` mit sieben oder zehn Stellen.
  *
  * @returns alle Befunde; ein leeres Array heißt: nichts zu beanstanden, oder der
  *   Träger ist unbekannt.
