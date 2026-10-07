@@ -386,6 +386,8 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
     });
   }
 
+  befunde.push(...pruefeLehrlingsAbschlag(saetze));
+
   // Die eigentliche Strukturregel steht nicht im Prüfkatalog, sondern in
   // Kapitel E.32.2.2.6 — der Katalog verweist bei F9070 nur darauf.
   befunde.push(...pruefeAbfolge(saetze));
@@ -398,6 +400,69 @@ export function pruefeMbgmPaket(saetze: readonly RohSatz[]): Befund[] {
     });
   }
 
+  return befunde;
+}
+
+/**
+ * Beschäftigtengruppen der Lehrlinge, für die das belegt ist: das Tarifsystem
+ * der ÖGK und das ELDA-Protokoll („BESCHGRUPPE: Arbeiterlehrlinge“ zu B045,
+ * „Angestelltenlehrlinge“ zu B044, SIT 10/2026).
+ */
+const LEHRLINGSGRUPPEN: Readonly<Record<string, string>> = {
+  B044: 'Angestelltenlehrlinge',
+  B045: 'Arbeiterlehrlinge',
+};
+
+/** Allgemeine AV-Minderung bei geringem Einkommen (D.60) und ihr Lehrlings-Gegenstück. */
+const AV_MINDERUNG_LEHRLING: Readonly<Record<string, string>> = {
+  A01: 'A04 oder A05',
+  A02: 'A05',
+  A03: 'A04',
+};
+
+/**
+ * Lehrlinge mit der ALLGEMEINEN AV-Minderung bei geringem Einkommen.
+ *
+ * Auch Lehrlinge haben die AV-Minderung nach § 2a AMPFG – aber mit eigenen
+ * Verrechnungspositionen und eigenen Sätzen: Das Tarifsystem (Stand 19.09.2025)
+ * führt bei den Lehrlings-Tarifgruppen „Mind. AV auf 0% (Lg.)“ (A04, −1,15 %)
+ * und „Mind. AV auf 1% (Lg.)“ (A05, −0,15 %), nicht A01–A03. Die ÖGK beantwortet
+ * die Kombination mit Clearing BW1838 („Die Kombination der Tarifgruppe
+ * Arb. Lg. … mit … Verrechnungsposition Minderung AV auf 0% (A03) ist nicht
+ * zulässig.“) und rechnet die Beiträge neu (BW1850) – beobachtet auf der
+ * SIT-Plattform am 07.10.2026. Die Meldung wird zwar übernommen, muss aber
+ * storniert und neu gemeldet werden.
+ *
+ * Geprüft wird nur, wo die Beschäftigtengruppe als Lehrlingsgruppe belegt ist
+ * ({@link LEHRLINGSGRUPPEN}); den vollständigen Tarifgruppen-Katalog liefert
+ * dieses Paket bewusst nicht mit (siehe `codes-e32.ts`).
+ */
+function pruefeLehrlingsAbschlag(saetze: readonly RohSatz[]): Befund[] {
+  const befunde: Befund[] = [];
+  let bsgr: string | undefined;
+  let wer: string | undefined;
+  for (const s of saetze) {
+    if (/^[GR]\d$/.test(s.satzart)) {
+      wer = s.werte.VSNR?.trim() || s.werte.REFW?.trim() || s.satzart;
+      bsgr = undefined;
+    } else if (/^T\d$/.test(s.satzart)) {
+      bsgr = s.werte.BSGR?.trim();
+    } else if ((s.satzart === 'V1' || s.satzart === 'V2') && bsgr && LEHRLINGSGRUPPEN[bsgr]) {
+      const vpty = s.werte.VPTY?.trim();
+      const richtig = vpty ? AV_MINDERUNG_LEHRLING[vpty] : undefined;
+      if (richtig) {
+        befunde.push({
+          code: 'BW1838',
+          schwere: 'fehler',
+          meldung:
+            `${wer ?? 'Meldung'}: ${LEHRLINGSGRUPPEN[bsgr]} (${bsgr}) mit der allgemeinen AV-Minderung ${vpty}. ` +
+            `Für Lehrlinge führt das Tarifsystem eigene Abschläge – hier ${richtig} ` +
+            '(„Mind. AV … (Lg.)“). Die ÖGK beantwortet die Kombination mit Clearing BW1838 ' +
+            'und rechnet die Beiträge neu.',
+        });
+      }
+    }
+  }
   return befunde;
 }
 
