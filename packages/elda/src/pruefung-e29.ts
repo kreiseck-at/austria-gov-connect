@@ -17,7 +17,7 @@ function wirf(code: string, text: string): never {
  * als solche erkennen). Liefert `undefined`, wenn nach dem Trimmen nichts übrig bleibt —
  * das ist die einzige Stelle, an der „belegt“ entschieden wird.
  */
-function normalisiert(wert: string | undefined): string | undefined {
+export function normalisiert(wert: string | undefined): string | undefined {
   if (wert === undefined) return undefined;
   const getrimmt = wert.trim().normalize('NFC');
   return getrimmt === '' ? undefined : getrimmt;
@@ -43,7 +43,7 @@ function normalisiert(wert: string | undefined): string | undefined {
  * `fuelle` in `festsatz.ts` wendet dieselbe Gleichsetzung beim Schreiben an, damit Prüfung
  * und Serialisierung denselben Begriff von „belegt" verwenden.
  */
-function normalisiertNumerisch(wert: string | undefined): string | undefined {
+export function normalisiertNumerisch(wert: string | undefined): string | undefined {
   const getrimmt = normalisiert(wert);
   if (getrimmt === undefined) return undefined;
   return /^0+$/.test(getrimmt) ? undefined : getrimmt;
@@ -61,7 +61,7 @@ function istSchaltjahr(jjjj: number): boolean {
 const TAGE_PRO_MONAT: readonly number[] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 /** Liefert die tatsächliche Anzahl Tage eines Monats, Februar im Schaltjahr eingeschlossen. */
-function tageImMonat(mm: number, jjjj: number): number {
+export function tageImMonat(mm: number, jjjj: number): number {
   if (mm === 2 && istSchaltjahr(jjjj)) return 29;
   return TAGE_PRO_MONAT[mm - 1] ?? 31;
 }

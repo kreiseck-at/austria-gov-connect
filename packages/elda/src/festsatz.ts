@@ -43,8 +43,12 @@ export interface Feld {
    * `MMJJJJ` kommt beim Beitragszeitraum der mBGM hinzu (Kapitel E.32,
    * Seite 339). Dieselbe Begründung in kleinerem Maßstab: `'12026'` würde ohne
    * Marker zu `'012026'` — Jänner 2026 statt eines erkennbaren Tippfehlers.
+   *
+   * `JJJJ` und `TTMM` stammen aus der Schwerarbeitsmeldung (Kapitel E.22,
+   * Seite 267 der 43. Ergänzung): Tätigkeitsjahr sowie Beginn und Ende einer Tätigkeit. Aus
+   * `'103'` würde ohne Marker `'0103'` — der 1. März statt des 10. März.
    */
-  format?: 'TTMMJJJJ' | 'LLLPTTMMJJ' | 'MMJJJJ';
+  format?: 'TTMMJJJJ' | 'LLLPTTMMJJ' | 'MMJJJJ' | 'JJJJ' | 'TTMM';
 }
 
 /** Werte je Feldname. Ein fehlender oder `undefined`-Wert bedeutet Grundstellung. */
