@@ -61,6 +61,11 @@ export type Verfahren = 'selbstabrechnung' | 'vorschreibung';
  * sondern eine Matrix: Sie sagt, ob es im Beitragszeitraum eine
  * Versicherungszeit gibt — und getrennt danach, ob sich Zeit und Verrechnung
  * auf die Sozialversicherung, die betriebliche Vorsorge oder beides beziehen.
+ *
+ * Seit der 43. Ergänzung (D.54, Seite 135): „Wenn in einer mBGM sowohl eine
+ * Verrechnung mit Zeit als auch eine Verrechnung ohne Zeit vorzunehmen ist, so
+ * zählt für die Belegung der Verrechnunsgrundlage immer die Verrechnung mit
+ * Zeit."
  */
 export const VERRECHNUNGSGRUNDLAGE = {
   /** SV-Verrechnung und BV-Verrechnung mit Zeit in der SV und BV. */

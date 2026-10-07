@@ -1,7 +1,7 @@
 /**
  * Codekataloge der mBGM: Verrechnungsbasis-Typen (D.58) und
  * Verrechnungspositions-Typen (D.60), samt der Regeln, welche Position zu
- * welcher Basis gehört (D.60, Seiten 149–159).
+ * welcher Basis gehört (D.60, Seiten 149–161).
  *
  * **Nicht enthalten ist die Tarifgruppe** (BSGR/ERGB). Deren zulässige Werte
  * stehen ausdrücklich nicht im Dokument: „Zulässige Werte für die Tarifgruppe
@@ -13,7 +13,7 @@
  * Meldungen zu bauen. Die Tarifgruppe übergibt deshalb der Aufrufer.
  */
 
-// --- D.58 Verrechnungsbasis-Typ (Seiten 139–140) ---------------------------
+// --- D.58 Verrechnungsbasis-Typ (Seiten 140–141) ---------------------------
 
 /** Verrechnungsbasis-Typen laut D.58. */
 export const VBTY_CODES = {
@@ -76,7 +76,7 @@ export type VbtyCode = keyof typeof VBTY_CODES;
  */
 export const VBTY_NUR_EINMAL_JE_TARIFBLOCK = true;
 
-// --- D.60 Verrechnungspositions-Typ (Seiten 148–159) -----------------------
+// --- D.60 Verrechnungspositions-Typ (Seiten 149–161) -----------------------
 
 /**
  * Einschränkung eines Positionstyps, wie sie das Dokument in Fußnoten führt.
@@ -89,7 +89,7 @@ export interface VptyEinschraenkung {
   readonly fussnote: number;
 }
 
-/** Kategorie eines Positionstyps laut D.60, Seite 149. */
+/** Kategorie eines Positionstyps laut D.60, Seite 150. */
 export type VptyArt = 'standard' | 'vorsorge' | 'abschlag' | 'zuschlag';
 
 /** Ein Verrechnungspositions-Typ mit Bezeichnung, Kategorie und Einschränkung. */
@@ -99,16 +99,17 @@ export interface VptyEintrag {
   readonly einschraenkung?: VptyEinschraenkung;
 }
 
-const NUR_BVAEB: VptyEinschraenkung = { text: 'Nur zu verwenden für die BVAEB', fussnote: 45 };
+const NUR_BVAEB: VptyEinschraenkung = { text: 'Nur zu verwenden für die BVAEB', fussnote: 50 };
+const AB_07_2026: VptyEinschraenkung = { text: 'Gültig für Beitragszeiträume ab 07/2026', fussnote: 60 };
 const NUR_BKK_WIEN: VptyEinschraenkung = {
   text: 'Nur zu verwenden für die BKK der Wiener Verkehrsbetriebe',
-  fussnote: 46,
+  fussnote: 51,
 };
 
 /**
- * Die 45 Verrechnungspositions-Typen laut D.60.
+ * Die 48 Verrechnungspositions-Typen laut D.60.
  *
- * Aus D.60 (Seite 149): „Der Verrechnungsposition-Typ legt fest, um welche Art
+ * Aus D.60 (Seite 150): „Der Verrechnungsposition-Typ legt fest, um welche Art
  * von Verrechnung es sich handelt. […] Dabei werden grundsätzlich vier Arten
  * von Verrechnung unterschieden: 1) Standard-Tarifgruppenverrechnung
  * 2) Verrechnung der betrieblichen Vorsorge 3) Abschläge (das sind
@@ -137,11 +138,38 @@ export const VPTY_CODES: Readonly<Record<string, VptyEintrag>> = {
 
   V01: { bezeichnung: 'Betriebliche Vorsorge', art: 'vorsorge' },
 
-  A01: { bezeichnung: 'Minderung AV auf 2%', art: 'abschlag' },
-  A02: { bezeichnung: 'Minderung AV auf 1%', art: 'abschlag' },
-  A03: { bezeichnung: 'Minderung AV auf 0%', art: 'abschlag' },
-  A04: { bezeichnung: 'Minderung AV auf 0% (Lg.)', art: 'abschlag' },
-  A05: { bezeichnung: 'Minderung AV auf 1% (Lg.)', art: 'abschlag' },
+  // Minderung der AV bei geringem Einkommen. Seite 152: „Ab dem 01.01.2027 muss
+  // für die Minderung der AV bei geringem Einkommen der Beginn des
+  // Dienstverhältnisses berücksichtigt werden. Für zum 31. Dezember 2026
+  // aufrechte Dienstverhältnisse gelten die Abschläge Mind. AV (ALT) […], für
+  // nach dem 31. Dezember 2026 beginnende Dienstverhältnisse gelten die
+  // Abschläge Mind. AV (NEU) […]". Den Beginn des Dienstverhältnisses kennt die
+  // mBGM nicht; die Wahl zwischen ALT und NEU trifft der Aufrufer.
+  A01: {
+    bezeichnung: 'Mind. AV (ALT) – Bereich 3',
+    art: 'abschlag',
+    einschraenkung: { text: 'Gültig bis 31.12.2027', fussnote: 44 },
+  },
+  A02: {
+    bezeichnung: 'Mind. AV (ALT) – Bereich 2',
+    art: 'abschlag',
+    einschraenkung: { text: 'Gültig bis 31.12.2029', fussnote: 45 },
+  },
+  A03: {
+    bezeichnung: 'Mind. AV (ALT) – Bereich 1',
+    art: 'abschlag',
+    einschraenkung: { text: 'Gültig bis 31.12.2031', fussnote: 46 },
+  },
+  A04: {
+    bezeichnung: 'Mind. AV (ALT) – Bereich 1 (Lg.)',
+    art: 'abschlag',
+    einschraenkung: { text: 'Gültig bis 31.12.2028', fussnote: 47 },
+  },
+  A05: {
+    bezeichnung: 'Minderung AV auf 1% (Lg.)',
+    art: 'abschlag',
+    einschraenkung: { text: 'Gültig bis 31.12.2026', fussnote: 48 },
+  },
   A07: { bezeichnung: 'WF-Entfall Neugründerförderung', art: 'abschlag' },
   A08: { bezeichnung: 'UV-Entfall Neugründerförderung', art: 'abschlag' },
   A09: { bezeichnung: 'UV-Entfall 60. LJ vollendet', art: 'abschlag' },
@@ -149,7 +177,7 @@ export const VPTY_CODES: Readonly<Record<string, VptyEintrag>> = {
   A11: {
     bezeichnung: 'Bonus-Altfall',
     art: 'abschlag',
-    einschraenkung: { text: 'Gültig bis 31.12.2025', fussnote: 44 },
+    einschraenkung: { text: 'Gültig bis 31.12.2025', fussnote: 49 },
   },
   A12: { bezeichnung: 'AV Entfall Pensionsanspruch (IE-freie DV)', art: 'abschlag' },
   A13: { bezeichnung: 'Entfall AV - Lehrlingssonderfall alt', art: 'abschlag' },
@@ -164,20 +192,35 @@ export const VPTY_CODES: Readonly<Record<string, VptyEintrag>> = {
   A22: {
     bezeichnung: 'Reduktion DN-Anteil PV',
     art: 'abschlag',
-    einschraenkung: { text: 'Nur gültig für Beitragszeiträume in den Jahren 2024 und 2025', fussnote: 47 },
+    einschraenkung: { text: 'Nur gültig für Beitragszeiträume in den Jahren 2024 und 2025', fussnote: 52 },
   },
   A23: {
     bezeichnung: 'Reduktion DN-Anteil KV-Pensionisten 2025',
     art: 'abschlag',
     einschraenkung: {
       text: 'Nur zu verwenden für die BVAEB für Beitragszeiträume 06/2025 bis 12/2025',
-      fussnote: 48,
+      fussnote: 53,
     },
   },
   A24: {
     bezeichnung: 'WF-Entfall NeuFög Ergänzung Wien',
     art: 'abschlag',
-    einschraenkung: { text: 'Nur gültig für Beitragskonten in Wien', fussnote: 49 },
+    einschraenkung: { text: 'Nur gültig für Beitragskonten in Wien', fussnote: 54 },
+  },
+  A25: {
+    bezeichnung: 'Mind. AV (NEU) – Bereich 1',
+    art: 'abschlag',
+    einschraenkung: { text: 'Gültig bis 31.12.2028', fussnote: 55 },
+  },
+  A26: {
+    bezeichnung: 'Mind. AV (NEU) – Bereich 2',
+    art: 'abschlag',
+    einschraenkung: { text: 'Gültig bis 31.12.2027', fussnote: 56 },
+  },
+  A27: {
+    bezeichnung: 'Mind. AV (NEU) – Bereich 1 (Lg.)',
+    art: 'abschlag',
+    einschraenkung: { text: 'Gültig bis 31.12.2027', fussnote: 57 },
   },
 
   Z01: { bezeichnung: 'Dienstgeberabgabe', art: 'zuschlag' },
@@ -192,7 +235,7 @@ export const VPTY_CODES: Readonly<Record<string, VptyEintrag>> = {
     art: 'zuschlag',
     einschraenkung: {
       text: 'Nur zu verwenden in Kärnten (für Sonderzahlungen) sowie Kärnten und Steiermark (bei unbezahltem Urlaub)',
-      fussnote: 50,
+      fussnote: 58,
     },
   },
   Z11: { bezeichnung: 'KV-Beitrag für SW-Entschädigung Lehrling', art: 'zuschlag' },
@@ -205,10 +248,18 @@ export const VPTY_CODES: Readonly<Record<string, VptyEintrag>> = {
   Z14: {
     bezeichnung: 'Zuschlag zum WF in Wien',
     art: 'zuschlag',
-    einschraenkung: { text: 'Nur gültig für Beitragskonten in Wien', fussnote: 51 },
+    einschraenkung: { text: 'Nur gültig für Beitragskonten in Wien', fussnote: 59 },
   },
-  Z15: { bezeichnung: 'Beitrag Sozialfonds Bewachungsgewerbe', art: 'zuschlag' },
-  Z16: { bezeichnung: 'Beitrag Sozialfonds Gebäudereinigungsgewerbe', art: 'zuschlag' },
+  Z15: {
+    bezeichnung: 'Beitrag Sozialfonds Bewachungsgewerbe',
+    art: 'zuschlag',
+    einschraenkung: AB_07_2026,
+  },
+  Z16: {
+    bezeichnung: 'Beitrag Sozialfonds Gebäudereinigungsgewerbe',
+    art: 'zuschlag',
+    einschraenkung: AB_07_2026,
+  },
   Z21: { bezeichnung: 'UF-Beitrag für Beamte der Stadt Wien', art: 'zuschlag', einschraenkung: NUR_BKK_WIEN },
   Z22: {
     bezeichnung: 'Mitversicherung gem. § 51d ASVG – Verrechnung über Dienstgeber',
@@ -220,11 +271,11 @@ export const VPTY_CODES: Readonly<Record<string, VptyEintrag>> = {
 /** Ein Verrechnungspositions-Typ. */
 export type VptyCode = keyof typeof VPTY_CODES;
 
-// --- Zulässige Kombinationen (D.60, Seiten 151–153) ------------------------
+// --- Zulässige Kombinationen (D.60, Seiten 153–156) ------------------------
 
 /**
  * Verrechnungsbasis-Typen, zu denen es **genau eine** Verrechnungsposition
- * geben muss (D.60, Seite 153): „Das bedeutet, dass es zu einer
+ * geben muss (D.60, Seite 155): „Das bedeutet, dass es zu einer
  * Verrechnungsbasis vom Typ auf der linken Seite der Liste immer genau eine
  * Verrechnungsposition von Typ auf der rechten Seite der Liste geben muss."
  *
@@ -234,7 +285,7 @@ export type VptyCode = keyof typeof VPTY_CODES;
  *
  * `KE`, `UH` und `RP` fehlten hier bis zum 04.08.2026, mit der Begründung, das
  * Dokument führe für sie keine Zuordnung. Das war falsch: Alle drei stehen in
- * derselben Liste auf Seite 153, in Schwarzdruck, also nicht einmal neu in
+ * derselben Liste auf Seite 155, in Schwarzdruck, also nicht einmal neu in
  * dieser Ergänzung. Solange sie fehlten, wurde zu einer Basis dieser Typen
  * weder die Zulässigkeit der Position geprüft noch die zwingende Position
  * eingefordert — beides ging kommentarlos durch.
@@ -257,7 +308,7 @@ export const EINS_ZU_EINS: Readonly<Record<string, readonly VptyCode[]>> = {
 
 /**
  * Einschränkungen der Verrechnungsbasis-Typen aus den Fußnoten zu D.58
- * (Seite 139).
+ * (Seite 140).
  *
  * Bis zum 04.08.2026 waren nur die Einschränkungen der POSITIONS-Typen
  * hinterlegt. Dass auch Basistypen eingeschränkt sind, ging unter — `PA` und
@@ -279,7 +330,7 @@ export const VBTY_EINSCHRAENKUNG: Readonly<Record<string, string>> = {
 /**
  * Zulässigkeit je Kombination aus Verrechnungsbasis- und
  * Verrechnungspositions-Typ für die fünf „klassischen" Beitragsgrundlagen
- * (D.60, Seite 153).
+ * (D.60, Seite 156).
  *
  * - `Z`  Angabe zwingend erforderlich
  * - `Z1` Angabe zulässig (zwingend, wenn zutreffend)
@@ -309,6 +360,9 @@ export const KOMBINATION: Readonly<Record<string, Readonly<Record<string, 'Z' | 
     A17: 'Z1',
     A23: 'Z1',
     A24: 'Z1',
+    A25: 'Z1',
+    A26: 'Z1',
+    A27: 'Z1',
     Z01: 'Z1',
     Z05: 'Z1',
     Z14: 'Z1',
@@ -333,9 +387,14 @@ export const KOMBINATION: Readonly<Record<string, Readonly<Record<string, 'Z' | 
     A16: 'Z1',
     A17: 'Z1',
     A23: 'Z1',
+    A25: 'Z1',
+    A26: 'Z1',
+    A27: 'Z1',
     Z01: 'Z1',
     Z05: 'Z1',
     Z10: 'Z1',
+    Z15: 'Z1',
+    Z16: 'Z1',
   },
   AZ: {
     A01: 'Z1',
@@ -343,6 +402,9 @@ export const KOMBINATION: Readonly<Record<string, Readonly<Record<string, 'Z' | 
     A03: 'Z1',
     A04: 'Z1',
     A05: 'Z1',
+    A25: 'Z1',
+    A26: 'Z1',
+    A27: 'Z1',
   },
   SA: {
     A01: 'Z1',
@@ -350,6 +412,9 @@ export const KOMBINATION: Readonly<Record<string, Readonly<Record<string, 'Z' | 
     A03: 'Z1',
     A04: 'Z1',
     A05: 'Z1',
+    A25: 'Z1',
+    A26: 'Z1',
+    A27: 'Z1',
   },
   UU: {
     T03: 'Z',
@@ -368,6 +433,9 @@ export const KOMBINATION: Readonly<Record<string, Readonly<Record<string, 'Z' | 
     A15: 'Z1',
     A16: 'Z1',
     A17: 'Z1',
+    A25: 'Z1',
+    A26: 'Z1',
+    A27: 'Z1',
     Z05: 'Z1',
     Z10: 'Z1',
     Z15: 'Z1',
@@ -385,14 +453,14 @@ for (const eintrag of Object.values(VPTY_CODES)) Object.freeze(eintrag);
 /**
  * Welche Verrechnungspositions-Typen zu einem Basistyp zulässig sind.
  *
- * Führt beide Tabellen aus D.60 zusammen: die 1:1-Beziehungen (Seite 153) und
+ * Führt beide Tabellen aus D.60 zusammen: die 1:1-Beziehungen (Seite 155) und
  * die Kombinationstabelle der klassischen Beitragsgrundlagen.
  *
  * @returns `undefined`, wenn das Dokument für diesen Basistyp keine Zuordnung
  *   führt. Dann wird **nicht** geprüft — eine Ablehnung wäre geraten.
  *
  *   Hier stand einmal, das betreffe `KE`, `UH` und `RP`. Das war falsch: Alle
- *   drei stehen in der 1:1-Liste auf Seite 153. Seit sie dort eingetragen sind,
+ *   drei stehen in der 1:1-Liste auf Seite 155. Seit sie dort eingetragen sind,
  *   liefert diese Funktion für sie ein Ergebnis, und `undefined` bleibt dem
  *   Fall vorbehalten, dass ein Basistyp tatsächlich in keiner der beiden
  *   Tabellen vorkommt.
@@ -426,7 +494,7 @@ export function zwingendePositionen(vbty: string): readonly string[] {
  * Ob zu einer Verrechnungsbasis dieses Typs **genau eine** Position gehören
  * muss.
  *
- * Der Wortlaut auf Seite 153: „Das bedeutet, dass es zu einer
+ * Der Wortlaut auf Seite 155: „Das bedeutet, dass es zu einer
  * Verrechnungsbasis vom Typ auf der linken Seite der Liste immer genau eine
  * Verrechnungsposition von Typ auf der rechten Seite der Liste geben muss."
  *

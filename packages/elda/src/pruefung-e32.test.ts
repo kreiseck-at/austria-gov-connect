@@ -126,8 +126,9 @@ test('F9072: die Hoechstanzahl der Verrechnungspositionen ist eine Warnung', () 
 });
 
 test('die Beitragskontonummer wird gegen den Traeger geprueft', () => {
-  // Salzburg: sieben Stellen.
+  // Salzburg: sieben Stellen, seit der 43. Ergänzung auch zehn.
   assert.deepEqual(pruefeBeitragskontonummer('1234567', 'ÖGK-S'), []);
+  assert.deepEqual(pruefeBeitragskontonummer('1234567897', 'ÖGK-S'), []);
   const b = pruefeBeitragskontonummer('12345678', 'ÖGK-S');
   assert.equal(b[0]?.schwere, 'warnung', 'eine abweichende Laenge weist ELDA nicht zurueck');
   assert.match(b[0]?.meldung ?? '', /7/);
