@@ -109,11 +109,21 @@ An all diesen Stellen schlägt der Client bewusst laut fehl, statt stillschweige
 leere oder halb geparste Daten zu liefern — eine falsche Annahme fällt damit beim
 ersten echten Aufruf auf und nicht erst in den Daten.
 
-Seit Version 0.3.0 gilt dasselbe Vorbehalt auch für den Meldungsbau (Abschnitt
-„Meldungen erzeugen" unten): Auch diese Stufe ist nie gegen eine echte
-ELDA-Gegenstelle gelaufen. Anders als bei der Transport-Schicht stützen sich die
-Tests dort aber nicht nur auf die eigene Lesart der Spezifikation, sondern
-zusätzlich auf die 28 durchgerechneten Beispiele aus Kapitel E.29.2 der
+Der **Meldungsbau** (Abschnitt „Meldungen erzeugen" unten) ist je Meldungsart
+unterschiedlich weit belegt:
+
+| Meldungsart | Bestand | Gegen ELDA gelaufen |
+| ----------- | ------- | ------------------- |
+| Versichertenmeldung reduziert (E.29) | `VR` | SIT-Plattform, Oktober 2026 |
+| Monatliche Beitragsgrundlagenmeldung (E.32) | `MB` | Produktion seit 05.08.2026, SIT-Plattform |
+| VSNR-Anforderung (E.30), Adresse Versicherter (E.31) | `VS`, `AV` | nein — SIT-Fälle angelegt |
+| Familienhospizkarenz/Pflegekarenz (E.12), Schwerarbeitsmeldung (E.22) | `FH`, `SM` | nein — SIT-Fälle angelegt |
+| Antrag auf zwischenstaatliche Bescheinigung (E.27) | `ES` | nein — SIT-Fälle angelegt; ob die SIT `ES` verarbeitet, ist unbelegt |
+| Lohnzettel Finanz (E.13/E.14) | `LF` | nein — die SIT verarbeitet `LF` nicht, nur der Kundentest |
+
+Was nicht gelaufen ist, stützt sich auf die Feldtabellen, Pflichtmatrizen und
+Prüfkataloge — und, wo das Dokument welche abdruckt, auf dessen Beispiele. Bei
+E.29 sind das die 28 durchgerechneten Beispiele aus Kapitel E.29.2 der
 Organisationsbeschreibung (`beispiele-e29.test.ts`) — jede dort abgedruckte
 Wert-Tabelle ist als Test erfasst und ausschließlich mit den im Dokument
 genannten Werten bestückt. Eine Fehldeutung der Spezifikation, die bereits im
@@ -1547,16 +1557,14 @@ D.5 (10-stellige ÖGK-Beitragskontonummer), D.54 (Verrechnungsgrundlage bei
 Verrechnung mit und ohne Zeit), D.60 (Abschläge ALT/NEU, `Z15`/`Z16` bei
 Sonderzahlungen), E.27 (Code `05` für die BVAEB-EB im Feld `VTBK`, eigene
 Pflichtmatrix für das Storno) sowie in Kapiteln geändert, die dieses Paket
-nicht abbildet (E.10, E.16, E.24, E.26) oder als eigene Version führt (E.13/E.14:
-Lohnzettelversion 29). E.1–E.3, E.29 und E.32 sind
-inhaltlich gleich geblieben. `codes-e32.ts` zitiert die Seiten der 43.
-Ergänzung, ebenso `felder-e30.ts`, `felder-e31.ts` und die übrigen Dateien zu
-E.30/E.31 sowie die Dateien zu E.27; die Dateien zu E.13/E.14 nennen die Seiten beider
-Ergänzungen; die übrigen Seiten- und Fußnotenangaben
-im Code beziehen sich auf die 42. In der 43. liegen D.61 bis E.10 zwei Seiten
-später, E.28 bis G.10 —
-also E.29 und E.32 — elf Seiten später; die Fußnoten ab D.61 sind um neun bis
-zehn verschoben.
+nicht abbildet (E.10, E.16, E.24, E.26) oder als eigene Version führt
+(E.13/E.14: Lohnzettelversion 29). E.1–E.3, E.12, E.22, E.29, E.30, E.31 und
+E.32 sind inhaltlich gleich geblieben. Die Seiten der 43. Ergänzung zitieren
+`codes-e32.ts` und die Dateien zu E.27, E.30 und E.31; die Dateien zu E.12,
+E.22 und E.13/E.14 nennen die Seiten beider Ergänzungen; die übrigen Seiten-
+und Fußnotenangaben im Code beziehen sich auf die 42. In der 43. liegen D.61
+bis E.10 zwei Seiten später, E.28 bis G.10 — also E.29 und E.32 — elf Seiten
+später; die Fußnoten ab D.61 sind um neun bis zehn verschoben.
 - Das separate Zeichensatz-Dokument (Zeichenvorrat Personennamen bzw.
   Unternehmensnamen/Adressen in ISO-8859-15).
 - Rücksendungen: `elda_mitteilung-3.0.xsd` (ELDA, „Mitteilungsfiles") und
