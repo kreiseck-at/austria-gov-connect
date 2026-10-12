@@ -775,7 +775,7 @@ module.exports = [
     zweck: 'Seit 01.01.2026 Pflicht – prüft der SIT sie im simulierten 2025?',
     quelle: 'Prüfkatalog Blatt VR (F7115)',
     erwartung: 'F7115 oder übernommen (2025 simuliert)',
-    fenster: ['mo-vm', 'mo-nm'],
+    fenster: ['mo-vm', 'mo-nm', 'mi-vm'],
     rang: 28,
     baue: (ctx) => verfaelscht(freierDnAnmeldungA14(ctx, 'V64'), { VWAZ: '0000' }),
   }),
