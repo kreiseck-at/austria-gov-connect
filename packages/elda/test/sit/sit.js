@@ -10,6 +10,8 @@
 //   node test/sit/sit.js lauf     <ID> [<ID> …] [--ja] [--nochmal]      (Alias: senden)
 //   node test/sit/sit.js abholen  [--ja]
 //   node test/sit/sit.js urteil   <ID> <bestanden|abweichung|blockiert|entfaellt> [--notiz …] [--befund B004]
+//   node test/sit/sit.js auswerten
+//   node test/sit/sit.js kasseneck-zuordnung   (KASSENECK_VR_PFAD, offline)
 //   node test/sit/sit.js protokoll
 //   node test/sit/sit.js katalog
 //   node test/sit/sit.js generalprobe
@@ -42,7 +44,7 @@ const { ladeTestdaten } = require('./lib/testdaten');
 const { ladeKatalog, planFuer, alsMarkdown, fehlendeVorlaeufe } = require('./lib/katalog');
 const { statusJeFall, gelaufenInWoche, enthaeltNummer, URTEILE } = require('./lib/status');
 const { baueKontext } = require('./lib/kontext');
-const { verfuegbar: kasseneckVerfuegbar } = require('./lib/kasseneck');
+const { brueckeFehlt, kasseneckVr, vrVerfuegbar } = require('./lib/kasseneck');
 const { maskiereObus, maskiereText, ohneSeriennummer, formenDerSeriennummer } = require('./lib/maskierung');
 
 const VERSION = require('../../package.json').version;
@@ -398,6 +400,79 @@ function befehlAuswerten() {
   }
 }
 
+/**
+ * N6 (D3/D5): Schickt die gesicherten Rücksendungen der K-Fälle durch die Zuordnung
+ * von kasseneck – offline, ohne Netz, ohne Firestore. Nachgebildet ist, was
+ * elda-rueckmeldung-dienst.js mit den reinen Funktionen tut: Mitteilung und
+ * Meldebestätigung (mbd_) über die Protokollnummer der eigenen Sendung, Clearing
+ * über Beitragskonto + Referenzwert (`fallSchluessel`, `deuteReferenzwert`).
+ */
+function befehlKasseneckZuordnung() {
+  if (!vrVerfuegbar()) abbruch('KASSENECK_VR_PFAD fehlt (Checkout von feature/elda-versichertenmeldung).');
+  const { rueck } = kasseneckVr();
+  const { ablage } = grundlagen({ fuerNetz: false });
+  const zuProtokoll = new Map();
+  const zuRefw = new Map();
+  for (const e of ablage.ereignisse()) {
+    if (e.art !== 'lauf' || !/^K\d/.test(e.fall ?? '') || !e.protokollnummer) continue;
+    zuProtokoll.set(String(e.protokollnummer), e);
+    for (const r of e.referenzwerte ?? []) zuRefw.set(r, e.fall);
+  }
+  if (zuProtokoll.size === 0) {
+    console.log('Noch kein K-Fall gesendet.');
+    return;
+  }
+  const ordner = path.join(ablage.basis, 'ruecksendungen');
+  const dateien = fs.existsSync(ordner) ? fs.readdirSync(ordner).sort() : [];
+  for (const datei of dateien) {
+    const name = datei.replace(/^\d+__/, '');
+    const art = elda.artDerRuecksendung(name);
+    const inhalt = fs.readFileSync(path.join(ordner, datei));
+    const lauf = art.protokollnummer ? zuProtokoll.get(String(art.protokollnummer)) : undefined;
+    try {
+      if (art.art === 'mitteilung' && lauf) {
+        const m = rueck.mitteilungsErgebnis(elda.liesMitteilung(inhalt));
+        for (const x of m.meldungen) {
+          const passt = (lauf.referenzwerte ?? []).includes(x.refw);
+          const deut = rueck.deuteReferenzwert(x.refw);
+          console.log(
+            `${name}: ${lauf.fall} Mitteilung ${m.status}, Meldung ${x.status}, REFW ${x.refw} ` +
+              `(${deut.art}) → ${passt ? 'zugeordnet' : 'NICHT zugeordnet'}` +
+              (x.codes.length ? `; ${x.codes.map((c) => `${c.typ ?? ''} ${c.code} ${c.text}`).join(' | ')}` : ''),
+          );
+        }
+      } else if (art.art === 'protokoll' && lauf) {
+        const text = inhalt.toString('latin1');
+        const refwImText = (lauf.referenzwerte ?? []).some((r) => text.includes(r));
+        console.log(
+          `${name}: Meldebestätigung → ${lauf.fall} (über die Protokollnummer, wie kasseneck); ` +
+            `Referenzwert im Text: ${refwImText ? 'ja' : 'nein'}`,
+        );
+      } else if (art.art === 'clearing') {
+        for (const df of elda.liesClearing(inhalt)) {
+          const deut = rueck.deuteReferenzwert(df.referenzwert);
+          if (deut.art !== 'versichertenmeldung') continue;
+          const fallId = zuRefw.get(df.referenzwert);
+          const { fall } = rueck.fortschreibeFall(null, df, {
+            protokollnummer: art.protokollnummer ?? null,
+            jetztMs: Date.now(),
+            bezug: fallId ? { art: 'versichertenmeldung', fall: fallId } : undefined,
+          });
+          const sicht = rueck.kundenSichtFall(fall);
+          console.log(
+            `${name}: Clearing zu ${df.referenzwert} → ${fallId ?? 'kein K-Fall'}; Stufe ${rueck.stufeDerZustellung(df)}, ` +
+              `Fall ${sicht.status}${sicht.erledigtGrund ? ` (${sicht.erledigtGrund})` : ''}, ` +
+              `Schlüssel ${rueck.fallSchluessel(df).replace(/^[^_]*_/, '…_')}: ` +
+              sicht.informationen.map((i) => `${i.code} ${i.text}`).join(' | '),
+          );
+        }
+      }
+    } catch (err) {
+      console.log(`${name}: nicht lesbar – ${err.message}`);
+    }
+  }
+}
+
 function befehlProtokoll() {
   const { katalog, ablage } = grundlagen();
   const status = statusJeFall(katalog, ablage.ereignisse());
@@ -512,10 +587,9 @@ function befehlGeneralprobe() {
       fertig.add(fall.id);
       fall.abhaengig.forEach((id) => bau(nachId.get(id)));
       if (fall.aktion === 'beobachten') return;
-      if (fall.braucht === 'kasseneck' && !kasseneckVerfuegbar()) {
-        console.log(
-          `übersprungen ${fall.id}: braucht KASSENECK_PFAD (kasseneck-Checkout mit functions-lohn)`,
-        );
+      const fehlt = brueckeFehlt(fall);
+      if (fehlt) {
+        console.log(`übersprungen ${fall.id}: braucht ${fehlt}`);
         return;
       }
       const fenster = fall.fenster === 'jedes' ? 'mo-vm' : fall.fenster[0];
@@ -838,6 +912,8 @@ async function main() {
       return befehlUrteil(positionen, optionen);
     case 'auswerten':
       return befehlAuswerten();
+    case 'kasseneck-zuordnung':
+      return befehlKasseneckZuordnung();
     case 'protokoll':
       return befehlProtokoll();
     case 'katalog':
