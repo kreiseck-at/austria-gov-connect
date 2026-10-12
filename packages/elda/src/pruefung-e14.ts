@@ -3,6 +3,7 @@ import { EldaError } from './errors';
 import { KINDERBLOECKE, kindfeld, VORZEICHEN_L1, type Lohnzettelversion } from './felder-e14';
 import { L16_PRUEFKATALOG, type L16Regel } from './pruefkatalog-l16';
 import { pruefeVorrat, type Feldklasse } from './zeichensatz';
+import { steuernummerPruefzifferGueltig, vsnrPruefzifferGueltig } from './pruefziffer';
 
 /**
  * Inhaltliche Prüfungen des Lohnzettels L16 nach dem Prüfkatalog des
@@ -288,37 +289,7 @@ function leer(wert: string): boolean {
   return /^0*$/.test(wert);
 }
 
-/**
- * Prüfziffer der Versicherungsnummer `LLLPTTMMJJ` nach der Anfragebeantwortung
- * 4690/AB XXIII. GP (siehe Modulkopf). Ein Divisionsrest von 10 ist nie gültig.
- */
-export function vsnrPruefzifferGueltig(vsnr: string): boolean {
-  if (!/^\d{10}$/.test(vsnr)) return false;
-  const z = [...vsnr].map(Number);
-  const faktoren = [3, 7, 9, 0, 5, 8, 4, 2, 1, 6];
-  const rest = faktoren.reduce((summe, f, i) => summe + f * z[i]!, 0) % 11;
-  return rest !== 10 && rest === z[3];
-}
-
-/**
- * Prüfziffer der neunstelligen Steuernummer (Finanzamtsnummer und Steuernummer
- * samt Prüfziffer) nach STUZZA „Finanzamtszahlung in MBS", Seite 8 (siehe
- * Modulkopf).
- */
-export function steuernummerPruefzifferGueltig(steuernummer: string): boolean {
-  if (!/^\d{9}$/.test(steuernummer)) return false;
-  const z = [...steuernummer].map(Number);
-  let summe = 0;
-  for (let i = 0; i < 8; i++) {
-    if (i % 2 === 1) {
-      const doppelt = 2 * z[i]!;
-      summe += Math.floor(doppelt / 10) + (doppelt % 10);
-    } else {
-      summe += z[i]!;
-    }
-  }
-  return (10 - (summe % 10)) % 10 === z[8];
-}
+export { vsnrPruefzifferGueltig, steuernummerPruefzifferGueltig } from './pruefziffer';
 
 /** TTMMJJ mit zweistelligem Jahr: ein gültiger Kalendertag im 20. oder 21. Jahrhundert. */
 function kalendertagTtmmjj(wert: string): boolean {

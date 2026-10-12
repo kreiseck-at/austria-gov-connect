@@ -318,15 +318,18 @@ Beobachtet auf der SIT-Plattform (Oktober 2026):
   (`FonSoapFaultError`).
 - `500` kam dort bei `ruecksendungenAuflisten` mit **leerer** Outbox — laut
   ELDA ein Fehler der SIT, behoben mit der Testversion Oktober 2026, in
-  Produktion nicht vorhanden. Die Antwort trug neben dem Text eine zweite
+  Produktion nicht vorhanden. Seit dem 12.10.2026 antwortet die SIT dort mit
+  `000`. Die Antwort trug neben dem Text eine zweite
   `<messages>` mit `requestId:<Base64>`; darin stehen eine UUID, die
   Seriennummer und eine Zahl — wer Mitschnitte speichert, schwärzt sie.
 - `405` (Duplikat) kam **nie**: Dieselbe Datei, byte-gleich mit derselben
   Datenträgernummer und denselben Referenzwerten, wurde zweimal mit `000`
-  angenommen, und auch das Clearing meldete nichts. Gegen Doppelversand schützt
+  angenommen (07.10. und erneut 12.10.2026), und auch das Clearing meldete
+  nichts. Gegen Doppelversand schützt
   sich der Absender selbst.
 - `559` kam nie: ELDA nimmt die Anfrage auch mit `Content-Type: application/xml`
-  an.
+  an (zuletzt 12.10.2026). Ebenso blieb ein leeres `created` am 12.10.2026 beim
+  SOAP-Fault statt `555`.
 
 ## Fehler oder Zustand?
 
@@ -504,7 +507,8 @@ gelesen, nicht beobachtet.
 Die Systemintegrationstest-Plattform der Sozialversicherung (SIT) verarbeitet
 Meldungen wie die Produktion, mit synthetischen Testdaten und einer
 „Zeitreise" über simulierte Monate. Ein Testzyklus vom 05. bis 07.10.2026 mit
-Versichertenmeldungen und mBGM hat Folgendes gezeigt — was dort beobachtet ist,
+Versichertenmeldungen und mBGM und ein zweiter ab dem 12.10.2026 haben Folgendes
+gezeigt — was dort beobachtet ist,
 muss für die Produktion nicht ebenso gelten:
 
 - **Rücksendungen kommen sofort**, nicht erst nach der Verarbeitung: Mitteilung
@@ -525,10 +529,32 @@ muss für die Produktion nicht ebenso gelten:
   BV-Teil aber nicht: `BW1871` (dringend) „keine entsprechende
   Versicherungszeit BV vorhanden. Die Grundlage … wurde nicht gespeichert."
   Andere Codes zur fehlenden Versicherungszeit kamen nicht.
-- `BVAB` gehört **nicht** in jede Anmeldung: Laut DM-Org (E.29.2, „Anmeldung
-  zur Betrieblichen Vorsorge ohne Sozialversicherungszeit") ist es nur dann
-  anzugeben, wenn eine BV-Zeit ohne SV-Zeit gemeldet wird. Die Anmeldungen der
-  SIT trugen kein `BVAB`; das war nicht die Ursache der fehlenden BV-Zeit.
+- **`BVAB` in der Anmeldung — offen.** Eine frühere Fassung dieses Abschnitts
+  behauptete, `BVAB` gehöre nur in die Anmeldung zur BV ohne SV-Zeit. Das ist
+  so nicht belegt: E.29.2 (43. Ergänzung, Seite 317) verlangt `BVAB` **mit**
+  `ADAT` in Grundstellung nur für diesen Sonderfall; die Beispiele derselben
+  Kapitel (Seiten 321–322) zeigen aber gewöhnliche Anmeldungen „als
+  vollversicherter Arbeiter (mit BV ab 01.02.2019)" mit `BVAB` = Eintritt plus
+  ein Monat, und die Pflichtmatrix (E.29.1, Seite 314) führt `BVAB` bei der
+  Anmeldung als `Z1`. Ob die fehlende BV-Zeit (`BW1871`, `VW1942`) an einem
+  fehlenden `BVAB` lag, ist damit wieder offen; die SIT-Fälle V40–V42
+  (Anmeldung mit `BVAB` = Eintritt + 1 Monat, ohne `BVAB`, mit `BVAB` =
+  Eintrittstag) klären es.
+- **Prüfziffer der Versicherungsnummer:** Eine Anmeldung mit verfälschter
+  vierter Stelle (12.10.2026) kam als `nicht_uebernommen` zurück, `F7020`
+  „Ungueltige Angabe im Feld VERSICHERUNGSNUMMER". ELDA rechnet die Prüfziffer
+  also nach (Verfahren: Anfragebeantwortung 4690/AB XXIII. GP, siehe Quellen).
+  Die Versichertenmeldung prüft sie seither selbst (`F7020`). Die
+  Beispielnummer aus Kapitel D.43 (`1234 010180`) besteht diese Prüfung nicht;
+  die Tests nutzen dieselbe Nummer mit richtiger Prüfziffer.
+- **Geschlecht in der VSNR-Anforderung:** `3` (divers) wurde angenommen, `5`
+  mit `F6562` abgewiesen — Wortlaut „Ungueltige Angabe im Feld GESCHLECHT
+  (1 = maennlich, 2 = weiblich, 3 = divers, 4 = offen, 6= inter, 7= keine
+  Angabe)". Die Katalogzeile `F6561` („gültig 1,2") kam nicht.
+- **Abweisungen kommen als Mitteilung:** Beide abgewiesenen Meldungen meldete
+  ELDA mit `000` beim Senden und danach in `mitteilung_<prot>.xml` mit Status
+  `nicht_uebernommen`, Code, Zeilennummer und Text je Meldung — genau so, wie
+  `liesMitteilung` es nach dem Schema liest.
 - **Lehrlinge** mit der allgemeinen AV-Minderung `A01`–`A03`: `BW1838`
   (Kontrollfall) und `BW1850` (Beitragssumme weicht ab) — die Meldung wird
   verarbeitet und verbucht, aber zu niedrig; Handlung „ggf. Storno und
@@ -550,7 +576,8 @@ muss für die Produktion nicht ebenso gelten:
   verarbeitet; einen eigenen Clearing-Code für die Verspätung gab es nicht.
 - **Formal nicht geprüft** wurden dort: der Projektcode (`DM` statt `TM` wurde
   angenommen), das Erstellungsdatum gegen das simulierte Datum, der
-  Content-Type und Duplikate (siehe „Status-Codes").
+  Content-Type und Duplikate (siehe „Status-Codes") — im zweiten Testzyklus am
+  12.10.2026 unverändert.
 
 ## Fehlerbehandlung
 
@@ -758,7 +785,7 @@ const meldung = anmeldung({
   REFW: 'REF-2026-000123', // eigener, eindeutiger Referenzwert dieser Meldung
   BKNR: '1234567', // Beitragskontonummer beim zuständigen Träger
   DGNA: 'Muster GmbH',
-  VSNR: '1234010180',
+  VSNR: '1237010180',
   FANA: 'Muster',
   VONA: 'Maria',
   ADAT: '01022026', // Anmeldedatum TTMMJJJJ
@@ -886,7 +913,7 @@ entscheidbar.** Umgesetzt sind:
 | Code | Prüft | Satzarten |
 | ---- | ----- | --------- |
 | `F7000` | `BKNR` darf nicht leer sein | alle |
-| `F7020` | Struktur `VSNR` (`LLLPTTMMJJ`, Tag `01`–`31`, Monat `01`–`12` bzw. `13`–`15` beim fingierten Datum, Kapitel D.6) | alle, wenn belegt |
+| `F7020` | Struktur `VSNR` (`LLLPTTMMJJ`, Tag `01`–`31`, Monat `01`–`12` bzw. `13`–`15` beim fingierten Datum, Kapitel D.6) und Prüfziffer (`vsnrPruefzifferGueltig`; ELDA weist eine falsche Prüfziffer unter `F7020` ab, SIT 12.10.2026) | alle, wenn belegt |
 | `F7030` | Format `GEBD` (`TTMMJJJJ`, `00MMJJJJ` oder `0000JJJJ`, echte Monatslänge inkl. Schaltjahr) | alle, wenn belegt |
 | `F7050` | Ist `REFV` belegt, muss `GEBD` belegt sein | `M3`, `M4`, `M6` |
 | `F7051` | `VSNR` oder `GEBD` muss belegt sein; zusätzlich (eigene, aus Kapitel E.30.2 abgeleitete Ergänzung ohne eigenen Katalog-Code): fehlt die `VSNR`, muss neben `GEBD` auch `REFV` belegt sein | alle bzw. `M4`/`M6`/`M8` |
@@ -1023,17 +1050,6 @@ Mitteilungssätzen (Satzart `L1`, Satzlänge 3500).
 
 **Ausdrücklich nicht umgesetzt** — ELDA prüft diese serverseitig:
 
-- Die **Prüfziffer der Versicherungsnummer** — das DM-Org beschreibt das
-  Verfahren nicht. Geprüft wird bei der Versichertenmeldung nur die
-  Stellenfolge `LLLPTTMMJJ` aus Kapitel D.6 (siehe `F7020` oben). Das
-  Verfahren selbst steht in der Anfragebeantwortung 4690/AB XXIII. GP (siehe
-  Quellen); der Lohnzettel prüft damit (`F2001`, `vsnrPruefzifferGueltig`).
-  Die Versicherungsnummer des Beispiels in D.43 (`1234010180`), die die
-  Beispiele hier verwenden, besteht diese Prüfung übrigens nicht. Ob ELDA bei
-  der Versichertenmeldung die Prüfziffer unter `F7020` („ungültig") mitprüft,
-  ist unbelegt; das klärt der SIT-Fall `V21` (Anmeldung mit verfälschter
-  Prüfziffer). Bis dahin weist der Builder eine falsche Prüfziffer nicht ab —
-  wer sicher gehen will, prüft vorher selbst mit `vsnrPruefzifferGueltig`.
 - Die **trägerabhängige Länge der Beitragskontonummer** — im Prüfkatalog nur
   als Warnung geführt, nicht als harter Fehler.
 - Die inhaltliche **Schreibweise von Namen** (`F7036`/`F7038`) — sie verlangt
@@ -1055,8 +1071,9 @@ deren Verletzung eine **strukturell einwandfreie, aber inhaltlich falsche**
 Meldung erzeugt — kein `EldaError`, denn es gibt formal nichts zu beanstanden.
 Beispiel: Bleibt bei einer Richtigstellung (`M8`) das Feld „Betriebliche
 Vorsorge AB" (`BVAB`) unbelegt, **storniert** das laut Dokument die Zeit der
-betrieblichen Vorsorge — ein leeres `BVAB` ist dort also keine „keine
-Änderung", sondern eine aktive Löschung.
+betrieblichen Vorsorge (E.29.2, 43. Ergänzung, Seiten 324–325) — ein leeres
+`BVAB` ist dort also keine „keine Änderung", sondern eine aktive Löschung. Wer
+eine Anmeldung richtigstellt, schickt den Beginn der BV deshalb immer mit.
 
 ### Prüfung der mBGM
 
@@ -1338,7 +1355,7 @@ import { antragZwischenstaatlich, erstelleEsBestand } from '@kreiseck/elda';
 
 const antrag = antragZwischenstaatlich('E1', {
   UIDM: randomUUID(),
-  VONA: 'Mirela', FANA: 'Weinzierl', GESL: '2', GEBD: '01011980', VSNR: '1234010180',
+  VONA: 'Mirela', FANA: 'Weinzierl', GESL: '2', GEBD: '01011980', VSNR: '1237010180',
   STSL: 'AT', STRA: 'Musterstraße 1', WKFZ: 'AT', PLZL: '5020', WORT: 'Salzburg',
   dienstgeber: [{
     DGNA: 'Max Hollerer GmbH', BKNR: '4711815', VTBK: '15',
@@ -1667,7 +1684,10 @@ wird nichts davon geraten:
     ab 01.11.2023; Entgelte nur bei 01/02) werden nicht geprüft.
   - Für das Geschlecht bei SART 80 führt der Prüfkatalog zwei Zeilen mit
     Status N, die sich widersprechen: `F0081` „gültig 1,2" und `F0082`
-    „gültig 1,2,3,4,6,7". Das Paket folgt der Feldtabelle (wie `F0082`).
+    „gültig 1,2,3,4,6,7". Das Paket folgt der Feldtabelle (wie `F0082`). Bei
+    der VSNR-Anforderung wandte ELDA die entsprechende weite Zeile an (`F6562`,
+    SIT 12.10.2026); für Familienhospiz ist das naheliegend, aber noch nicht
+    beobachtet.
   - Die Tätigkeitsart ist zweistellig, die Codes sind einstellig abgedruckt.
     Das Paket sendet `1 ` und weist `01` ab; ob ELDA `01` annimmt, klärt S43.
   - Die Version der Schwerarbeitsmeldung ist laut Kapitelkopf `02`, die
@@ -1676,17 +1696,22 @@ wird nichts davon geraten:
     zuordnet und was bei mehr als 26 Tätigkeiten im Jahr gilt, sagt E.22
     nicht; mehr als 26 weist das Paket ab.
 - **VSNR-Anforderung und Adressmeldung:** nach DM-Org und Prüfkatalog gebaut,
-  gegen ELDA noch nie gesendet. Offen ist dort: ob ELDA beim Geschlecht `F6561`
-  („gültig 1,2") oder `F6562` („gültig 1,2,3,4,6,7") anwendet — beide Zeilen
-  stehen mit Status `N` im Katalog; ob `WKFZ = A` an einen anderen Träger als
+  die VSNR-Anforderung ist auf der SIT übernommen worden (12.10.2026), beim
+  Geschlecht gilt `F6562` (siehe „Was die SIT-Plattform gezeigt hat"). Offen
+  ist: ob `WKFZ = A` an einen anderen Träger als
   die ÖGK zulässig ist (`F8041` sagt nein, die Feldtabelle schränkt nur die ÖGK
   ein); woran ELDA eine „ungültige" Beitragskontonummer (`F6511`, `F8011`) und
   Postleitzahl (`F6583`, `F8051`) erkennt; welche Regel hinter der Groß- und
   Kleinschreibung von Ort und Straße steht (`F6585`, `F6587`, `F8061`,
   `F8071`); und wie der Clearingfall mit der vergebenen VSNR aussieht.
-- **Mitteilung bei Abweisung:** nach dem Schema gelesen, auf der SIT aber nie
-  beobachtet (alle Sendungen kamen `uebernommen`). Das Klartext-Protokoll
-  (`mbd_…`) wird nicht ausgewertet.
+- **Klartext-Protokoll** (`mbd_…`) wird nicht ausgewertet. Die Mitteilung bei
+  Abweisung ist seit dem 12.10.2026 beobachtet und entspricht dem Schema.
+- **Prüfziffer der Versicherungsnummer außerhalb der Versichertenmeldung:**
+  Die Adressmeldung (`F8031`), Familienhospiz und Schwerarbeit (`F0040`), der
+  Antrag auf zwischenstaatliche Bescheinigung (`F7589`) und die mBGM prüfen nur
+  die Stellenfolge. Ob ELDA dort die
+  Prüfziffer ebenso durchsetzt wie bei `F7020`, ist nicht beobachtet — je
+  Meldungsart eine SIT-Probe mit verfälschter Prüfziffer klärt es.
 - **Beitragssätze:** Die Rundung je Position wird nachgerechnet (`DM-D.62`),
   der Prozentsatz selbst nicht — falsche Sätze (`BW1850`) erkennt erst der
   Träger. Wie er auf Abweichungen über die Rundung hinaus reagiert, ist nicht

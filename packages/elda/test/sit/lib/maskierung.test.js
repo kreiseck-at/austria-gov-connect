@@ -20,7 +20,7 @@ function bestand() {
     REFW: 'R1',
     BKNR: '1234567',
     DGNA: 'Musterbetrieb',
-    VSNR: '1234010180',
+    VSNR: '1237010180',
     FANA: 'Muster',
     VONA: 'Max',
     ADAT: '01012025',

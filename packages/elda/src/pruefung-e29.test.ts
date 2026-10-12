@@ -16,7 +16,7 @@ const wirft = (satzart: Parameters<typeof pruefeInhalt>[0], werte: Record<string
 };
 
 test('F7000: leere Beitragskontonummer', () => {
-  wirft('M3', { BKNR: '', ADAT: '01022026', VSNR: '1234010180' }, 'F7000');
+  wirft('M3', { BKNR: '', ADAT: '01022026', VSNR: '1237010180' }, 'F7000');
 });
 
 test('F7030: Geburtsdatum in zulässiger Form', () => {
@@ -52,12 +52,12 @@ test('F7051: gültige VSNR allein reicht, GEBD/REFV bleiben leer (M3/M4/M6/M8)',
   // Dies ist genau der Fall, den die Ergänzung um die REFV-Flanke NICHT werfen darf:
   // eine gültige VSNR ist vorhanden, weder Geburtsdatum noch Referenzwert sind nötig.
   assert.doesNotThrow(() =>
-    pruefeInhalt('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '05' }),
+    pruefeInhalt('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', BBER: '05' }),
   );
-  assert.doesNotThrow(() => pruefeInhalt('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026' }));
-  assert.doesNotThrow(() => pruefeInhalt('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026' }));
+  assert.doesNotThrow(() => pruefeInhalt('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026' }));
+  assert.doesNotThrow(() => pruefeInhalt('M6', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026' }));
   assert.doesNotThrow(() =>
-    pruefeInhalt('M8', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '02022026' }),
+    pruefeInhalt('M8', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', RDAT: '02022026' }),
   );
 });
 
@@ -112,16 +112,16 @@ test('F7051-Ergänzung gilt nicht bei M9: Kapitel E.30.2 nennt dort keine REFV-P
 test('F7050: Referenzwert der VSNR-Anforderung ohne Geburtsdatum', () => {
   wirft(
     'M3',
-    { BKNR: '1', VSNR: '1234010180', REFV: 'ANFORDERUNG-001', ADAT: '01022026', BBER: '05' },
+    { BKNR: '1', VSNR: '1237010180', REFV: 'ANFORDERUNG-001', ADAT: '01022026', BBER: '05' },
     'F7050',
   );
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', REFV: 'ANFORDERUNG-001', ADAT: '01022026' }, 'F7050');
-  wirft('M6', { BKNR: '1', VSNR: '1234010180', REFV: 'ANFORDERUNG-001', ADAT: '01022026' }, 'F7050');
+  wirft('M4', { BKNR: '1', VSNR: '1237010180', REFV: 'ANFORDERUNG-001', ADAT: '01022026' }, 'F7050');
+  wirft('M6', { BKNR: '1', VSNR: '1237010180', REFV: 'ANFORDERUNG-001', ADAT: '01022026' }, 'F7050');
 
   assert.doesNotThrow(() =>
     pruefeInhalt('M3', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       GEBD: '01011980',
       REFV: 'ANFORDERUNG-001',
       ADAT: '01022026',
@@ -131,9 +131,9 @@ test('F7050: Referenzwert der VSNR-Anforderung ohne Geburtsdatum', () => {
 });
 
 test('F7060 und F7062: An-/Abmeldedatum', () => {
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '' }, 'F7060');
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '31122018' }, 'F7062');
-  assert.doesNotThrow(() => pruefeInhalt('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01012019' }));
+  wirft('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '' }, 'F7060');
+  wirft('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '31122018' }, 'F7062');
+  assert.doesNotThrow(() => pruefeInhalt('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01012019' }));
 });
 
 test('F7061 gilt laut Prüfkatalog nicht für M8/M9: ADAT wird dort unverändert aus der Ursprungsmeldung übernommen', () => {
@@ -141,29 +141,29 @@ test('F7061 gilt laut Prüfkatalog nicht für M8/M9: ADAT wird dort unverändert
   // dort bewusst, weil ADAT bei der Richtigstellung das ursprüngliche Datum fortführt
   // (Kapitel E.29.2, Satzart M8) und nur RDAT (F7066) neu geprüft wird.
   assert.doesNotThrow(() =>
-    pruefeInhalt('M8', { BKNR: '1', VSNR: '1234010180', ADAT: '99992026', RDAT: '01022026' }),
+    pruefeInhalt('M8', { BKNR: '1', VSNR: '1237010180', ADAT: '99992026', RDAT: '01022026' }),
   );
-  wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '99992026', BBER: '05' }, 'F7061');
+  wirft('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '99992026', BBER: '05' }, 'F7061');
 });
 
 test('F7061: ADAT mit unmöglichem Tag wird gegen die Monatslänge geprüft', () => {
   // April hat nur 30 Tage.
-  wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '31042026', BBER: '05' }, 'F7061');
+  wirft('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '31042026', BBER: '05' }, 'F7061');
   assert.doesNotThrow(() =>
-    pruefeInhalt('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '30042026', BBER: '05' }),
+    pruefeInhalt('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '30042026', BBER: '05' }),
   );
 });
 
 test('F7065 und F7067: richtiges An-/Abmeldedatum bei Richtigstellung', () => {
-  wirft('M8', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '' }, 'F7065');
-  wirft('M8', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '31122018' }, 'F7067');
+  wirft('M8', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', RDAT: '' }, 'F7065');
+  wirft('M8', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', RDAT: '31122018' }, 'F7067');
 });
 
 test('F7069: Beschäftigungsbereich 01 bis 13', () => {
-  wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '14' }, 'F7069');
-  wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '00' }, 'F7069');
+  wirft('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', BBER: '14' }, 'F7069');
+  wirft('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', BBER: '00' }, 'F7069');
   assert.doesNotThrow(() =>
-    pruefeInhalt('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '13' }),
+    pruefeInhalt('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', BBER: '13' }),
   );
 });
 
@@ -174,10 +174,10 @@ test('F7069: der Wertebereich aus D.39 gilt auch bei M6, wo die Matrix BBER zul�
   // gehört zum FELD, nicht zur Satzart. Die Pflichtmatrix lässt BBER bei M6 mit der Stufe `V`
   // zu — ein '99' ging dort stillschweigend durch und stand danach als Beschäftigungsbereich
   // im Satz.
-  wirft('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '99' }, 'F7069');
-  wirft('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '1' }, 'F7069');
+  wirft('M6', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', BBER: '99' }, 'F7069');
+  wirft('M6', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', BBER: '1' }, 'F7069');
   assert.doesNotThrow(() =>
-    pruefeInhalt('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '13' }),
+    pruefeInhalt('M6', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', BBER: '13' }),
   );
 });
 
@@ -186,7 +186,7 @@ test('F7069: Satzarten, in denen die Matrix BBER auf `-` führt, prüft pruefeIn
   // `pruefePflicht` ab, hier ist deshalb nichts zu prüfen. Die Aufteilung ist Absicht:
   // pruefeInhalt entscheidet über Wertebereiche, nicht über Zulässigkeit je Satzart.
   assert.doesNotThrow(() =>
-    pruefeInhalt('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '12', BBER: '99' }),
+    pruefeInhalt('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', AGRD: '12', BBER: '99' }),
   );
 });
 
@@ -199,7 +199,7 @@ test('F7104: Ummeldedatum muss TTMMJJJJ sein (reine Formatprüfung wie F7061/F70
     'M4',
     {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       AGRD: '12',
       UMDA: '99992026',
@@ -213,7 +213,7 @@ test('F7104: Ummeldedatum muss TTMMJJJJ sein (reine Formatprüfung wie F7061/F70
     'M4',
     {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       AGRD: '12',
       UMDA: '30022026',
@@ -225,7 +225,7 @@ test('F7104: Ummeldedatum muss TTMMJJJJ sein (reine Formatprüfung wie F7061/F70
   assert.doesNotThrow(() =>
     pruefeInhalt('M4', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       AGRD: '12',
       UMDA: '01022026',
@@ -237,7 +237,7 @@ test('F7104: Ummeldedatum muss TTMMJJJJ sein (reine Formatprüfung wie F7061/F70
   assert.doesNotThrow(() =>
     pruefeInhalt('M4', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       AGRD: '12',
       UMDA: '29022024',
@@ -249,7 +249,7 @@ test('F7104: Ummeldedatum muss TTMMJJJJ sein (reine Formatprüfung wie F7061/F70
 
 test('F7104 gilt nicht bei M6: Blatt VR führt UMDA nur für M4, M9, S4', () => {
   assert.doesNotThrow(() =>
-    pruefeInhalt('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', UMDA: '99992026' }),
+    pruefeInhalt('M6', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', UMDA: '99992026' }),
   );
 });
 
@@ -262,7 +262,7 @@ test('F7106: richtiges Ummeldedatum muss TTMMJJJJ sein, nur bei M9', () => {
     'M9',
     {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       RDAT: '02022026',
       RUMD: '99992026',
@@ -275,7 +275,7 @@ test('F7106: richtiges Ummeldedatum muss TTMMJJJJ sein, nur bei M9', () => {
   assert.doesNotThrow(() =>
     pruefeInhalt('M9', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       RDAT: '02022026',
       RUMD: '01022026',
@@ -288,7 +288,7 @@ test('F7106: richtiges Ummeldedatum muss TTMMJJJJ sein, nur bei M9', () => {
 
 test('F7106 gilt nicht bei M4: Blatt VR führt RUMD nur für M9', () => {
   assert.doesNotThrow(() =>
-    pruefeInhalt('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RUMD: '99992026' }),
+    pruefeInhalt('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', RUMD: '99992026' }),
   );
 });
 
@@ -300,7 +300,7 @@ test('F7107: Sonderfall Ummeldung nur J oder leer', () => {
     'M4',
     {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       AGRD: '12',
       SOUM: 'N',
@@ -320,7 +320,7 @@ test('F7114: Zielversicherungsträger 11 bis 19', () => {
     'M4',
     {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       AGRD: '12',
       UMDA: '01022026',
@@ -332,12 +332,12 @@ test('F7114: Zielversicherungsträger 11 bis 19', () => {
 });
 
 test('F7096: Abmeldegrund gegen die Codeliste aus Kapitel D.22', () => {
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '99' }, 'F7096');
+  wirft('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', AGRD: '99' }, 'F7096');
   // 26 und 28 fehlen in der Codeliste bewusst (Lücke im Dokument selbst, Kapitel D.22, Seite 94/95).
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '26' }, 'F7096');
-  wirft('M9', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '02022026', AGRD: '28' }, 'F7096');
+  wirft('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', AGRD: '26' }, 'F7096');
+  wirft('M9', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', RDAT: '02022026', AGRD: '28' }, 'F7096');
   assert.doesNotThrow(() =>
-    pruefeInhalt('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '12' }),
+    pruefeInhalt('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', AGRD: '12' }),
   );
   // Rand der Liste: kleinster ('00') und größter ('34') Code. SAGR bzw. EBSV sind ergänzt,
   // damit ausschließlich die Codeliste geprüft wird und nicht die Abhängigkeiten aus der
@@ -345,7 +345,7 @@ test('F7096: Abmeldegrund gegen die Codeliste aus Kapitel D.22', () => {
   assert.doesNotThrow(() =>
     pruefeInhalt('M4', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       AGRD: '00',
       SAGR: 'AUFLOESUNG',
@@ -355,7 +355,7 @@ test('F7096: Abmeldegrund gegen die Codeliste aus Kapitel D.22', () => {
   assert.doesNotThrow(() =>
     pruefeInhalt('M4', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       AGRD: '34',
       EBSV: '31012026',
@@ -372,22 +372,22 @@ test('F7108/F7109 (A1): Ummeldedatum belegt verlangt Zielversicherungsträger un
   // gilt dort nicht (siehe der eigene F7105-Test unten).
   wirft(
     'M4',
-    { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '12', UMDA: '01032026', ZKUM: '7788991' },
+    { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', AGRD: '12', UMDA: '01032026', ZKUM: '7788991' },
     'F7108',
   );
   wirft(
     'M4',
-    { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '12', UMDA: '01032026', ZTUM: '17' },
+    { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', AGRD: '12', UMDA: '01032026', ZTUM: '17' },
     'F7109',
   );
   wirft(
     'M9',
-    { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '02022026', UMDA: '01032026', ZKUM: '7788991' },
+    { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', RDAT: '02022026', UMDA: '01032026', ZKUM: '7788991' },
     'F7108',
   );
   wirft(
     'M9',
-    { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '02022026', UMDA: '01032026', ZTUM: '17' },
+    { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', RDAT: '02022026', UMDA: '01032026', ZTUM: '17' },
     'F7109',
   );
   // vollständig belegt: kein Fehler (Fall "muss NICHT werfen" aus dem Bericht). AGRD: '12' ist
@@ -395,7 +395,7 @@ test('F7108/F7109 (A1): Ummeldedatum belegt verlangt Zielversicherungsträger un
   assert.doesNotThrow(() =>
     pruefeInhalt('M4', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       AGRD: '12',
       UMDA: '01032026',
@@ -409,23 +409,23 @@ test('F7112/F7113 (A1): Ummeldedatum leer verlangt, dass auch SOUM/ZTUM/ZKUM (be
   // Kapitel E.29.2, Seite 321, "Ausnahmefall: Abmeldung mit Abmeldegrund 12 ohne Angaben zum
   // Ziel-Beitragskonto (Ummeldung ohne Zielangaben)": UMDA, SOUM, ZTUM, ZKUM (und bei M9 auch
   // RUMD) stehen dort gemeinsam mit "-" — das ist die Grundstellungs-Ausnahme aus dem Bericht.
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', ZTUM: '17' }, 'F7112');
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', ZKUM: '7788991' }, 'F7112');
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', SOUM: 'J' }, 'F7112');
+  wirft('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', ZTUM: '17' }, 'F7112');
+  wirft('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', ZKUM: '7788991' }, 'F7112');
+  wirft('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', SOUM: 'J' }, 'F7112');
   wirft(
     'M9',
-    { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '02022026', RUMD: '01032026' },
+    { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', RDAT: '02022026', RUMD: '01032026' },
     'F7113',
   );
-  wirft('M9', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '02022026', ZTUM: '17' }, 'F7113');
+  wirft('M9', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', RDAT: '02022026', ZTUM: '17' }, 'F7113');
   // Grundstellungs-Ausnahme: alle fünf Felder leer, unabhängig vom Abmeldegrund — wirft nicht.
   assert.doesNotThrow(() =>
-    pruefeInhalt('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '12' }),
+    pruefeInhalt('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', AGRD: '12' }),
   );
   assert.doesNotThrow(() =>
     pruefeInhalt('M9', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       RDAT: '02022026',
       AGRD: '12',
@@ -446,7 +446,7 @@ test('F7105 bei M9 bewusst NICHT umgesetzt: Kapitel E.29.2, Seite 326/327 (Beisp
   assert.doesNotThrow(() =>
     pruefeInhalt('M9', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       RDAT: '02022026',
       AGRD: '02',
@@ -470,7 +470,7 @@ test('F7105 bei M4 umgesetzt (A1-Nachtrag): Ummeldedatum belegt verlangt Abmelde
     'M4',
     {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       AGRD: '02',
       EBSV: '01022026',
@@ -484,7 +484,7 @@ test('F7105 bei M4 umgesetzt (A1-Nachtrag): Ummeldedatum belegt verlangt Abmelde
   assert.doesNotThrow(() =>
     pruefeInhalt('M4', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       AGRD: '12',
       UMDA: '01032026',
@@ -495,14 +495,14 @@ test('F7105 bei M4 umgesetzt (A1-Nachtrag): Ummeldedatum belegt verlangt Abmelde
 });
 
 test('F7115: VWAZ bei Anmeldung ab 2026 für die betroffenen Beschäftigungsbereiche', () => {
-  wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01012026', BBER: '01', FRDV: 'N' }, 'F7115');
+  wirft('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '01012026', BBER: '01', FRDV: 'N' }, 'F7115');
   // vor der Stichtagsgrenze nicht gefordert
   assert.doesNotThrow(() =>
-    pruefeInhalt('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '31122025', BBER: '01', FRDV: 'N' }),
+    pruefeInhalt('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '31122025', BBER: '01', FRDV: 'N' }),
   );
   // nicht betroffener Beschäftigungsbereich
   assert.doesNotThrow(() =>
-    pruefeInhalt('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01012026', BBER: '05', FRDV: 'N' }),
+    pruefeInhalt('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '01012026', BBER: '05', FRDV: 'N' }),
   );
 });
 
@@ -511,20 +511,20 @@ test('F7115 gilt laut Prüfkatalog nur, wenn FRDV mit N belegt ist (kein freier 
   // N belegt" — bei einem freien Dienstvertrag (FRDV = J) kann VWAZ laut Kapitel E.29.2
   // entfallen, wenn keine Arbeitszeit vereinbart wurde.
   assert.doesNotThrow(() =>
-    pruefeInhalt('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01012026', BBER: '01', FRDV: 'J' }),
+    pruefeInhalt('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '01012026', BBER: '01', FRDV: 'J' }),
   );
 });
 
 test('F7116: VWAZ vierstellig', () => {
   wirft(
     'M3',
-    { BKNR: '1', VSNR: '1234010180', ADAT: '01012026', BBER: '01', FRDV: 'N', VWAZ: '156' },
+    { BKNR: '1', VSNR: '1237010180', ADAT: '01012026', BBER: '01', FRDV: 'N', VWAZ: '156' },
     'F7116',
   );
   assert.doesNotThrow(() =>
     pruefeInhalt('M3', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01012026',
       BBER: '01',
       FRDV: 'N',
@@ -568,7 +568,7 @@ test('E.29: die acht Datumsfelder ohne Katalog-Zeile werden gegen den Kalender g
   // der Stellenzahlprüfung in festsatz.ts vorbei.
   for (const [feld, satzart, rest] of DATUMSFELDER_OHNE_KATALOG) {
     for (const ungueltig of ['31112026', '99999999', '00000001', '32012026', '29022026']) {
-      wirft(satzart, { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', ...rest, [feld]: ungueltig }, 'E.29');
+      wirft(satzart, { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', ...rest, [feld]: ungueltig }, 'E.29');
     }
   }
 });
@@ -580,7 +580,7 @@ test('E.29: gültige Kalenderdaten und die Grundstellung passieren in allen acht
         () =>
           pruefeInhalt(satzart, {
             BKNR: '1',
-            VSNR: '1234010180',
+            VSNR: '1237010180',
             ADAT: '01022026',
             ...rest,
             [feld]: gueltig,
@@ -595,7 +595,7 @@ test('E.29: ein vertauschtes MMTTJJJJ fällt jetzt auf, solange der Tag über 12
   // Der teuerste Fall aus dem Befund: Ein Aufrufer im US-Format liefert für den 25.03.2026
   // '03252026' — Monat 03, Tag 25 wären gültig, in TTMMJJJJ gelesen ist es aber Tag 03,
   // Monat 25. Genau dieser Monat 13..31 ist der Hebel.
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '01', EBSV: '03252026' }, 'E.29');
+  wirft('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', AGRD: '01', EBSV: '03252026' }, 'E.29');
 });
 
 test('E.29: die abgeleitete Kalenderprüfung fasst die Felder mit Katalog-Zeile nicht an', () => {
@@ -603,10 +603,10 @@ test('E.29: die abgeleitete Kalenderprüfung fasst die Felder mit Katalog-Zeile 
   // M3/M4/M6/S3/S4, weil ADAT dort das ursprüngliche Datum unverändert fortführt. Diese
   // belegte Auslassung darf die neue Prüfung nicht überschreiben.
   assert.doesNotThrow(() =>
-    pruefeInhalt('M8', { BKNR: '1', VSNR: '1234010180', ADAT: '99992026', RDAT: '01022026' }),
+    pruefeInhalt('M8', { BKNR: '1', VSNR: '1237010180', ADAT: '99992026', RDAT: '01022026' }),
   );
   // Umgekehrt wirft dieselbe Eingabe bei M3 weiterhin unter F7061, nicht unter 'E.29'.
-  wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '99992026', BBER: '05' }, 'F7061');
+  wirft('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '99992026', BBER: '05' }, 'F7061');
 });
 
 test('E.29: GEBD behält seine Sonderformen 00MMJJJJ und 0000JJJJ', () => {
@@ -628,15 +628,15 @@ test('GERF/FRDV/BVJN: nur J und N sind zulässig, in genau dieser Schreibweise',
   // Keines der drei Felder hat eine Zeile im Prüfkatalog; die Werte stehen in der
   // Feldtabelle E.29 (GERF, Feld Nr. 19) bzw. in D.41 (FRDV) und D.47 (BVJN).
   for (const wert of ['n', 'j', 'X', '1', 'Ja']) {
-    wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '05', GERF: wert }, 'E.29');
-    wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BBER: '05', FRDV: wert }, 'D.41');
-    wirft('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BVJN: wert }, 'D.47');
+    wirft('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', BBER: '05', GERF: wert }, 'E.29');
+    wirft('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', BBER: '05', FRDV: wert }, 'D.41');
+    wirft('M6', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', BVJN: wert }, 'D.47');
   }
   for (const wert of ['J', 'N']) {
     assert.doesNotThrow(() =>
       pruefeInhalt('M3', {
         BKNR: '1',
-        VSNR: '1234010180',
+        VSNR: '1237010180',
         ADAT: '01022026',
         BBER: '05',
         GERF: wert,
@@ -645,41 +645,41 @@ test('GERF/FRDV/BVJN: nur J und N sind zulässig, in genau dieser Schreibweise',
       }),
     );
     assert.doesNotThrow(() =>
-      pruefeInhalt('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', BVJN: wert }),
+      pruefeInhalt('M6', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', BVJN: wert }),
     );
   }
 });
 
 test('GERF/FRDV/BVJN werden in jeder Satzart geprüft, in der die Matrix sie belegen lässt', () => {
   // GERF: Z bei M3/M4/M9, V bei M6 — also vier Satzarten, nicht nur die Anmeldung.
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '12', GERF: 'n' }, 'E.29');
-  wirft('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', GERF: 'n' }, 'E.29');
+  wirft('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', AGRD: '12', GERF: 'n' }, 'E.29');
+  wirft('M6', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', GERF: 'n' }, 'E.29');
   wirft(
     'M9',
-    { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '02022026', AGRD: '12', GERF: 'n' },
+    { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', RDAT: '02022026', AGRD: '12', GERF: 'n' },
     'E.29',
   );
   // FRDV: Z bei M3, V bei M6.
-  wirft('M6', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', FRDV: 'n' }, 'D.41');
+  wirft('M6', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', FRDV: 'n' }, 'D.41');
 });
 
 test('FRDV: ein kleingeschriebenes n hebelt F7115 nicht mehr aus, sondern wird abgewiesen', () => {
   // Der Kern des Befundes: Die F7115-Bedingung vergleicht zeichengenau gegen 'N', so wie es
   // der Prüfkatalog formuliert. Ein 'n' war früher belegt, aber ungleich — die Meldung ging
   // ohne VWAZ hinaus UND trug ein Kleinbuchstaben-Byte auf Position 540.
-  wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01012026', BBER: '01', FRDV: 'n' }, 'D.41');
+  wirft('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '01012026', BBER: '01', FRDV: 'n' }, 'D.41');
   // Mit dem korrekten 'N' greift F7115 unverändert.
-  wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01012026', BBER: '01', FRDV: 'N' }, 'F7115');
+  wirft('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '01012026', BBER: '01', FRDV: 'N' }, 'F7115');
 });
 
 test('F7115: am Stichtag selbst (ADAT = 31.12.2025) greift die VWAZ-Pflicht noch nicht', () => {
   // Die nicht feuernde Seite der Bedingung „ADAT>31.12.2025" aus Blatt VR Nr. 36 — der
   // 31.12.2025 ist NICHT größer als der 31.12.2025.
   assert.doesNotThrow(() =>
-    pruefeInhalt('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '31122025', BBER: '01', FRDV: 'N' }),
+    pruefeInhalt('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '31122025', BBER: '01', FRDV: 'N' }),
   );
   // Einen Tag später greift sie.
-  wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01012026', BBER: '01', FRDV: 'N' }, 'F7115');
+  wirft('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '01012026', BBER: '01', FRDV: 'N' }, 'F7115');
 });
 
 test('F7020: die Versicherungsnummer wird gegen die Stellenfolge aus D.6 geprüft', () => {
@@ -689,12 +689,25 @@ test('F7020: die Versicherungsnummer wird gegen die Stellenfolge aus D.6 geprüf
     wirft('M3', { BKNR: '1', VSNR: vsnr, ADAT: '01022026', BBER: '05' }, 'F7020');
   }
   // Gültig: echtes Geburtsdatum, Randtage und die drei fingierten Monate 13–15.
-  for (const vsnr of ['1234010180', '1234311280', '1234011380', '1234011480', '1234311580']) {
+  // Die vierte Stelle ist jeweils die richtige Prüfziffer (siehe nächster Test).
+  for (const vsnr of ['1237010180', '1236311280', '1234011380', '1236011480', '1231311580']) {
     assert.doesNotThrow(
       () => pruefeInhalt('M3', { BKNR: '1', VSNR: vsnr, ADAT: '01022026', BBER: '05' }),
       vsnr,
     );
   }
+});
+
+test('F7020: eine falsche Prüfziffer weist ELDA ab – das Paket auch', () => {
+  // SIT-Plattform, 12.10.2026: Anmeldung mit verfälschter vierter Stelle →
+  // nicht_uebernommen, F7020 „Ungueltige Angabe im Feld VERSICHERUNGSNUMMER".
+  // 1234 010180 ist die Beispielnummer aus Kapitel D.43 – ihre Prüfziffer wäre 7.
+  for (const vsnr of ['1234010180', '1238010180', '1235311280']) {
+    wirft('M3', { BKNR: '1', VSNR: vsnr, ADAT: '01022026', BBER: '05' }, 'F7020');
+  }
+  assert.doesNotThrow(() =>
+    pruefeInhalt('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', BBER: '05' }),
+  );
 });
 
 test('F7020: die Grundstellung der VSNR bleibt eine Grundstellung, kein Formatfehler', () => {
@@ -727,7 +740,7 @@ test('F7020: die Meldung nennt das Feld, nicht die Versicherungsnummer selbst', 
 
 test('A3: Feldwerte werden vor dem Vergleich getrimmt (Füllzeichen aus einem Festsatz)', () => {
   // FRDV mit Füllzeichen darf F7115 nicht stillschweigend aushebeln.
-  wirft('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '01012026', BBER: '01', FRDV: 'N ' }, 'F7115');
+  wirft('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '01012026', BBER: '01', FRDV: 'N ' }, 'F7115');
 
   // Eine mit Leerzeichen aufgefüllte Grundstellung zählt weiterhin als "keine VSNR".
   wirft('M3', { BKNR: '1', VSNR: '0000000000 ', ADAT: '01022026', BBER: '05' }, 'F7051');
@@ -738,7 +751,7 @@ test('A3: Feldwerte werden vor dem Vergleich getrimmt (Füllzeichen aus einem Fe
   assert.doesNotThrow(() =>
     pruefeInhalt('M4', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       AGRD: '12',
       SOUM: 'J ',
@@ -788,17 +801,17 @@ const AGRD_MIT_EBSV = [
 
 test('F7111: Abmeldegrund 09 (Zivildienst) mit belegtem EBSV wird abgewiesen', () => {
   // Der nachgestellte Fall: baute frueher durch, ELDA weist ihn mit Status N zurueck.
-  wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: '09', EBSV: '31012026' }, 'F7111');
+  wirft('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', AGRD: '09', EBSV: '31012026' }, 'F7111');
 });
 
 test('F7111: gilt fuer alle zwoelf Codes und fuer M4 wie M9', () => {
   for (const agrd of AGRD_OHNE_EBSV) {
-    wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: agrd, EBSV: '31012026' }, 'F7111');
+    wirft('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', AGRD: agrd, EBSV: '31012026' }, 'F7111');
     wirft(
       'M9',
       {
         BKNR: '1',
-        VSNR: '1234010180',
+        VSNR: '1237010180',
         ADAT: '01022026',
         RDAT: '02022026',
         AGRD: agrd,
@@ -812,7 +825,7 @@ test('F7111: gilt fuer alle zwoelf Codes und fuer M4 wie M9', () => {
 test('F7111: leeres EBSV ist bei denselben zwoelf Codes zulaessig', () => {
   for (const agrd of AGRD_OHNE_EBSV) {
     assert.doesNotThrow(
-      () => pruefeInhalt('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: agrd }),
+      () => pruefeInhalt('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', AGRD: agrd }),
       agrd,
     );
   }
@@ -820,7 +833,7 @@ test('F7111: leeres EBSV ist bei denselben zwoelf Codes zulaessig', () => {
   assert.doesNotThrow(() =>
     pruefeInhalt('M4', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       AGRD: '09',
       EBSV: '00000000',
@@ -834,7 +847,7 @@ test('F7111: alle uebrigen Abmeldegruende duerfen EBSV belegen', () => {
       () =>
         pruefeInhalt('M4', {
           BKNR: '1',
-          VSNR: '1234010180',
+          VSNR: '1237010180',
           ADAT: '01022026',
           AGRD: agrd,
           EBSV: '31012026',
@@ -898,10 +911,10 @@ const D22_TABELLE: readonly (readonly [string, string, string, string])[] = [
 ];
 
 /** Rahmenwerte einer M4-Fixture, in die der jeweils geprüfte Fall eingesetzt wird. */
-const M4_RAHMEN = { BKNR: '1', VSNR: '1234010180', ADAT: '01022026' };
+const M4_RAHMEN = { BKNR: '1', VSNR: '1237010180', ADAT: '01022026' };
 
 /** Dasselbe für M9 — dort kommt das richtige Abmeldedatum hinzu. */
-const M9_RAHMEN = { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '02022026' };
+const M9_RAHMEN = { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', RDAT: '02022026' };
 
 /**
  * Baut eine M4-Fixture, die zu einem gegebenen Abmeldegrund die Abhaengigkeiten aus Kapitel
@@ -911,7 +924,7 @@ const M9_RAHMEN = { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '0202
 function m4MitAbmeldegrund(agrd: string, ebsvStufe: string): Record<string, string> {
   return {
     BKNR: '1',
-    VSNR: '1234010180',
+    VSNR: '1237010180',
     ADAT: '01022026',
     AGRD: agrd,
     ...(ebsvStufe === '-' ? {} : { EBSV: '31012026' }),
@@ -937,7 +950,7 @@ test('F7096: jeder zweistellige Code ausserhalb der Liste wird abgewiesen', () =
   for (let n = 0; n <= 99; n++) {
     const agrd = String(n).padStart(2, '0');
     if (gueltig.has(agrd)) continue;
-    wirft('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', AGRD: agrd }, 'F7096');
+    wirft('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', AGRD: agrd }, 'F7096');
     geprueft++;
   }
   assert.equal(geprueft, 100 - 33);
@@ -1081,7 +1094,7 @@ test('F7111: greift nur bei M4 und M9 — der Katalog nennt keine weitere Satzar
   assert.doesNotThrow(() =>
     pruefeInhalt('M3', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       BBER: '05',
       AGRD: '09',
@@ -1124,7 +1137,7 @@ test('M8: ein zurueckgelesenes UMDA in Grundstellung ist leer, kein Formatfehler
   assert.doesNotThrow(() =>
     pruefeInhalt('M4', {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       AGRD: '01',
       // EBSV ergaenzt (Kapitel D.22, Seite 96: „Z" beim Abmeldegrund 01), damit die Fixture
@@ -1165,14 +1178,14 @@ test('I6: Formatmeldungen zu Datumsfeldern nennen das Feld, nicht den Wert', () 
     'F7030',
     '32011990',
   );
-  ohneWert('M3', { BKNR: '1', VSNR: '1234010180', ADAT: '31042026', BBER: '05' }, 'F7061', '31042026');
-  ohneWert('M8', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', RDAT: '31042026' }, 'F7066', '31042026');
-  ohneWert('M4', { BKNR: '1', VSNR: '1234010180', ADAT: '01022026', UMDA: '31042026' }, 'F7104', '31042026');
+  ohneWert('M3', { BKNR: '1', VSNR: '1237010180', ADAT: '31042026', BBER: '05' }, 'F7061', '31042026');
+  ohneWert('M8', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', RDAT: '31042026' }, 'F7066', '31042026');
+  ohneWert('M4', { BKNR: '1', VSNR: '1237010180', ADAT: '01022026', UMDA: '31042026' }, 'F7104', '31042026');
   ohneWert(
     'M9',
     {
       BKNR: '1',
-      VSNR: '1234010180',
+      VSNR: '1237010180',
       ADAT: '01022026',
       RDAT: '02022026',
       UMDA: '01022026',

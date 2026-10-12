@@ -1,6 +1,7 @@
 import { EldaError } from './errors';
 import { FELDER_E29 } from './felder-e29';
 import { PFLICHT_E29, type Satzart } from './pflicht-e29';
+import { vsnrPruefzifferGueltig } from './pruefziffer';
 
 type Werte = Readonly<Record<string, string | undefined>>;
 
@@ -115,11 +116,12 @@ export function gueltigesDatum(wert: string): boolean {
  * für TT einen glatten Bereich 01–31 und keine Abhängigkeit vom Monat — bei den fingierten
  * Monaten 13–15 gäbe es eine solche Länge auch gar nicht.
  *
- * Die Prüfziffer bleibt ebenfalls ungeprüft: Ihr Verfahren steht in keiner der verfügbaren
- * Quellen (weder in Kapitel D.6 noch sonst irgendwo in der Organisationsbeschreibung oder im
- * Prüfkatalog). Sie zu raten wäre schlimmer als sie wegzulassen — eine falsch berechnete
- * Prüfziffer würde gültige Versicherungsnummern abweisen. ELDA prüft sie serverseitig
- * (Prüfkatalog F7020).
+ * Die Prüfziffer prüft diese Funktion nicht — sie ist eine reine Strukturprüfung und wird
+ * auch von Meldungsarten genutzt, für die nicht belegt ist, ob ELDA dort die Prüfziffer
+ * durchsetzt. Ihr Verfahren steht nicht im DM-Org, sondern in der Anfragebeantwortung
+ * 4690/AB XXIII. GP (siehe `pruefziffer.ts`). Für die Versichertenmeldung ist belegt, dass
+ * ELDA sie unter F7020 prüft (SIT-Plattform, 12.10.2026); dort prüft {@link pruefeInhalt}
+ * sie zusätzlich.
  */
 export function gueltigeVsnrStruktur(vsnr: string): boolean {
   if (!/^\d{10}$/.test(vsnr)) return false;
@@ -584,15 +586,24 @@ export function pruefeInhalt(satzart: Satzart, werte: Werte): void {
 
   // F7020 (Prüfkatalog, Blatt VR Nr. 16 „VSNR ungültig", alle sieben Satzarten): Die
   // Versicherungsnummer ist stellenkodiert (Kapitel D.6, Seite 72) — siehe
-  // gueltigeVsnrStruktur für die geprüften und die bewusst ungeprüften Stellen. Der Wert
-  // selbst steht wie bei GEBD nicht in der Meldung: Er ist ein Personendatum.
+  // gueltigeVsnrStruktur für die geprüften Stellen. Dazu die Prüfziffer: ELDA weist eine
+  // Anmeldung mit falscher Prüfziffer unter F7020 ab („Ungueltige Angabe im Feld
+  // VERSICHERUNGSNUMMER", SIT-Plattform 12.10.2026). Der Wert selbst steht wie bei GEBD
+  // nicht in der Meldung: Er ist ein Personendatum.
   if (vsnr !== undefined && !gueltigeVsnrStruktur(vsnr)) {
     wirf(
       'F7020',
       'Die Versicherungsnummer (VSNR) ist ungültig. Erwartet: zehn Ziffern in der Form ' +
         'LLLPTTMMJJ mit Tag 01 bis 31 und Monat 01 bis 12 (bzw. 13 bis 15 bei fingiertem ' +
-        'Datum), siehe Kapitel D.6. Die Prüfziffer wird hier nicht nachgerechnet — das ' +
-        'Verfahren steht in keiner der Quellen; ELDA prüft sie serverseitig.',
+        'Datum), siehe Kapitel D.6.',
+    );
+  }
+  if (vsnr !== undefined && !vsnrPruefzifferGueltig(vsnr)) {
+    wirf(
+      'F7020',
+      'Die Prüfziffer der Versicherungsnummer (VSNR, vierte Stelle) stimmt nicht. ELDA weist ' +
+        'die Meldung damit ab (Verfahren laut Anfragebeantwortung 4690/AB XXIII. GP: Faktoren ' +
+        '3, 7, 9, 5, 8, 4, 2, 1, 6, Rest mod 11).',
     );
   }
 

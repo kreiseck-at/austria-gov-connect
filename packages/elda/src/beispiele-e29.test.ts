@@ -35,8 +35,13 @@ import type { BestandOptionen } from './bestand';
  * Satzart zwingend verlangt, die Beispiele sie aber durchwegs weglassen: Referenzwert,
  * Beitragskontonummer, Dienstgebername und ein identifizierendes Feld (hier die VSNR).
  * Beispiele, die Referenzwert oder Beitragskontonummer selbst angeben, überschreiben sie.
+ *
+ * Die Versicherungsnummer ist NICHT die Beispielnummer des Dokuments (1234 010180 aus
+ * D.43): Deren vierte Stelle ist keine gültige Prüfziffer, und ELDA weist eine falsche
+ * Prüfziffer unter F7020 ab (SIT-Plattform, 12.10.2026). Verwendet wird dieselbe Nummer
+ * mit richtiger Prüfziffer.
  */
-const RAHMEN = { REFW: 'REF-1', BKNR: '1234567', DGNA: 'Muster GmbH', VSNR: '1234010180' } as const;
+const RAHMEN = { REFW: 'REF-1', BKNR: '1234567', DGNA: 'Muster GmbH', VSNR: '1237010180' } as const;
 
 /**
  * Ebenfalls ergänzt: Familien- und Vorname sind laut E.29.1 bei M3, M4 und M6 zwingend, bei

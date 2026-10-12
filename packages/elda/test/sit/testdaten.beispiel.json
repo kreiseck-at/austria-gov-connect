@@ -51,49 +51,49 @@
       "vorname": "Max",
       "geburtsdatum": "01011980",
       "geschlecht": "m",
-      "vsnr": "1234010180"
+      "vsnr": "1237010180"
     },
     "angestellte": {
       "familienname": "Muster",
       "vorname": "Maria",
       "geburtsdatum": "02021985",
       "geschlecht": "w",
-      "vsnr": "2345020285"
+      "vsnr": "2340020285"
     },
     "arbeiterlehrling": {
       "familienname": "Muster",
       "vorname": "Lukas",
       "geburtsdatum": "03032005",
       "geschlecht": "m",
-      "vsnr": "3456030305"
+      "vsnr": "3468030305"
     },
     "angestelltenlehrling": {
       "familienname": "Muster",
       "vorname": "Lea",
       "geburtsdatum": "04042005",
       "geschlecht": "w",
-      "vsnr": "4567040405"
+      "vsnr": "4566040405"
     },
     "geringfuegig": {
       "familienname": "Muster",
       "vorname": "Gerda",
       "geburtsdatum": "05051990",
       "geschlecht": "w",
-      "vsnr": "5678050590"
+      "vsnr": "5673050590"
     },
     "freier_dn": {
       "familienname": "Muster",
       "vorname": "Felix",
       "geburtsdatum": "06061975",
       "geschlecht": "m",
-      "vsnr": "6789060675"
+      "vsnr": "6785060675"
     },
     "reserve_1": {
       "familienname": "Muster",
       "vorname": "Rita",
       "geburtsdatum": "07071970",
       "geschlecht": "w",
-      "vsnr": "7890070770",
+      "vsnr": "7894070770",
       "staatsangehoerigkeit": "AUT",
       "anschrift": {
         "kfz": "A",
@@ -107,14 +107,14 @@
       "vorname": "Rudi",
       "geburtsdatum": "08081965",
       "geschlecht": "m",
-      "vsnr": "8901080865"
+      "vsnr": "8905080865"
     },
     "reserve_3": {
       "familienname": "Muster",
       "vorname": "Rosa",
       "geburtsdatum": "09091960",
       "geschlecht": "w",
-      "vsnr": "9012090960"
+      "vsnr": "9010090960"
     }
   }
 }
