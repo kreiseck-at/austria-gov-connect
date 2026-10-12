@@ -60,9 +60,67 @@ const SART = {
   B11: 'M3',
   B12: 'M3',
   T02: 'M3',
+  V40: 'M3',
+  V41: 'M3',
+  V42: 'M3',
+  V43: 'M8',
+  V44: 'M4',
+  V45: 'M4',
+  V46: 'M4',
+  V47: 'M4',
+  V48: 'M4',
+  V49: 'M4',
+  V50: 'M4',
+  V51: 'M3',
+  V52: 'M3',
+  V53: 'M3',
+  V54: 'M3',
+  V55: 'M3',
+  V56: 'M6',
+  V57: 'M3',
+  V58: 'M8',
+  V59: 'M3',
+  V60: 'M3',
+  V34: 'M3',
+  V35: 'M4',
+  V36: 'S3',
+  V33: 'M3',
+  V61: 'M3',
+  V62: 'M3',
+  V63: 'M3',
+  V64: 'M3',
+  V65: 'M4',
+  V66: 'M4',
 };
-const VSTR = { V02: '15', V09: '15', V13: '15', B03: '15', B11: '15', B12: '15', V06: '15' };
-const REFU_AUS = { V09: 'V02', V11: 'V05', V19: 'V15', V20: 'V12' };
+const VSTR = {
+  V02: '15',
+  V09: '15',
+  V13: '15',
+  B03: '15',
+  B11: '15',
+  B12: '15',
+  V06: '15',
+  V40: '15',
+  V41: '15',
+  V42: '15',
+  V43: '15',
+  V44: '15',
+  V45: '15',
+  V46: '15',
+  V47: '15',
+  V48: '15',
+  V49: '15',
+  V52: '15',
+  V53: '15',
+  V54: '15',
+  V55: '15',
+  V56: '15',
+  V57: '15',
+  V58: '15',
+  V34: '15',
+  V33: '15',
+};
+const REFU_AUS = { V09: 'V02', V11: 'V05', V19: 'V15', V20: 'V12', V43: 'V40', V58: 'V57' };
 
 const ersterFenster = (fall) => (fall.fenster === 'jedes' ? 'mo-vm' : fall.fenster[0]);
 
@@ -375,7 +433,10 @@ test('ES-Fälle: Bestand ES, Version 08, TM, Satzart und Träger; Negativfälle 
   }
   const antragVon = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
   // Storno verweist über UIDU auf S50.
-  assert.equal(feld(antragVon('S53'), pos('UIDU').pos, 40).trimEnd(), GEBAUT.get('S50').ergebnis.referenzwerte[0]);
+  assert.equal(
+    feld(antragVon('S53'), pos('UIDU').pos, 40).trimEnd(),
+    GEBAUT.get('S50').ergebnis.referenzwerte[0],
+  );
   assert.equal(feld(antragVon('S53'), 21, 2), '02');
   // S54: nur AGSTAAT auf AT geändert.
   const agstaat = pos('AGSTAAT');
