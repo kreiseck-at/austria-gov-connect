@@ -16,7 +16,7 @@ const { ladeTestdaten } = require('../lib/testdaten');
 const { erstelleAblage } = require('../lib/ablage');
 const { baueKontext } = require('../lib/kontext');
 const { elementWert } = require('../lib/manipulation');
-const { verfuegbar } = require('../lib/kasseneck');
+const { verfuegbar, brueckeFehlt } = require('../lib/kasseneck');
 const { maskiereObus } = require('../lib/maskierung');
 const { ttmmjjjj, zrDatum, wienerZeit } = require('../lib/fenster');
 
@@ -105,6 +105,9 @@ const SART = {
   V81: 'M4',
   V82: 'M3',
   V83: 'M4',
+  K01: 'M3',
+  K02: 'M8',
+  K03: 'M4',
 };
 const VSTR = {
   V02: '15',
@@ -169,7 +172,7 @@ function baueAlle(ablage) {
     for (const id of fall.abhaengig) bau(nachId.get(id));
     if (fall.aktion === 'beobachten') return;
     // Die mBGM-Fälle rechnen mit kasseneck; ohne Checkout (CI) bauen sie nicht.
-    if (fall.braucht === 'kasseneck' && !verfuegbar()) return;
+    if (brueckeFehlt(fall)) return;
     const fenster = ersterFenster(fall);
     const jetzt = IM_FENSTER[fenster];
     const ctx = baueKontext({
@@ -213,7 +216,7 @@ const feld = (satz, pos, laenge) => satz.slice(pos - 1, pos - 1 + laenge);
 test('der Katalog lädt und jeder Fall mit baue ist gebaut worden', () => {
   assert.ok(KATALOG.length >= 25);
   for (const f of KATALOG.filter(
-    (x) => x.aktion !== 'beobachten' && (x.braucht !== 'kasseneck' || verfuegbar()),
+    (x) => x.aktion !== 'beobachten' && !brueckeFehlt(x),
   )) {
     assert.ok(GEBAUT.has(f.id), f.id);
   }

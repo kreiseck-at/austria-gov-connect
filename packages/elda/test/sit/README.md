@@ -79,6 +79,7 @@ bestanden bewertet ist, weist `lauf` auf mögliche Folgefehler hin.
 | `urteil <ID> <Urteil>` | nein | Bewertung ins Laufprotokoll |
 | `protokoll` | nein | Status je Fall (Wiener Zeit), Läufe mit Antwort / Versuche |
 | `auswerten` | nein | gesicherte Mitteilungen und Clearingfälle lesen, Clearing per Referenzwert dem Fall zugeordnet |
+| `kasseneck-zuordnung` | nein | Rücksendungen der K-Fälle durch die Zuordnung von kasseneck schicken (Mitteilung/Meldebestätigung über die Protokollnummer, Clearing über Referenzwert `KE-VR-…`); braucht `KASSENECK_VR_PFAD` |
 | `katalog` | nein | Katalog als Markdown |
 
 `SIT_JETZT` (ISO-Zeitpunkt) verschiebt für die Befehle **ohne Netz** die aktuelle Zeit; Netzbefehle nehmen immer die
