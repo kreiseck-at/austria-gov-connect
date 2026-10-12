@@ -78,6 +78,11 @@ function adressmeldung(ctx, id, { rolle, dg, traeger }) {
   };
 }
 
+/** Die Versicherungsnummer mit verfälschter vierter Stelle – nie gültig (Prüfziffer eindeutig). */
+function falscheVsnr(vsnr) {
+  return vsnr.slice(0, 3) + String((Number(vsnr[3]) + 1) % 10) + vsnr.slice(4);
+}
+
 module.exports = [
   fall({
     id: 'S10',
@@ -175,6 +180,21 @@ module.exports = [
     baue: (ctx) => {
       const b = adressmeldung(ctx, 'S21', { rolle: 'angestellte', dg: 'A', traeger: '15' });
       return { ...b, inhalt: setzeFeld(b.inhalt, 2, feldE31('WKFZ'), 'A') };
+    },
+  }),
+  fall({
+    id: 'S22',
+    titel: 'Negativtest: Adressmeldung mit falscher Prüfziffer der VSNR (AV)',
+    zweck:
+      'V21 (12.10.2026) zeigte: Bei der Versichertenmeldung weist ELDA eine falsche Prüfziffer mit F7020 ab. ' +
+      'Prüft dasselbe für diese Meldungsart (Paket prüft hier bisher nur die Stellenfolge). Am Builder vorbei gesetzt.',
+    quelle: 'E.31 Feld VSNR; Prüfkatalog Blatt AV (F8031); Anfragebeantwortung 4690/AB XXIII. GP',
+    erwartung: 'nicht übernommen, F8031 – oder übernommen, dann prüft ELDA hier die Prüfziffer nicht',
+    fenster: FOLGE_VM,
+    abhaengig: ['V01'],
+    baue: (ctx) => {
+      const b = adressmeldung(ctx, 'S22', { rolle: 'arbeiter', dg: 'A', traeger: '14' });
+      return { ...b, inhalt: setzeFeld(b.inhalt, 2, feldE31('VSNR'), falscheVsnr(ctx.rolle('arbeiter').vsnr)) };
     },
   }),
 ];
