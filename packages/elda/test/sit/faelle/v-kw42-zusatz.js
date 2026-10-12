@@ -514,7 +514,8 @@ module.exports = [
     zweck: 'Umlaut und ß stehen im Zeichenvorrat für Personennamen; geht das durch?',
     quelle: 'Zeichensatz-Dokument (Personennamen, ISO-8859-15); E.29.2 Seite 305 (M3 mit GEBD ohne VSNR)',
     erwartung: 'übernommen',
-    fenster: MO_NM,
+    fenster: ['mo-vm', 'mo-nm'],
+    rang: 28,
     baue: (ctx) => anmeldungOhneVsnr(ctx, 'V52', { FANA: 'Weißenböck', VONA: 'Livia', GEBD: '19081996' }),
   }),
   fall({
@@ -524,7 +525,8 @@ module.exports = [
       'Das Paket sperrt é im Personennamen. Was sagt ELDA (F7036/F7038 oder nichts)? Zeigt, ob die Sperre zu streng ist.',
     quelle: 'Zeichensatz-Dokument; Prüfkatalog Blatt VR (F7036, F7038)',
     erwartung: 'F7036/F7038 (Warnung oder Abweisung) – oder übernommen',
-    fenster: MO_NM,
+    fenster: ['mo-vm', 'mo-nm'],
+    rang: 28,
     baue: (ctx) =>
       verfaelscht(anmeldungOhneVsnr(ctx, 'V53', { FANA: 'Lindmayr', VONA: 'Renee', GEBD: '03051997' }), {
         VONA: 'Renée',
@@ -537,7 +539,8 @@ module.exports = [
       'ş gibt es in ISO-8859-15 nicht; ein Programm, das UTF-8 schickt, erzeugt die Bytes C5 9F. Wie reagiert ELDA?',
     quelle: 'Zeichensatz-Dokument; Prüfkatalog Blatt VR (F7036, F7038)',
     erwartung: 'F7036/F7038 oder Abweisung',
-    fenster: MO_NM,
+    fenster: ['mo-vm', 'mo-nm'],
+    rang: 28,
     baue: (ctx) =>
       verfaelscht(anmeldungOhneVsnr(ctx, 'V54', { FANA: 'Grabner', VONA: 'Ayse', GEBD: '11121995' }), {
         VONA: 'AyÅ\u009fe',
@@ -660,7 +663,8 @@ module.exports = [
     zweck: 'Absichtlich abgewiesene Datei: Kommt nicht_uebernommen mit einem Grund, den man anzeigen kann?',
     quelle: 'Prüfkatalog Blatt VR (BKNR); elda_mitteilung-3.0.xsd',
     erwartung: 'nicht_uebernommen mit Fehlercode',
-    fenster: MO_NM,
+    fenster: ['mo-vm', 'mo-nm'],
+    rang: 28,
     baue: (ctx) => verfaelscht(freierDnAnmeldungA14(ctx, 'V60'), { BKNR: '9999999' }),
   }),
   fall({
@@ -689,7 +693,8 @@ module.exports = [
     zweck: 'Die Person war bei diesem Konto nie angemeldet.',
     quelle: 'E.29.2 (M4)',
     erwartung: 'Clearing oder Abweisung',
-    fenster: MO_NM,
+    fenster: ['mo-vm', 'mo-nm'],
+    rang: 28,
     baue: (ctx) => freierDnAbmeldungA14(ctx, 'V35'),
   }),
   fall({
@@ -698,7 +703,8 @@ module.exports = [
     zweck: 'REFU zeigt ins Leere.',
     quelle: 'E.29.1 (S3), D.44',
     erwartung: 'Clearing oder Abweisung',
-    fenster: MO_NM,
+    fenster: ['mo-vm', 'mo-nm'],
+    rang: 28,
     baue: (ctx) =>
       meldung(ctx, {
         fall: 'V36',
@@ -739,7 +745,8 @@ module.exports = [
     zweck: 'Bestätigt, dass ELDA denselben Code vergibt wie das Paket.',
     quelle: 'Prüfkatalog Blatt VR (F7061)',
     erwartung: 'F7061, Abweisung',
-    fenster: MO_NM,
+    fenster: ['mo-vm', 'mo-nm'],
+    rang: 28,
     baue: (ctx) => verfaelscht(freierDnAnmeldungA14(ctx, 'V61'), { ADAT: '31022025' }),
   }),
   fall({
@@ -748,7 +755,8 @@ module.exports = [
     zweck: 'Bestätigt den Code für ein Datum vor dem 01.01.2019.',
     quelle: 'Prüfkatalog Blatt VR (F7062)',
     erwartung: 'F7062, Abweisung',
-    fenster: MO_NM,
+    fenster: ['mo-vm', 'mo-nm'],
+    rang: 28,
     baue: (ctx) => verfaelscht(freierDnAnmeldungA14(ctx, 'V62'), { ADAT: '01012018' }),
   }),
   fall({
@@ -757,7 +765,8 @@ module.exports = [
     zweck: 'Bestätigt den Code für einen BBER außerhalb von D.39.',
     quelle: 'Prüfkatalog Blatt VR (F7069); D.39',
     erwartung: 'F7069, Abweisung',
-    fenster: MO_NM,
+    fenster: ['mo-vm', 'mo-nm'],
+    rang: 28,
     baue: (ctx) => verfaelscht(freierDnAnmeldungA14(ctx, 'V63'), { BBER: '99' }),
   }),
   fall({
@@ -766,7 +775,8 @@ module.exports = [
     zweck: 'Seit 01.01.2026 Pflicht – prüft der SIT sie im simulierten 2025?',
     quelle: 'Prüfkatalog Blatt VR (F7115)',
     erwartung: 'F7115 oder übernommen (2025 simuliert)',
-    fenster: MO_NM,
+    fenster: ['mo-vm', 'mo-nm'],
+    rang: 28,
     baue: (ctx) => verfaelscht(freierDnAnmeldungA14(ctx, 'V64'), { VWAZ: '0000' }),
   }),
   fall({
@@ -775,7 +785,8 @@ module.exports = [
     zweck: 'Bestätigt den Code für einen AGRD außerhalb von D.22.',
     quelle: 'Prüfkatalog Blatt VR (F7096); D.22 Seite 94',
     erwartung: 'F7096, Abweisung',
-    fenster: MO_NM,
+    fenster: ['mo-vm', 'mo-nm'],
+    rang: 28,
     baue: (ctx) => verfaelscht(freierDnAbmeldungA14(ctx, 'V65'), { AGRD: '26' }),
   }),
   fall({
@@ -784,7 +795,8 @@ module.exports = [
     zweck: 'AGRD 07 (Karenz) verlangt ein leeres EBSV.',
     quelle: 'Prüfkatalog Blatt VR (F7111); D.22 Seite 96',
     erwartung: 'F7111, Abweisung',
-    fenster: MO_NM,
+    fenster: ['mo-vm', 'mo-nm'],
+    rang: 28,
     baue: (ctx) => verfaelscht(freierDnAbmeldungA14(ctx, 'V66'), { AGRD: '07' }),
   }),
 ];
