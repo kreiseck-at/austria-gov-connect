@@ -1,4 +1,5 @@
 import { EldaError } from './errors';
+import { vsnrPruefzifferGueltig } from './pruefziffer';
 import {
   gueltigesGeburtsdatum,
   gueltigeVsnrStruktur,
@@ -33,7 +34,10 @@ export function wirf(code: string, text: string): never {
  * - `F0020` Dienstgebername leer.
  * - `F0030` Versicherungsnummer und Geburtsdatum beide leer.
  * - `F0040` Versicherungsnummer ungültig — die Stellenfolge laut Kapitel D.6
- *   wie in `pruefung-e29.ts`; die Prüfziffer bleibt ungeprüft.
+ *   wie in `pruefung-e29.ts` und die Prüfziffer (`vsnrPruefzifferGueltig`).
+ *   Auf der SIT-Plattform (12.10.2026) wies ELDA eine Familienhospiz-Meldung
+ *   und einen Antrag auf zwischenstaatliche Bescheinigung mit verfälschter
+ *   Prüfziffer jeweils mit `F0040` „Versicherungsnummer ungueltig" ab.
  * - `F0050` Geburtsdatum ungültig (TTMMJJJJ, 00MMJJJJ oder 0000JJJJ).
  * - `F0060` Familienname leer, `F0070` Vorname leer.
  *
@@ -61,7 +65,13 @@ export function pruefeAllgemein(werte: Werte): void {
     wirf(
       'F0040',
       'Die Versicherungsnummer (VSNR) ist ungültig. Erwartet: zehn Ziffern LLLPTTMMJJ mit Tag 01 bis 31 ' +
-        'und Monat 01 bis 15 (Kapitel D.6). Die Prüfziffer wird hier nicht nachgerechnet.',
+        'und Monat 01 bis 15 (Kapitel D.6).',
+    );
+  }
+  if (vsnr !== undefined && gueltigeVsnrStruktur(vsnr) && !vsnrPruefzifferGueltig(vsnr)) {
+    wirf(
+      'F0040',
+      'Die Versicherungsnummer (VSNR) ist ungültig: Die Prüfziffer (vierte Stelle) stimmt nicht.',
     );
   }
   if (gebd !== undefined && !gueltigesGeburtsdatum(gebd)) {

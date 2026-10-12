@@ -2,6 +2,7 @@ import { EldaError } from './errors';
 import { PLAETZE_ARBEITSORT, PLAETZE_DIENSTGEBER, PLAETZE_SELBSTAENDIG } from './felder-e27';
 import { PFLICHT_E27, type E27Meldeart, type E27Satzart } from './pflicht-e27';
 import { STAATEN } from './staaten';
+import { vsnrPruefzifferGueltig } from './pruefziffer';
 import { alsZahl, gueltigeVsnrStruktur, gueltigesDatum, gueltigesGeburtsdatum } from './pruefung-e29';
 
 type Werte = Readonly<Record<string, string | undefined>>;
@@ -269,7 +270,15 @@ export function pruefeInhaltE27(satzart: E27Satzart, meldeart: E27Meldeart, wert
     wirf(
       'F7589',
       'Die Versicherungsnummer (VSNR) ist ungültig: erwartet LLLPTTMMJJ mit Tag 01–31 und Monat ' +
-        '01–15 (Kapitel D.6). Die Prüfziffer wird nicht nachgerechnet.',
+        '01–15 (Kapitel D.6).',
+    );
+  }
+  // Eine falsche Prüfziffer wies ELDA auf der SIT-Plattform (12.10.2026) nicht
+  // mit F7589, sondern mit dem allgemeinen F0040 „Versicherungsnummer ungueltig" ab.
+  if (vsnr !== undefined && gueltigeVsnrStruktur(vsnr) && !vsnrPruefzifferGueltig(vsnr)) {
+    wirf(
+      'F0040',
+      'Die Versicherungsnummer (VSNR) ist ungültig: Die Prüfziffer (vierte Stelle) stimmt nicht.',
     );
   }
   const gesl = wert(werte, 'GESL');

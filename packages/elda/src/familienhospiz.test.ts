@@ -226,3 +226,8 @@ test('der gebaute Satz ist eingefroren', () => {
   assert.ok(Object.isFrozen(satz));
   assert.ok(Object.isFrozen(satz.werte));
 });
+
+test('F0040: falsche Prüfziffer der VSNR – so weist ELDA es ab (SIT, 12.10.2026)', () => {
+  // 7890030990 ist gültig; die vierte Stelle verfälscht ergibt eine ungültige Nummer.
+  assert.throws(() => familienhospizStornoAnmeldung({ ...BASIS, VSNR: '7891030990' }), /F0040/);
+});

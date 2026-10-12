@@ -1706,12 +1706,15 @@ wird nichts davon geraten:
   `F8071`); und wie der Clearingfall mit der vergebenen VSNR aussieht.
 - **Klartext-Protokoll** (`mbd_…`) wird nicht ausgewertet. Die Mitteilung bei
   Abweisung ist seit dem 12.10.2026 beobachtet und entspricht dem Schema.
-- **Prüfziffer der Versicherungsnummer außerhalb der Versichertenmeldung:**
-  Die Adressmeldung (`F8031`), Familienhospiz und Schwerarbeit (`F0040`), der
-  Antrag auf zwischenstaatliche Bescheinigung (`F7589`) und die mBGM prüfen nur
-  die Stellenfolge. Ob ELDA dort die
-  Prüfziffer ebenso durchsetzt wie bei `F7020`, ist nicht beobachtet — je
-  Meldungsart eine SIT-Probe mit verfälschter Prüfziffer klärt es.
+- **Prüfziffer der Versicherungsnummer außerhalb der Versichertenmeldung**
+  (SIT-Proben vom 12.10.2026): Familienhospiz und Antrag auf zwischenstaatliche
+  Bescheinigung wies ELDA mit `F0040` „Versicherungsnummer ungueltig" ab — beim
+  Antrag also nicht mit `F7589`. Das Paket prüft deshalb dort und bei der
+  Schwerarbeit (dieselbe Regel `F0040` aus dem Blatt `Allgemein`) die Prüfziffer
+  mit. Eine mBGM mit verfälschter Prüfziffer wurde dagegen formal übernommen;
+  das Clearing verbuchte sie nicht (`BW1837`, für diesen Zeitraum kein
+  Versicherter gemeldet). Die mBGM prüft deshalb weiter nur die Stellenfolge.
+  Offen: Adressmeldung (`F8031`) und Schwerarbeit — Proben `S22`/`S44`.
 - **Beitragssätze:** Die Rundung je Position wird nachgerechnet (`DM-D.62`),
   der Prozentsatz selbst nicht — falsche Sätze (`BW1850`) erkennt erst der
   Träger. Wie er auf Abweichungen über die Rundung hinaus reagiert, ist nicht

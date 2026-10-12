@@ -23,7 +23,7 @@ const PERSON = {
   FANA: 'Weinzierl',
   GESL: '2',
   GEBD: '01011980',
-  VSNR: '1234010180',
+  VSNR: '1237010180',
   STSL: 'AT',
   STRA: 'Musterstraße 1',
   WKFZ: 'AT',
@@ -437,4 +437,8 @@ test('Builder lehnt unbekannte Felder und Satzarten ab', () => {
       }),
     /32 Plätze/,
   );
+});
+
+test('F0040: falsche Prüfziffer der VSNR – ELDA meldet hier F0040, nicht F7589 (SIT, 12.10.2026)', () => {
+  fehlercode(() => antragZwischenstaatlich('E1', { ...E1, VSNR: '1238010180' }), 'F0040');
 });
