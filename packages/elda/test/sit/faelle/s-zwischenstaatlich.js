@@ -99,6 +99,11 @@ const feldVon = (name) => {
   return FELDER_E27.find((f) => f.name === name);
 };
 
+/** Die Versicherungsnummer mit verfälschter vierter Stelle – nie gültig (Prüfziffer eindeutig). */
+function falscheVsnr(vsnr) {
+  return vsnr.slice(0, 3) + String((Number(vsnr[3]) + 1) % 10) + vsnr.slice(4);
+}
+
 module.exports = [
   fall({
     id: 'S50',
@@ -228,6 +233,21 @@ module.exports = [
       const block1 = b.inhalt.toString('latin1').split('\r\n')[1].slice(p1 - 1, p2 - 1);
       const platz2 = { name: 'Dienstgeber-Block Platz 2', pos: p2, laenge: p2 - p1 };
       return { ...b, inhalt: setzeFeld(b.inhalt, 2, platz2, block1) };
+    },
+  }),
+  fall({
+    id: 'S56',
+    titel: 'Negativtest: Entsendung mit falscher Prüfziffer der VSNR (E1)',
+    zweck:
+      'V21 (12.10.2026) zeigte: Bei der Versichertenmeldung weist ELDA eine falsche Prüfziffer mit F7020 ab. ' +
+      'Prüft dasselbe für diese Meldungsart (Paket prüft hier bisher nur die Stellenfolge). Am Builder vorbei gesetzt.',
+    quelle: 'E.27 Feld VSNR; Prüfkatalog Blatt ES (F7589); Anfragebeantwortung 4690/AB XXIII. GP',
+    erwartung: 'nicht übernommen, F7589 – oder übernommen, dann prüft ELDA hier die Prüfziffer nicht',
+    fenster: NACH_ANMELDUNG,
+    abhaengig: ['S50'],
+    baue: (ctx) => {
+      const b = bestand(ctx, 'S56', entsendungE1(ctx, randomUUID()), { dg: 'A', traeger: '14' });
+      return { ...b, inhalt: setzeFeld(b.inhalt, 2, feldVon('VSNR'), falscheVsnr(ctx.rolle('arbeiter').vsnr)) };
     },
   }),
 ];

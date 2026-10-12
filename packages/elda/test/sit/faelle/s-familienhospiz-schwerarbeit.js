@@ -74,6 +74,11 @@ const sm = (ctx, id, art) => {
   });
 };
 
+/** Die Versicherungsnummer mit verfälschter vierter Stelle – nie gültig (Prüfziffer eindeutig). */
+function falscheVsnr(vsnr) {
+  return vsnr.slice(0, 3) + String((Number(vsnr[3]) + 1) % 10) + vsnr.slice(4);
+}
+
 module.exports = [
   fall({
     id: 'S30',
@@ -219,5 +224,45 @@ module.exports = [
     abhaengig: ['S30', 'S41'],
     rang: 27,
     baue: (ctx) => geaendert(sm(ctx, 'S43', 'schwerarbeitsmeldung'), FELDER_E22, 'TART_1', '01'),
+  }),
+  fall({
+    id: 'S34',
+    titel: 'Negativtest: Familienhospiz mit falscher Prüfziffer der VSNR (FH 80)',
+    zweck:
+      'V21 (12.10.2026) zeigte: Bei der Versichertenmeldung weist ELDA eine falsche Prüfziffer mit F7020 ab. ' +
+      'Prüft dasselbe für diese Meldungsart (Paket prüft hier bisher nur die Stellenfolge). Am Builder vorbei gesetzt.',
+    quelle: 'E.12 Feld VSNR; Prüfkatalog Blatt Allgemein (F0040); Anfragebeantwortung 4690/AB XXIII. GP',
+    erwartung: 'nicht übernommen, F0040 – oder übernommen, dann prüft ELDA hier die Prüfziffer nicht',
+    fenster: ['mo-nm', 'di-vm', 'di-nm', 'mi-vm', 'mi-nm'],
+    abhaengig: ['S30'],
+    rang: 26,
+    baue: (ctx) =>
+      geaendert(
+        familienhospiz(ctx, {
+          fall: 'S34',
+          art: 'familienhospizAnmeldung',
+          rolle: PERSON,
+          dg: DG,
+          traeger: TRAEGER,
+          felder: { ADAT: d(ctx, ctx.zr), KART: ctx.elda.KARENZART.PFLEGEKARENZ },
+        }),
+        FELDER_E12,
+        'VSNR',
+        falscheVsnr(ctx.rolle(PERSON).vsnr),
+      ),
+  }),
+  fall({
+    id: 'S44',
+    titel: 'Negativtest: Schwerarbeitsmeldung mit falscher Prüfziffer der VSNR (SM 65)',
+    zweck:
+      'V21 (12.10.2026) zeigte: Bei der Versichertenmeldung weist ELDA eine falsche Prüfziffer mit F7020 ab. ' +
+      'Prüft dasselbe für diese Meldungsart (Paket prüft hier bisher nur die Stellenfolge). Am Builder vorbei gesetzt.',
+    quelle: 'E.22 Feld VSNR; Prüfkatalog Blatt Allgemein (F0040); Anfragebeantwortung 4690/AB XXIII. GP',
+    erwartung: 'nicht übernommen, F0040 – oder übernommen, dann prüft ELDA hier die Prüfziffer nicht',
+    fenster: ['mi-vm', 'mi-nm'],
+    abhaengig: ['S30'],
+    rang: 26,
+    baue: (ctx) =>
+      geaendert(sm(ctx, 'S44', 'schwerarbeitsmeldung'), FELDER_E22, 'VSNR', falscheVsnr(ctx.rolle(PERSON).vsnr)),
   }),
 ];
