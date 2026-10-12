@@ -91,6 +91,20 @@ const SART = {
   V64: 'M3',
   V65: 'M4',
   V66: 'M4',
+  V70: 'M3',
+  V71: 'M4',
+  V72: 'M3',
+  V73: 'M4',
+  V74: 'M3',
+  V75: 'M4',
+  V76: 'M3',
+  V77: 'M4',
+  V78: 'M3',
+  V79: 'M4',
+  V80: 'M3',
+  V81: 'M4',
+  V82: 'M3',
+  V83: 'M4',
 };
 const VSTR = {
   V02: '15',
@@ -119,6 +133,16 @@ const VSTR = {
   V58: '15',
   V34: '15',
   V33: '15',
+  V70: '15',
+  V71: '15',
+  V72: '15',
+  V73: '15',
+  V74: '15',
+  V75: '15',
+  V78: '15',
+  V79: '15',
+  V80: '15',
+  V81: '15',
 };
 const REFU_AUS = { V09: 'V02', V11: 'V05', V19: 'V15', V20: 'V12', V43: 'V40', V58: 'V57' };
 
@@ -448,4 +472,29 @@ test('ES-Fälle: Bestand ES, Version 08, TM, Satzart und Träger; Negativfälle 
   const a = antragVon('S55');
   assert.equal(a.slice(p2 - 1, p2 - 1 + 399), a.slice(p1 - 1, p1 - 1 + 399));
   assert.notEqual(a.slice(p2 - 1, p2 - 1 + 399).trim(), '');
+});
+
+test('N2: V70 meldet 38 h 30 min als 3850, N1-Abmeldungen tragen ihre Codes, N3/N4-BVEN wie geplant', () => {
+  const { FELDER_E29 } = require('../../../dist/felder-e29.js');
+  const wert = (id, name) => {
+    const f = FELDER_E29.find((x) => x.name === name);
+    const [, satz] = saetze(GEBAUT.get(id).ergebnis.inhalt);
+    return feld(satz, f.pos, f.laenge).trim();
+  };
+  assert.equal(wert('V70', 'VWAZ'), '3850');
+  assert.equal(wert('V70', 'ADAT'), '01022025');
+  assert.equal(wert('V70', 'BVAB'), '01032025');
+  for (const [id, code] of [
+    ['V71', '02'],
+    ['V73', '04'],
+    ['V75', '05'],
+    ['V77', '06'],
+    ['V79', '13'],
+  ]) {
+    assert.equal(wert(id, 'AGRD'), code, id);
+  }
+  assert.equal(wert('V71', 'BVEN'), '31032025');
+  assert.match(wert('V81', 'BVEN'), /^0*$/, 'Grundstellung');
+  assert.equal(wert('V83', 'BVEN'), '20032025');
+  assert.equal(wert('V81', 'EBSV'), '20032025');
 });
