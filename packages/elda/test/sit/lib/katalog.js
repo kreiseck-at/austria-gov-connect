@@ -91,7 +91,7 @@ const erlaubtIn = (fall, fenster) => fall.fenster === 'jedes' || fall.fenster.in
 
 /**
  * Was in diesem Fenster laufen soll, in sinnvoller Reihenfolge:
- * offene Fälle, die hier erlaubt sind, dazu ihre Vorläufe, die in dieser Woche
+ * Fälle, die hier erlaubt sind und diese Woche noch nicht liefen, dazu ihre Vorläufe, die in dieser Woche
  * noch fehlen (Wochen-Neustart). Abhängigkeiten zuerst, Sperrgefahr zuletzt.
  * Fehlt ein Vorlauf, der hier nicht laufen darf, ist der Fall blockiert.
  */
@@ -114,7 +114,9 @@ function planFuer(katalog, fenster, status, gelaufenDieseWoche) {
 
   for (const fall of katalog) {
     if (fall.aktion === 'beobachten' || !erlaubtIn(fall, fenster)) continue;
-    if (status.get(fall.id)?.status !== 'offen') continue;
+    // Die SIT setzt die Anlage nach jedem Wochenzyklus zurück: Was in einer
+    // früheren Woche lief (auch „bestanden“), läuft diese Woche wieder.
+    if (gelaufenDieseWoche.has(fall.id)) continue;
     const fehlend = vorlaeufe(fall);
     const nichtHier = fehlend.filter((v) => !erlaubtIn(v, fenster));
     if (nichtHier.length > 0) {
