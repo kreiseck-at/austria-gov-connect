@@ -233,7 +233,7 @@ module.exports = [
       'Prüft dasselbe für diese Meldungsart (Paket prüft hier bisher nur die Stellenfolge). Am Builder vorbei gesetzt.',
     quelle: 'E.12 Feld VSNR; Prüfkatalog Blatt Allgemein (F0040); Anfragebeantwortung 4690/AB XXIII. GP',
     erwartung: 'nicht übernommen, F0040 – oder übernommen, dann prüft ELDA hier die Prüfziffer nicht',
-    fenster: ['mo-nm', 'di-vm', 'di-nm', 'mi-vm', 'mi-nm'],
+    fenster: ['mo-vm', 'mo-nm', 'di-vm', 'di-nm', 'mi-vm', 'mi-nm'],
     abhaengig: ['S30'],
     rang: 26,
     baue: (ctx) =>
