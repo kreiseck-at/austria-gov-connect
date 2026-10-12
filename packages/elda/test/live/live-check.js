@@ -317,7 +317,7 @@ function baueTestbestand() {
     BKNR: '1234567',
     DGNA: 'Musterbetrieb Testdaten',
     INF1: 'LIVECHECK',
-    VSNR: '1234010180',
+    VSNR: '1237010180',
     FANA: 'Mustermann',
     VONA: 'Max',
     ADAT: heute(),

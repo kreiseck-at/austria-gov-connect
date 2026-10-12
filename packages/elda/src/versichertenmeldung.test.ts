@@ -17,7 +17,7 @@ import { FELDER_E29 } from './felder-e29';
 import { SATZTRENNER } from './bestand';
 import type { BestandOptionen } from './bestand';
 
-const BASIS = { REFW: 'REF-1', BKNR: '1234567', DGNA: 'Muster GmbH', VSNR: '1234010180' };
+const BASIS = { REFW: 'REF-1', BKNR: '1234567', DGNA: 'Muster GmbH', VSNR: '1237010180' };
 
 /** Rahmenangaben für einen Bestand, wie in bestand.test.ts — nur hier lokal, um Durchstich-Tests unabhängig zu halten. */
 const OPT: BestandOptionen = {

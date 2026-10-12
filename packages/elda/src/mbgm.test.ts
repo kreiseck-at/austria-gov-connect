@@ -74,7 +74,7 @@ test('das mBGM-Paket geht im MB-Bestand hinaus, die Versichertenmeldung im VR-Be
         REFW: 'A-0001',
         BKNR: '1234567890',
         DGNA: 'Musterbetrieb',
-        VSNR: '1234010180',
+        VSNR: '1237010180',
         FANA: 'Musterfrau',
         VONA: 'Maria',
         ADAT: '01072026',
