@@ -92,6 +92,8 @@ const SART = {
   V65: 'M4',
   V66: 'M4',
   V70: 'M3',
+  V84: 'M3',
+  B13: 'M3',
   V71: 'M4',
   V72: 'M3',
   V73: 'M4',
@@ -146,6 +148,8 @@ const VSTR = {
   V79: '15',
   V80: '15',
   V81: '15',
+  V84: '15',
+  B13: '15',
 };
 const REFU_AUS = { V09: 'V02', V11: 'V05', V19: 'V15', V20: 'V12', V43: 'V40', V58: 'V57' };
 
@@ -500,4 +504,33 @@ test('N2: V70 meldet 38 h 30 min als 3850, N1-Abmeldungen tragen ihre Codes, N3/
   assert.match(wert('V81', 'BVEN'), /^0*$/, 'Grundstellung');
   assert.equal(wert('V83', 'BVEN'), '20032025');
   assert.equal(wert('V81', 'EBSV'), '20032025');
+});
+
+test('Di-Zusatzfälle: jede Verfälschung sitzt genau dort, wo der Fall sie behauptet', () => {
+  const s = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt);
+  // M52: Lehrlinge mit A04, keine A03.
+  const m52 = s('M52');
+  assert.ok(m52.some((z) => z.startsWith('V1') && feld(z, 21, 3) === 'A04'), 'M52: A04');
+  assert.ok(!m52.some((z) => z.startsWith('V1') && feld(z, 21, 3) === 'A03'), 'M52: keine A03');
+  // M60 REFP leer, M61 BZRM 122018, M64 JAGB X, M65 BKNR leer.
+  assert.equal(feld(s('M60')[1], 21, 40).trim(), '');
+  assert.equal(feld(s('M61')[1], 282, 6), '122018');
+  assert.equal(feld(s('M64')[1], 171, 1), 'X');
+  assert.equal(feld(s('M65')[1], 61, 10).trim(), '');
+  // M62: GSUM um genau 1 Cent höher als im unverfälschten Paket (M60 hat dieselben Beträge).
+  assert.equal(Number(feld(s('M62')[1], 289, 11)), Number(feld(s('M60')[1], 289, 11)) + 1);
+  // M63: kein PE, Satzanzahl im Schlusssatz um 1 kleiner.
+  assert.ok(!s('M63').some((z) => z.startsWith('PE')));
+  assert.equal(Number(feld(s('M63').at(-1), 21, 6)), Number(feld(s('M60').at(-1), 21, 6)) - 1);
+  // M66: zwei G1, die zweite VSNR mit Monat 20.
+  const g = s('M66').filter((z) => z.startsWith('G1'));
+  assert.equal(g.length, 2);
+  assert.equal(feld(g[1], 147, 2), '20');
+  // M54: reines Storno R1 mit REFU = erster Referenzwert von M52.
+  const m54 = s('M54');
+  assert.ok(m54.some((z) => z.startsWith('R1')));
+  // V84: Familienname mit den UTF-8-Bytes C5 9F.
+  assert.ok(GEBAUT.get('V84').ergebnis.inhalt.includes(Buffer.from([0xc5, 0x9f])));
+  // B13: dieselbe Datenträgernummer wie V40.
+  assert.equal(feld(s('B13')[0], 25, 6), feld(s('V40')[0], 25, 6));
 });
