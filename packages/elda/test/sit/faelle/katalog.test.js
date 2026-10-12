@@ -228,7 +228,7 @@ test('der Katalog lädt und jeder Fall mit baue ist gebaut worden', () => {
 
 test('jeder Sendefall: drei Sätze, VR, TM, simuliertes Erstellungsdatum, Seriennummer, Träger, Satzart', () => {
   for (const [id, { ergebnis, ctx }] of GEBAUT) {
-    if (!Buffer.isBuffer(ergebnis.inhalt) || /^[MS]/.test(id)) continue;
+    if (!Buffer.isBuffer(ergebnis.inhalt) || /^[MSL]/.test(id)) continue;
     const s = saetze(ergebnis.inhalt, id === 'B03' ? '\n' : '\r\n');
     assert.equal(s.length, 3, `${id}: Vorlauf, Meldung, Schluss`);
     const [vorlauf, meldungssatz] = s;
@@ -533,4 +533,22 @@ test('Di-Zusatzfälle: jede Verfälschung sitzt genau dort, wo der Fall sie beha
   assert.ok(GEBAUT.get('V84').ergebnis.inhalt.includes(Buffer.from([0xc5, 0x9f])));
   // B13: dieselbe Datenträgernummer wie V40.
   assert.equal(feld(s('B13')[0], 25, 6), feld(s('V40')[0], 25, 6));
+});
+
+test('L-Fälle: Bestand LF, TM, Version 28, VSTR 94, Informationssatz und ein Lohnzettel', () => {
+  for (const id of ['L01', 'L02']) {
+    if (!GEBAUT.has(id)) continue;
+    const { ergebnis, ctx } = GEBAUT.get(id);
+    const s = saetze(ergebnis.inhalt);
+    assert.equal(s.length, 4, `${id}: Vorlauf, I1, L1, Schluss`);
+    const [vorlauf, i1, l1] = s;
+    assert.equal(feld(vorlauf, 21, 2), 'TM', `${id}: PROJ`);
+    assert.equal(feld(vorlauf, 23, 2), 'LF', `${id}: BEST`);
+    assert.equal(feld(vorlauf, 31, 8), ttmmjjjj(ctx.zr), `${id}: EDAT`);
+    for (const satz of s) assert.equal(feld(satz, 19, 2), '94', `${id}: VSTR`);
+    assert.equal(feld(i1, 1, 2), 'I1', `${id}: Satzart I1`);
+    assert.equal(feld(l1, 1, 2), 'L1', `${id}: Satzart L1`);
+    assert.equal(feld(i1, 51, 9), id === 'L02' ? '911234566' : '911234565', `${id}: STNRA I1`);
+    assert.equal(feld(l1, 639, 9), id === 'L02' ? '911234566' : '911234565', `${id}: STNRA L1`);
+  }
 });
