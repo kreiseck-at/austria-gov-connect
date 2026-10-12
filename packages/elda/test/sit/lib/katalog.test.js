@@ -103,7 +103,7 @@ test('planFuer: ein Fall, dessen Vorlauf diese Woche fehlt und hier nicht laufen
   assert.match(plan.blockiert[0].grund, /V01.*mo-vm/);
 });
 
-test('planFuer: nach dem Wochen-Neustart läuft ein erledigter Vorlauf erneut mit', () => {
+test('planFuer: nach dem Wochen-Neustart läuft ein in einer früheren Woche bestandener Fall erneut', () => {
   const ereignisse = [
     { art: 'lauf', fall: 'V01', statusCode: '000', protokollnummer: '111' },
     { art: 'urteil', fall: 'V01', status: 'bestanden' },
@@ -114,7 +114,7 @@ test('planFuer: nach dem Wochen-Neustart läuft ein erledigter Vorlauf erneut mi
   assert.deepEqual(
     plan.reihenfolge.map((p) => [p.fall.id, p.grund]),
     [
-      ['V01', 'vorlauf'],
+      ['V01', 'offen'],
       ['V02', 'offen'],
       ['V07', 'offen'],
       ['Z01', 'offen'],
@@ -122,6 +122,9 @@ test('planFuer: nach dem Wochen-Neustart läuft ein erledigter Vorlauf erneut mi
     ],
   );
   assert.equal(status.get('V01').status, 'bestanden');
+  // Diese Woche schon gelaufen: nicht noch einmal im Plan.
+  const spaeter = planFuer(kat, 'mo-vm', statusJeFall(kat, ereignisse), new Set(['V01']));
+  assert.ok(!spaeter.reihenfolge.some((p) => p.fall.id === 'V01'));
 });
 
 test('statusJeFall: offen → gelaufen → rueckmeldung → Urteil', () => {
