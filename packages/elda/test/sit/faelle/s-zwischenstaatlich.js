@@ -435,4 +435,44 @@ module.exports = [
       );
     },
   }),
+  fall({
+    id: 'S73',
+    titel: 'Antrag Telearbeit (EA) mit Beginn nach dem ECHTEN heutigen Datum',
+    zweck:
+      'S72 (Beginn = simuliertes Datum + 14 Tage) kam mit F7665 „ANTRAGSZEITRAUM,VON liegt laenger als 3 Monate ' +
+      'in der Vergangenheit“ zurück, obwohl E1/E2/E5 mit demselben Zeitraum durchgingen. Klärt, ob ELDA F7665 gegen ' +
+      'das echte Datum statt das simulierte prüft (Beginn hier = echter Tag + 14).',
+    quelle: 'E.27; Prüfkatalog Blatt ES (F7665); SIT S72 (13.10.2026)',
+    erwartung: 'übernommen – dann prüft F7665 gegen das echte Datum',
+    fenster: ['di-vm', 'di-nm', 'mi-nm'],
+    abhaengig: ['V01'],
+    rang: 43,
+    baue: (ctx) => {
+      const heute = ctx.jetzt.toISOString().slice(0, 10);
+      const beginn = plusTage(heute, 14);
+      return bestand(
+        ctx,
+        'S73',
+        ctx.elda.antragZwischenstaatlich('EA', {
+          UIDM: randomUUID(),
+          ...person(ctx, 'arbeiter'),
+          dienstgeber: [dienstgeber(ctx, 'A', '14', { DGWS: '04' })],
+          arbeitsorte: [
+            {
+              AOST: 'DE',
+              AOKBS: 'J',
+              AOFNSN: 'Wohnung',
+              AOSTRA: 'Beispielweg 2',
+              AOPLZL: '83395',
+              AOORT: 'Freilassing',
+            },
+          ],
+          AUSMTE: 'J',
+          ANTVON: ctx.ttmmjjjj(beginn),
+          ANTBIS: ctx.ttmmjjjj(plusTage(beginn, 364)),
+        }),
+        { dg: 'A', traeger: '99' },
+      );
+    },
+  }),
 ];
