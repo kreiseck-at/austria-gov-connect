@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   antragZwischenstaatlich,
   stornoAntragZwischenstaatlich,
+  stornoAntragVollstaendig,
   erstelleEsBestand,
   type AntragFelder,
   type EsDienstgeber,
@@ -412,6 +413,23 @@ test('Storno: neue UIDM, UIDU des Antrags, sonst Grundstellung', () => {
   );
   // Kapitel D.68 druckt diese UUID als Beispiel ab.
   stornoAntragZwischenstaatlich('E1', { UIDM: '550e8400-e29b-11d4-a716-446655440000', UIDU: UUID_A });
+});
+
+test('Storno als vollständiger Satz: Antrag wiederholt, MART 02, UIDU des Antrags (SIT S58, 13.10.2026)', () => {
+  const antrag = antragZwischenstaatlich('E1', { ...E1, UIDM: UUID_A });
+  const storno = stornoAntragVollstaendig('E1', { ...E1, UIDM: UUID_B, UIDU: UUID_A });
+  assert.equal(storno.werte.MART, '02');
+  assert.equal(storno.werte.UIDU, UUID_A);
+  assert.equal(storno.werte.UIDM, UUID_B);
+  for (const [feld, wert] of Object.entries(antrag.werte)) {
+    if (feld === 'MART' || feld === 'UIDM' || feld === 'UIDU') continue;
+    assert.equal(storno.werte[feld], wert, feld);
+  }
+  wirft(() => stornoAntragVollstaendig('E1', { ...E1, UIDM: UUID_B, UIDU: '' }), /UIDU ist zu befüllen/);
+  wirft(() => stornoAntragVollstaendig('E1', { ...E1, UIDM: UUID_B, UIDU: 'kein-uuid' }), /F7662/);
+  wirft(() => stornoAntragVollstaendig('E1', { ...E1, UIDM: UUID_A, UIDU: UUID_A }), /F7634/);
+  // Wie beim Antrag: fehlende Pflichtfelder weist schon der Bau ab.
+  wirft(() => stornoAntragVollstaendig('E1', { ...E1, VONA: '', UIDM: UUID_B, UIDU: UUID_A }), /F0070|VONA/);
 });
 
 test('Bestand: zuständiger Träger je Satzart, UIDM eindeutig, nur E.27-Sätze', () => {

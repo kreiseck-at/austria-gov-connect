@@ -12,7 +12,7 @@ const BASIS: AdressmeldungFelder = {
   REFW: 'AV-2026-0001',
   BKNR: '4711815',
   DGNA: 'Bäckerei Kornblum',
-  VSNR: '1234010180',
+  VSNR: '1237010180',
   WKFZ: 'D',
   PLZL: '83395',
   WORT: 'Freilassing',
@@ -59,7 +59,7 @@ test('der Satz steht Feld für Feld an den Positionen der Feldtabelle', () => {
   };
   assert.equal(satz!.length, 416);
   assert.equal(feld('IDTEIL').slice(0, 2), 'AV');
-  assert.equal(feld('VSNR'), '1234010180');
+  assert.equal(feld('VSNR'), '1237010180');
   assert.equal(feld('WKFZ'), 'D  ');
   assert.equal(feld('PLZL'), '83395    ');
   assert.equal(feld('WORT').trimEnd(), 'Freilassing');
@@ -84,9 +84,9 @@ test('F8031: Versicherungsnummer mit falscher Stellenfolge', () => {
   assert.throws(() => adresseVersicherter({ ...BASIS, VSNR: '1234011680' }), fehler('F8031'));
 });
 
-test('F8041: ein inländischer Wohnsitz (A) ist keine Adressmeldung', () => {
-  assert.throws(() => adresseVersicherter({ ...BASIS, WKFZ: 'A' }), fehler('F8041'));
-  assert.throws(() => adresseVersicherter({ ...BASIS, WKFZ: ' A ' }), fehler('F8041'));
+test('F8039: ein inländischer Wohnsitz (A) ist keine Adressmeldung – Code wie auf der SIT (S21)', () => {
+  assert.throws(() => adresseVersicherter({ ...BASIS, WKFZ: 'A' }), fehler('F8039'));
+  assert.throws(() => adresseVersicherter({ ...BASIS, WKFZ: ' A ' }), fehler('F8039'));
   assert.doesNotThrow(() => adresseVersicherter({ ...BASIS, WKFZ: 'CH', PLZL: '9000', WORT: 'St. Gallen' }));
 });
 
@@ -117,4 +117,8 @@ test('F8012: bei der ÖGK-V keine BKNR mit führendem Leerzeichen', () => {
     () => erstelleAdressmeldungBestand([satz], { ...OPT, versicherungstraeger: '19' }),
     fehler('F8012'),
   );
+});
+
+test('F8031: falsche Prüfziffer der VSNR – so weist ELDA es ab (SIT S22, 13.10.2026)', () => {
+  assert.throws(() => adresseVersicherter({ ...BASIS, VSNR: '1238010180' }), fehler('F8031'));
 });

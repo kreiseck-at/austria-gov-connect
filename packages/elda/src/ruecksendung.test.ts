@@ -282,3 +282,11 @@ test('liesClearing: falsches Wurzelelement und kaputtes Base64 werden laut gemel
     EldaProtocolError,
   );
 });
+
+test('artDerRuecksendung: amtssignierte Bescheinigung zu einem ES-Antrag (es_<UIDM>_<Nummer>.pdf)', () => {
+  assert.deepEqual(artDerRuecksendung('es_0F8B6C1E-3D2A-4C5B-9E7F-1A2B3C4D5E6F_900123.pdf'), {
+    art: 'bescheinigung',
+    uidm: '0f8b6c1e-3d2a-4c5b-9e7f-1a2b3c4d5e6f',
+  });
+  assert.deepEqual(artDerRuecksendung('es_kein-uuid_900123.pdf'), { art: 'unbekannt' });
+});

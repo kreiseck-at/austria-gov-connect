@@ -32,6 +32,7 @@ export type RuecksendungsArt =
   | { art: 'mitteilung'; protokollnummer: string }
   | { art: 'protokoll'; protokollnummer: string; beitragskontonummer: string }
   | { art: 'clearing' }
+  | { art: 'bescheinigung'; uidm: string }
   | { art: 'unbekannt' };
 
 /**
@@ -41,6 +42,12 @@ export type RuecksendungsArt =
  * **Sendung** – darüber ordnet {@link findeRuecksendung} sie zu. Ein
  * Clearing-Datensatz trägt dagegen seine eigene Nummer; er wird über den
  * Referenzwert der Meldung zugeordnet (`Dialogfall.referenzwert`).
+ *
+ * Eine **Bescheinigung** (`es_<UIDM>_<Nummer>.pdf`) ist die amtssignierte
+ * PDF-Ausfertigung zu einem Antrag auf zwischenstaatliche Bescheinigung
+ * (Kapitel E.27), etwa das Formular PD A1. Zugeordnet wird sie über die UIDM
+ * des Antrags im Dateinamen; die Nummer dahinter ist die der Rücksendung selbst.
+ * Beobachtet auf der SIT-Plattform (Fälle S50, S51, S54, 13.10.2026).
  */
 export function artDerRuecksendung(dateiName: string): RuecksendungsArt {
   const name = dateiName.trim();
@@ -49,6 +56,8 @@ export function artDerRuecksendung(dateiName: string): RuecksendungsArt {
   m = /^mbd_(\d+)_(\d+)$/.exec(name);
   if (m) return { art: 'protokoll', protokollnummer: m[1]!, beitragskontonummer: m[2]! };
   if (/^cm_\d+\.xml$/.test(name)) return { art: 'clearing' };
+  m = /^es_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})_\d+\.pdf$/i.exec(name);
+  if (m) return { art: 'bescheinigung', uidm: m[1]!.toLowerCase() };
   return { art: 'unbekannt' };
 }
 

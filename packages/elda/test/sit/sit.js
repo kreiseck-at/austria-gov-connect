@@ -357,10 +357,13 @@ function befehlAuswerten() {
   const codes = new Map();
   for (const datei of dateien) {
     const name = datei.replace(/^\d+__/, '');
-    const art = elda.artDerRuecksendung(name).art;
+    const erkannt = elda.artDerRuecksendung(name);
+    const art = erkannt.art;
     const inhalt = fs.readFileSync(path.join(ordner, datei));
     try {
-      if (art === 'mitteilung') {
+      if (art === 'bescheinigung') {
+        console.log(`${name}: Bescheinigung (PDF, ${inhalt.length} Bytes) – ${fallZu.get(erkannt.uidm) ?? erkannt.uidm}`);
+      } else if (art === 'mitteilung') {
         const m = elda.liesMitteilung(inhalt);
         const refs = m.meldungen
           .map((x) => fallZu.get(x.referenznummer) ?? x.referenznummer)

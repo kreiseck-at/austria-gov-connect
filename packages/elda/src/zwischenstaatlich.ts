@@ -245,8 +245,16 @@ export function antragZwischenstaatlich(satzart: E27Satzart, felder: AntragFelde
 }
 
 /**
- * Storno eines Antrags (Meldeart `02`, Matrix E.27.2). Die Satzart ist die des
- * stornierten Antrags — die Stornomatrix ist je Satzart abgedruckt.
+ * Storno eines Antrags in der Form der 43. Ergänzung (Meldeart `02`, Matrix
+ * E.27.2, wirksam ab 01.12.2026): nur MART, UIDM, UIDU und ggf. die
+ * Beitragskontonummern. Die Satzart ist die des stornierten Antrags.
+ *
+ * **Achtung:** Auf der SIT-Plattform, die bis 01.11.2026 nach der 42. Ergänzung
+ * prüft, wurde genau dieser Satz abgewiesen (Fall S53, 13.10.2026: F0010,
+ * F0020, F0030, F0060, F0070); auch mit Konto, Dienstgeber und Person kamen
+ * weitere Pflichtfelder zurück (Fall S57). Angenommen wurde nur der vollständige
+ * Satz (Fall S58) – siehe {@link stornoAntragVollstaendig}. Ob ELDA ab der 43.
+ * Ergänzung den reduzierten Storno annimmt, ist nicht beobachtet.
  */
 export function stornoAntragZwischenstaatlich(satzart: E27Satzart, felder: StornoAntragFelder): RohSatz {
   const { BKNR, ...rest } = felder;
@@ -259,6 +267,34 @@ export function stornoAntragZwischenstaatlich(satzart: E27Satzart, felder: Storn
       'Beitragskontonummern',
     ),
   });
+}
+
+/**
+ * Storno eines Antrags als vollständiger Satz: alle Felder des ursprünglichen
+ * Antrags, dazu Meldeart `02`, eine neue `UIDM` und in `UIDU` die UIDM des
+ * stornierten Antrags. Geprüft wird wie beim Antrag (Pflichtmatrix E.27.1 und
+ * Inhaltsregeln), danach werden MART und UIDU gesetzt.
+ *
+ * So hat ELDA einen Storno auf der SIT-Plattform übernommen (Fall S58,
+ * 13.10.2026, Prüfstand 42. Ergänzung), nachdem der reduzierte Satz
+ * ({@link stornoAntragZwischenstaatlich}) abgewiesen worden war.
+ */
+export function stornoAntragVollstaendig(
+  satzart: E27Satzart,
+  felder: AntragFelder & { UIDU: string },
+): RohSatz {
+  const { UIDU, ...antrag } = felder;
+  if (!UIDU || UIDU.trim() === '') {
+    throw new EldaError('UIDU ist zu befüllen: die UIDM des stornierten Antrags (Kapitel D.69).');
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(UIDU.trim())) {
+    throw new EldaError('F7662: UIDU ist keine UUID in Textform (Kapitel D.69, D.68).');
+  }
+  if (UIDU.trim().toLowerCase() === (antrag.UIDM ?? '').trim().toLowerCase()) {
+    throw new EldaError('F7634: Die UIDM des Stornos muss neu sein, nicht die des stornierten Antrags.');
+  }
+  const satz = antragZwischenstaatlich(satzart, antrag);
+  return Object.freeze({ ...satz, werte: Object.freeze({ ...satz.werte, MART: '02', UIDU }) });
 }
 
 /**

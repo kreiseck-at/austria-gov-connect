@@ -162,7 +162,12 @@ test('index exportiert die Beitragsberechnung nach D.62', () => {
 });
 
 test('index exportiert den Antrag auf zwischenstaatliche Bescheinigung (E.27)', () => {
-  for (const name of ['antragZwischenstaatlich', 'stornoAntragZwischenstaatlich', 'erstelleEsBestand']) {
+  for (const name of [
+    'antragZwischenstaatlich',
+    'stornoAntragZwischenstaatlich',
+    'stornoAntragVollstaendig',
+    'erstelleEsBestand',
+  ]) {
     assert.equal(typeof (elda as Record<string, unknown>)[name], 'function', name);
   }
   assert.equal(elda.BEST_ZWISCHENSTAATLICH, 'ES');

@@ -1,5 +1,6 @@
 import { EldaError } from './errors';
 import { gueltigeVsnrStruktur } from './pruefung-e29';
+import { vsnrPruefzifferGueltig } from './pruefziffer';
 
 type Werte = Readonly<Record<string, string | undefined>>;
 
@@ -20,15 +21,16 @@ function normalisiert(wert: string | undefined): string | undefined {
  * schon `pruefePflichtstufen` abgewiesen.
  *
  * - `F8031`: Die Versicherungsnummer wird auf die Stellenfolge `LLLPTTMMJJ`
- *   geprüft wie bei der Versichertenmeldung (`F7020`); die Prüfziffer nicht,
- *   ihr Verfahren steht in keiner Quelle.
- * - `F8041`: „ungültig oder WKFZ=A". Der Katalog weist `A` damit ohne Rücksicht
- *   auf den Träger ab; daneben steht `F8039` „WKFZ="A" und VSTR = ÖGK". Die
- *   Feldtabelle (Seite 344) sagt nur „Für Meldungen an die ÖGK: Nur
- *   ausländische Hauptwohnsitze, A = Österreich ist nicht zulässig", und
- *   Kapitel E.31.2.1 begründet es: Inländische Adressen kommen aus dem
- *   zentralen Melderegister. Ob ein anderer Träger `A` annimmt, ist damit
- *   widersprüchlich belegt; hier wird `A` wie in `F8041` immer abgewiesen.
+ *   geprüft wie bei der Versichertenmeldung (`F7020`) und auf die Prüfziffer
+ *   (`vsnrPruefzifferGueltig`). Auf der SIT-Plattform (Fall S22, 13.10.2026)
+ *   wies ELDA eine Adressmeldung mit verfälschter Prüfziffer mit `F8031`
+ *   „Ungueltige Angabe im Feld VERSICHERUNGSNUMMER" ab.
+ * - `F8039`: „WKFZ = A und VSTR = ÖGK". Der Katalog führt daneben `F8041`
+ *   „ungültig oder WKFZ=A". Auf der SIT-Plattform (Fall S21, 13.10.2026) kam
+ *   für `A` an die ÖGK `F8039` – `F8041` kam nicht. Der Satz selbst kennt den
+ *   Träger nicht (VSTR steht im Bestand); `A` wird deshalb immer abgewiesen,
+ *   mit dem beobachteten Code. Ob ein anderer Träger `A` annimmt, ist unbelegt
+ *   (die Feldtabelle, Seite 344, schränkt nur die ÖGK ein).
  *
  * Nicht geprüft werden `F8011` (ungültige BKNR) und `F8051` (ungültige
  * Postleitzahl), weil der Katalog nicht sagt, woran er „ungültig" festmacht,
@@ -43,17 +45,23 @@ export function pruefeAdressmeldungInhalt(werte: Werte): void {
     wirf(
       'F8031',
       'Die Versicherungsnummer (VSNR) ist ungültig. Erwartet: zehn Ziffern in der Form LLLPTTMMJJ ' +
-        '(Kapitel D.6). Die Prüfziffer wird hier nicht nachgerechnet; ELDA prüft sie serverseitig.',
+        '(Kapitel D.6).',
+    );
+  }
+  if (vsnr !== undefined && !vsnrPruefzifferGueltig(vsnr)) {
+    wirf(
+      'F8031',
+      'Die Versicherungsnummer (VSNR) ist ungültig: Die Prüfziffer (vierte Stelle) stimmt nicht.',
     );
   }
 
   const wkfz = normalisiert(werte.WKFZ);
   if (wkfz === 'A') {
     wirf(
-      'F8041',
+      'F8039',
       'Das KFZ-Kennzeichen des Wohnorts (WKFZ) darf nicht A sein: Die Adressmeldung dient nur der ' +
         'Übermittlung eines ausländischen Hauptwohnsitzes; inländische Adressen kommen aus dem ' +
-        'zentralen Melderegister (Kapitel E.31, E.31.2.1). Bei der ÖGK lautet der Code F8039.',
+        'zentralen Melderegister (Kapitel E.31, E.31.2.1).',
     );
   }
 }
