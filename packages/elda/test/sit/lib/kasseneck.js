@@ -46,13 +46,33 @@ function kasseneckVr() {
   };
 }
 
+// --- Lohnzettel L16 über kasseneck (L12) -----------------------------------------
+//
+// Der L16-Bau von kasseneck liegt (Stand 13.10.2026) auf dem Branch
+// `feature/l16-elda`. KASSENECK_L16_PFAD zeigt auf einen nur gelesenen Checkout
+// dieses Branches mit installiertem `functions-lohn` (dort hängt
+// `@kreiseck/elda-l16`). Genutzt wird nur das reine Modul `l16-elda-core.js`.
+
+const l16Verfuegbar = () => Boolean(process.env.KASSENECK_L16_PFAD);
+
+function kasseneckL16() {
+  const wurzel = process.env.KASSENECK_L16_PFAD;
+  if (!wurzel) {
+    throw new Error('KASSENECK_L16_PFAD fehlt – der Fall L12 baut den L16 mit kasseneck.');
+  }
+  return require(path.join(wurzel, 'functions-lohn', 'l16-elda-core'));
+}
+
 /** Grund, warum ein Fall ohne Brücke nicht bauen kann – oder null. */
 function brueckeFehlt(fall) {
   if (fall.braucht === 'kasseneck' && !verfuegbar()) return 'KASSENECK_PFAD (kasseneck-Checkout mit functions-lohn)';
   if (fall.braucht === 'kasseneck-vr' && !vrVerfuegbar()) {
     return 'KASSENECK_VR_PFAD (Checkout von feature/elda-versichertenmeldung mit functions-lohn)';
   }
+  if (fall.braucht === 'kasseneck-l16' && !l16Verfuegbar()) {
+    return 'KASSENECK_L16_PFAD (Checkout von feature/l16-elda mit functions-lohn)';
+  }
   return null;
 }
 
-module.exports = { kasseneck, verfuegbar, kasseneckVr, vrVerfuegbar, brueckeFehlt };
+module.exports = { kasseneck, verfuegbar, kasseneckVr, vrVerfuegbar, kasseneckL16, l16Verfuegbar, brueckeFehlt };
