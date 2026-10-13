@@ -116,10 +116,10 @@ unterschiedlich weit belegt:
 | ----------- | ------- | ------------------- |
 | Versichertenmeldung reduziert (E.29) | `VR` | SIT-Plattform, Oktober 2026 |
 | Monatliche Beitragsgrundlagenmeldung (E.32) | `MB` | Produktion seit 05.08.2026, SIT-Plattform |
-| VSNR-Anforderung (E.30), Adresse Versicherter (E.31) | `VS`, `AV` | nein — SIT-Fälle angelegt |
-| Familienhospizkarenz/Pflegekarenz (E.12), Schwerarbeitsmeldung (E.22) | `FH`, `SM` | nein — SIT-Fälle angelegt |
-| Antrag auf zwischenstaatliche Bescheinigung (E.27) | `ES` | nein — SIT-Fälle angelegt; ob die SIT `ES` verarbeitet, ist unbelegt |
-| Lohnzettel Finanz (E.13/E.14) | `LF` | nein — die SIT verarbeitet `LF` nicht, nur der Kundentest |
+| VSNR-Anforderung (E.30), Adresse Versicherter (E.31) | `VS`, `AV` | SIT-Plattform, Oktober 2026 |
+| Familienhospizkarenz/Pflegekarenz (E.12), Schwerarbeitsmeldung (E.22) | `FH`, `SM` | Familienhospiz: SIT-Plattform, Oktober 2026; Schwerarbeit: SIT-Fälle angelegt |
+| Antrag auf zwischenstaatliche Bescheinigung (E.27) | `ES` | SIT-Plattform, Oktober 2026 (E1–E5, EA, Storno) |
+| Lohnzettel Finanz (E.13/E.14) | `LF` | SIT-Plattform, Oktober 2026 |
 
 Was nicht gelaufen ist, stützt sich auf die Feldtabellen, Pflichtmatrizen und
 Prüfkataloge — und, wo das Dokument welche abdruckt, auf dessen Beispiele. Bei
@@ -521,26 +521,33 @@ muss für die Produktion nicht ebenso gelten:
   (`BW1916`). Eine Betriebliche Vorsorge legt die amtswegige mBGM nicht an.
 - Eine **Abmeldung mit BV-Ende**, zu der keine BV-Zeit gespeichert ist, kommt
   als `VW1942` (dringend, Status `IA` in Arbeit) zurück; die Code-Liste der ÖGK
-  nennt als Handlung „Richtigstellung der Abmeldung". Im einen Fall lag das
-  BV-Ende **vor** dem Anmeldedatum — ein Fehler der Testdaten. Im anderen
-  endete die Beschäftigung mit dem ersten Monat, und für diesen Monat war keine
-  mBGM gesendet (die amtswegige mBGM des Trägers umfasst nur die SV). Welcher
-  der beiden Umstände die BV-Zeit verhindert hat, ist offen.
+  nennt als Handlung „Richtigstellung der Abmeldung". Die Ursache ist seit dem
+  13.10.2026 geklärt: Alle so beantworteten Abmeldungen betrafen Personen, die
+  **ohne `BVAB`** angemeldet worden waren (siehe den Punkt zu `BVAB` unten).
 - Eine **mBGM für Monate vor der Anmeldung** wird übernommen und verbucht; der
   BV-Teil aber nicht: `BW1871` (dringend) „keine entsprechende
   Versicherungszeit BV vorhanden. Die Grundlage … wurde nicht gespeichert."
   Andere Codes zur fehlenden Versicherungszeit kamen nicht.
-- **`BVAB` in der Anmeldung — offen.** Eine frühere Fassung dieses Abschnitts
-  behauptete, `BVAB` gehöre nur in die Anmeldung zur BV ohne SV-Zeit. Das ist
-  so nicht belegt: E.29.2 (43. Ergänzung, Seite 317) verlangt `BVAB` **mit**
-  `ADAT` in Grundstellung nur für diesen Sonderfall; die Beispiele derselben
-  Kapitel (Seiten 321–322) zeigen aber gewöhnliche Anmeldungen „als
-  vollversicherter Arbeiter (mit BV ab 01.02.2019)" mit `BVAB` = Eintritt plus
-  ein Monat, und die Pflichtmatrix (E.29.1, Seite 314) führt `BVAB` bei der
-  Anmeldung als `Z1`. Ob die fehlende BV-Zeit (`BW1871`, `VW1942`) an einem
-  fehlenden `BVAB` lag, ist damit wieder offen; die SIT-Fälle V40–V42
-  (Anmeldung mit `BVAB` = Eintritt + 1 Monat, ohne `BVAB`, mit `BVAB` =
-  Eintrittstag) klären es.
+- **Die BV-Zeit entsteht über `BVAB` in der Anmeldung** (13.10.2026). Eine
+  frühere Fassung dieses Abschnitts behauptete, `BVAB` gehöre nur in die
+  Anmeldung zur BV ohne SV-Zeit; das war falsch. Die Beispiele in E.29.2
+  (43. Ergänzung, Seiten 321–322) zeigen gewöhnliche Anmeldungen „mit BV ab"
+  = Eintritt plus ein Monat, die Pflichtmatrix (E.29.1, Seite 314) führt
+  `BVAB` bei der Anmeldung als `Z1`. Auf der SIT:
+  - Jede Abmeldung mit BV-Ende einer Person, die **ohne `BVAB`** angemeldet
+    war, kam als `VW1942` („keine Zeit der Betrieblichen Vorsorge
+    gespeichert").
+  - Eine mBGM mit BV-Basis für so eine Person kam als `BW1871` („keine
+    entsprechende Versicherungszeit BV … nicht gespeichert").
+  - Mit **`BVAB` = Eintrittstag** kam zur mBGM des Eintrittsmonats ohne BV
+    `BW1874` „Für die Beschäftigung von 07.02.2025 - laufend wurde im
+    Beitragszeitraum 02/2025 für den Bereich BV keine entsprechende
+    Beitragsgrundlage gemeldet" — die ÖGK erwartet BV dann ab dem ersten Tag.
+  - Mit **`BVAB` = Eintritt + 1 Monat** und ohne `BVAB` kam zum Eintrittsmonat
+    kein Clearing; die Antwort zum Folgemonat mit BV steht noch aus.
+
+  Folge: In der Anmeldung `BVAB` mit dem Beginn der BV-Pflicht mitschicken
+  (siehe „Was geprüft wird — und was nicht").
 - **Prüfziffer der Versicherungsnummer:** Eine Anmeldung mit verfälschter
   vierter Stelle (12.10.2026) kam als `nicht_uebernommen` zurück, `F7020`
   „Ungueltige Angabe im Feld VERSICHERUNGSNUMMER". ELDA rechnet die Prüfziffer
@@ -609,7 +616,24 @@ muss für die Produktion nicht ebenso gelten:
 - **Formal nicht geprüft** wurden dort: der Projektcode (`DM` statt `TM` wurde
   angenommen), das Erstellungsdatum gegen das simulierte Datum, der
   Content-Type und Duplikate (siehe „Status-Codes") — im zweiten Testzyklus am
-  12.10.2026 unverändert.
+  12.10.2026 unverändert. **Verarbeitet wurden die Anmeldungen mit `DM` bzw.
+  echtem Erstellungsdatum aber nicht:** Die Abmeldung derselben Person kam
+  danach mit `VW1960` „Die Abmeldung wurde nicht verarbeitet, da keine
+  Anmeldung vorliegt" zurück (13.10.2026). Ein falscher Projektcode oder ein
+  Erstellungsdatum außerhalb des simulierten Tages verschwindet auf der SIT
+  also lautlos.
+- **Lohnzettel Finanz (`LF`) wird auf der SIT verarbeitet** (13.10.2026), anders
+  als die ÖGK-Unterlage „LSWH-Test – Regelbetrieb" (10/2023) es aufzählt —
+  siehe „Lohnzettel Finanz (L16)".
+- **Antrag auf zwischenstaatliche Bescheinigung:** E1, E2, E3, E4, E5 und EA
+  (Telearbeit, Träger `99`) werden verarbeitet. `F7665` „ANTRAGSZEITRAUM,VON
+  liegt laenger als 3 Monate in der Vergangenheit" (EA) misst ELDA am **echten**
+  Datum, nicht am simulierten: Ein EA mit Beginn im simulierten 2025 wurde
+  abgewiesen, derselbe mit Beginn nach dem echten Tag übernommen. Der Storno
+  über `stornoAntragVollstaendig` wurde auch bei E5 übernommen.
+- **Weitere Clearing-Codes:** `BW1922` (für eine Person fehlt im Monat die
+  mBGM mit Verrechnung — die Mahnung je Versichertem, neben `BW1930` je
+  Beitragskonto) und `BW1874` (siehe `BVAB`).
 
 ## Fehlerbehandlung
 
@@ -1107,6 +1131,18 @@ betrieblichen Vorsorge (E.29.2, 43. Ergänzung, Seiten 324–325) — ein leeres
 `BVAB` ist dort also keine „keine Änderung", sondern eine aktive Löschung. Wer
 eine Anmeldung richtigstellt, schickt den Beginn der BV deshalb immer mit.
 
+**Ohne `BVAB` entsteht keine BV-Zeit.** Auf der SIT bekam jede Abmeldung mit
+BV-Ende einer Person, die ohne `BVAB` angemeldet war, `VW1942`, und eine mBGM
+mit BV-Basis für sie `BW1871` (siehe „Was die SIT-Plattform gezeigt hat"). Die
+Anmeldung (`M3`) trägt deshalb `BVAB` = Beginn der Beitragspflicht nach § 6
+Abs. 1 BMSVG: nach dem beitragsfreien ersten Monat, also Eintritt plus ein
+Monat; bei einem neuen Arbeitsverhältnis zum selben Arbeitgeber binnen zwölf
+Monaten der Eintrittstag. `BVAB` = Eintrittstag ohne diesen Grund führte zu
+`BW1874`, weil die ÖGK dann schon für den ersten Monat eine BV-Grundlage
+erwartet. Der Builder erzwingt `BVAB` nicht — die Pflichtmatrix führt es als
+`Z1`, und die Fälle ohne BV (etwa ein Arbeitsverhältnis bis zu einem Monat)
+gibt es.
+
 ### Prüfung der mBGM
 
 `erstelleMbgmPaket` wirft bei allem, was sich beim Bau entscheiden lässt
@@ -1438,9 +1474,9 @@ Geprüft wird beim Bau:
   EA, Kapitel D.4; `05` nur bei E1, Fußnote 69) und keine UIDM kommt doppelt
   vor (F7634).
 
-Nicht geprüft werden Regeln mit Status `W`, die Prüfziffer der
-Versicherungsnummer, F7665 (EA-Antragsbeginn höchstens drei Monate zurück —
-hängt vom Prüftag ab) und die Zeilen des Prüfkatalogs zu Feldern, die die
+Nicht geprüft werden Regeln mit Status `W`, F7665 (EA-Antragsbeginn höchstens
+drei Monate zurück — hängt vom Prüftag ab; ELDA misst ihn am echten Datum, siehe
+„Was die SIT-Plattform gezeigt hat") und die Zeilen des Prüfkatalogs zu Feldern, die die
 Version 08 nicht mehr hat (DGP, BKFZ, AGKFZ, BFRIST, BBEGIN, BZEIT, ANAT,
 BSTAAT, STAB, STSTAAT, STEND, BART). Ein abgedrucktes Beispiel für E.27 gibt es
 weder in der Organisationsbeschreibung noch auf den Seiten von ÖGK und ELDA;
@@ -1611,9 +1647,28 @@ rechnen mit dem Übermittlungsdatum `DTUE`.
 
 Für Version 29 gibt es noch keinen Katalog — `pruefeLohnzettel` lehnt sie ab.
 
-**Getestet** ist der Lohnzettel bisher nur hier: Die SIT-Plattform verarbeitet
-den Bestand `LF` nicht (ÖGK, „LSWH-Test – Regelbetrieb", 10/2023), testen
-lässt er sich nur im Kundentest. Gesendet wurde noch keiner.
+**Auf der SIT-Plattform** (13.10.2026; anders als die ÖGK-Unterlage „LSWH-Test
+– Regelbetrieb", 10/2023, aufzählt, verarbeitet sie den Bestand `LF`):
+
+- Ein gültiger Lohnzettel 2025 wurde übernommen, mit der Warnung `1706`
+  „Uebermittlung ausserhalb des Aufrollungszeitraumes nicht zulaessig". ELDA
+  misst sie am echten Datum (Jahr 2025, Eingang nach dem 30.04.2026); mit
+  Korrekturindikation `A` blieb sie aus — genau die Bedingung des Katalogs.
+- Eine Steuernummer mit falscher Prüfziffer → `nicht_uebernommen`, `9991`. Die
+  Ersatz-Steuernummer der Tests (prüfziffernrichtig, aber keinem Arbeitgeber
+  zugeordnet) wurde angenommen — geprüft wird nur die Prüfziffer.
+- Eine viel zu hohe Lohnsteuer → Warnung `7003` „Lohnsteuer zur Bem.
+  Grundlage zu hoch (Normverhaeltnis)": ELDA rechnet das Rechenblatt auch für
+  2025.
+- Berichtigung (`KORR` `K`), Storno (`KORR` `S`) und der Storno in der älteren
+  Form aus D.31/D.32 (KZ 210 = 0 mit `K`) wurden übernommen, ebenso ein
+  Lohnzettel mit Kinderblock und Familienbonus Plus.
+- **Kein Duplikatschutz:** Derselbe Lohnzettel mit gleicher Referenznummer und
+  ohne Korrekturindikation ein zweites Mal gesendet wurde übernommen. Den
+  Doppelversand muss der Absender verhindern.
+- Zwei Lohnzettel unter einem Informationssatz → „LF 2/2", Codes je Zeile.
+- **Die Codes kommen ohne „F"**: `1706`, `9991`, `7003`. `l16Regel(code)` sucht
+  die Katalogzeile auch zu diesem Rohcode (`l16Regel('1706')` = Zeile `F1706`).
 
 ### Zeitstempel im Bestand: Wiener Ortszeit
 
@@ -1708,8 +1763,9 @@ Familienhospizkarenz/Pflegekarenz (Kapitel E.12), die Schwerarbeitsmeldung
 der Lohnzettel Finanz (Kapitel E.13/E.14) und das Lesen der Rücksendungen (Mitteilung, Clearing-Datensatz 2.0). Noch offen — ohne Beleg
 wird nichts davon geraten:
 
-- **Lohnzettel Finanz:** nach DM-Org und Prüfkatalog gebaut, gegen ELDA noch
-  nie gesendet — die SIT-Plattform verarbeitet `LF` nicht, nur der Kundentest.
+- **Lohnzettel Finanz:** nach DM-Org und Prüfkatalog gebaut und auf der
+  SIT-Plattform gesendet (siehe „Lohnzettel Finanz (L16)"), in Produktion noch
+  nie.
   Offen: was gilt, wenn ein Lohnzettel 2026 nach dem 01.03.2027 berichtigt wird
   (Version 29 dann zwingend, fachlich aber erst ab 2027 gültig — das Paket lässt
   dafür Version 28 zu); ob ein eintägiger Lohnzahlungszeitraum zulässig ist (D.32

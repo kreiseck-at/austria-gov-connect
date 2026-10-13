@@ -406,5 +406,19 @@ export const L16_PRUEFKATALOG: ReadonlyMap<string, L16Regel> = new Map(
   ]),
 );
 
+/**
+ * Die Katalogzeile zu einem Fehlercode, wie ihn die Mitteilung zum Bestand `LF`
+ * liefert. Dort fehlt das „F" des Katalogs: Auf der SIT-Plattform kamen am
+ * 13.10.2026 `1706`, `9991` und `7003` (Katalog: `F1706`, `F9991`, `F7003`).
+ * Ein Code, der schon so im Katalog steht (`F1706`, `KA20`), wird unverändert
+ * gesucht.
+ *
+ * @returns die Regel, oder `undefined`, wenn der Katalog den Code nicht kennt.
+ */
+export function l16Regel(code: string): L16Regel | undefined {
+  const c = code.trim();
+  return L16_PRUEFKATALOG.get(c) ?? (/^\d{4}$/.test(c) ? L16_PRUEFKATALOG.get(`F${c}`) : undefined);
+}
+
 /** Quelle des Katalogs, für Doku und Befunde. */
 export const L16_PRUEFKATALOG_QUELLE = 'Prüfkatalog L16 ab 1.1.2026, Version 09 vom 17.02.2026 (elda.at)';
