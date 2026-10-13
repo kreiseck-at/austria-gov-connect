@@ -167,6 +167,7 @@ export { type Stufe } from './pflichtmatrix';
 export {
   antragZwischenstaatlich,
   stornoAntragZwischenstaatlich,
+  stornoAntragVollstaendig,
   erstelleEsBestand,
   type AntragFelder,
   type StornoAntragFelder,

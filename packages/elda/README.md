@@ -421,6 +421,7 @@ Rücksendungen ein, eine je Sendung, nicht je Meldung:
 | `mitteilung_<Protokollnummer>.xml` | `mitteilung` | ob ELDA die Meldungen **formal** übernommen hat — je Bestand und je Meldung (Referenznummer, Zeile) |
 | `mbd_<Protokollnummer>_<Beitragskontonummer>` | `protokoll` | dasselbe als Klartext-Protokoll (ISO-8859-15) mit Beträgen, Beschäftigtengruppe, Verrechnungsbasis; bei der Versichertenmeldung zusätzlich eine Bestätigung für Dienstgeber und Dienstnehmer |
 | `cm_<Nummer>.xml` | `clearing` | **erst nach der fachlichen Verarbeitung** beim Träger, wenn etwas zu klären ist: Clearing-Datensatz 2.0 |
+| `es_<UIDM>_<Nummer>.pdf` | `bescheinigung` | zu einem Antrag auf zwischenstaatliche Bescheinigung (Kapitel E.27): die amtssignierte PDF-Ausfertigung, etwa PD A1; zugeordnet über die UIDM des Antrags (`art.uidm`). Auf der SIT kam sie zu übernommenen Anträgen am nächsten Testtag (13.10.2026) |
 
 ```ts
 import { artDerRuecksendung, liesMitteilung, liesClearing, MELDUNG_STATUS } from '@kreiseck/elda';
@@ -574,6 +575,37 @@ muss für die Produktion nicht ebenso gelten:
   `pruefeMbgmPaket` meldet solche Abweichungen seither als Warnung `DM-D.62`.
 - Eine **verspätete mBGM** (nach dem 15. des Folgemonats) wurde angenommen und
   verarbeitet; einen eigenen Clearing-Code für die Verspätung gab es nicht.
+- **Formale Abweisung einer mBGM** (13.10.2026): Bestätigt sind `F9000`
+  (Referenzwert leer), `F9040` („Beitragszeitraum darf nicht vor dem 01.01.2019
+  liegen"), `F9051` (Gesamtsumme), `F9031` (JAGB) und `F9010` (Beitragskonto
+  leer) — jeweils das ganze Paket `nicht_uebernommen`, gezählt werden dabei die
+  Sätze des Pakets (z. B. „MB 0/8"). Vertauschte Satzfolge (T1 vor G1, Satznummern
+  stimmig): `F9070` je betroffener Zeile, dazu `F9060` (Anzahl der mBGM) und
+  `F9071` „Fehlerhafte Abfolge an dieser Position" — ein Code, den das Blatt
+  „mBGM Paket" des Prüfkatalogs nicht führt; `pruefeAbfolge` meldet dieselben
+  Stellen als `F9070`. Fehlt der Ende-Satz `PE`, weist ELDA schon den Umschlag
+  ab (`403`, `E19` „Die laufende Satznummer ist falsch"), bevor eine
+  Paketprüfung greift.
+- **Die Versicherungsnummer in der mBGM prüft ELDA formal nicht:** Ein Paket
+  mit einer zweiten mBGM, deren VSNR den Monat 20 trägt, wurde als Ganzes
+  übernommen (13.10.2026); eine mBGM mit falscher Prüfziffer ebenso (12.10.,
+  im Clearing dann `BW1837`, nicht verbucht). `pruefeMbgmPaket` bleibt bei
+  seiner Strukturprüfung.
+- **Sonderzeichen im Namen:** `ş` als UTF-8-Bytes kam im Vornamen als Fehler
+  `F7038`, im Familiennamen als Fehler `F7036` zurück (SIT auf dem Stand der
+  42. Ergänzung; laut 43. sind beide nur noch Warnungen). `é` im Vornamen wurde
+  formal übernommen, obwohl das Zeichensatz-Dokument es für Personennamen nicht
+  vorsieht — das Paket bleibt beim Dokument.
+- **Datenträgernummer:** Eine zweite Datei mit derselben Datenträgernummer wurde
+  angenommen (13.10.2026); ELDA prüft sie auf der SIT nicht.
+- **Adressmeldung:** Eine verfälschte Prüfziffer kam als `F8031`, `WKFZ` = `A`
+  an die ÖGK als `F8039` (nicht `F8041`) zurück, dazu `F8051`, weil die
+  Postleitzahl nicht zu `A` passte (13.10.2026).
+- **Storno eines Antrags auf zwischenstaatliche Bescheinigung:** Der reduzierte
+  Satz der 43. Ergänzung (nur `MART`, `UIDM`, `UIDU`) wurde abgewiesen (`F0010`,
+  `F0020`, `F0030`, `F0060`, `F0070`), mit Konto und Person ebenso (`F0082`,
+  `F0090`, `F7500`–`F7502`); übernommen wurde der vollständige Antrag mit
+  `MART 02` und `UIDU` (13.10.2026) — siehe `stornoAntragVollstaendig`.
 - **Formal nicht geprüft** wurden dort: der Projektcode (`DM` statt `TM` wurde
   angenommen), das Erstellungsdatum gegen das simulierte Datum, der
   Content-Type und Duplikate (siehe „Status-Codes") — im zweiten Testzyklus am
@@ -1208,8 +1240,8 @@ VSNR-Anforderung die Adresse schon trägt.
 | Code | Prüft |
 | ---- | ----- |
 | `F8000`–`F8070` (leer) | Pflichtfelder laut E.31.1 |
-| `F8031` | Versicherungsnummer in der Form `LLLPTTMMJJ` (die Prüfziffer nicht) |
-| `F8041` | `WKFZ` ist nicht `A` |
+| `F8031` | Versicherungsnummer in der Form `LLLPTTMMJJ` und ihre Prüfziffer (SIT 13.10.2026) |
+| `F8039` | `WKFZ` ist nicht `A` (so meldet ELDA es bei der ÖGK; `F8041` kam nicht) |
 | `F8012` | wie `F6512` |
 
 `STAATEN` und `STAATSANGEHOERIGKEITEN` geben die Staatencode-Tabelle der ÖGK
@@ -1373,9 +1405,18 @@ selbständige Tätigkeiten (`selbstaendig`, nur E4) und bis zu 32 Arbeitsorte
 (`arbeitsorte`, E2–E4 und EA). Im Satz heißen ihre Felder `DGNA_1`…`DGNA_5`
 usw. — dieselbe Zählung wie in den Fehlercodes des Prüfkatalogs (`F7500_1`).
 Statt eines Referenzwerts trägt der Antrag eine UUID (`UIDM`, Kapitel D.68);
-das Storno (`stornoAntragZwischenstaatlich`, Meldeart `02`) verweist über
-`UIDU` auf den Antrag und lässt alles andere in Grundstellung (E.27.2, neu in
-der 43. Ergänzung).
+ein Storno (Meldeart `02`) verweist über `UIDU` auf den Antrag.
+
+**Storno: den vollständigen Satz schicken.** Die 43. Ergänzung (wirksam ab
+01.12.2026) druckt für das Storno eine eigene Matrix ab, nach der außer `MART`,
+`UIDM`, `UIDU` und ggf. den Beitragskontonummern alles in Grundstellung bleibt
+(`stornoAntragZwischenstaatlich`). Die SIT-Plattform, die nach der 42. Ergänzung
+prüft, hat genau diesen Satz am 13.10.2026 abgewiesen; übernommen hat sie den
+vollständigen Antrag mit `MART 02` und `UIDU`. Dafür gibt es
+`stornoAntragVollstaendig(satzart, { ...antragsfelder, UIDM: neu, UIDU: alt })`
+— geprüft wie der Antrag selbst. Ob ELDA ab der 43. Ergänzung den reduzierten
+Storno annimmt, ist nicht beobachtet; bis dahin ist der vollständige Satz der
+belegte Weg.
 
 Geprüft wird beim Bau:
 
@@ -1699,8 +1740,8 @@ wird nichts davon geraten:
   die VSNR-Anforderung ist auf der SIT übernommen worden (12.10.2026), beim
   Geschlecht gilt `F6562` (siehe „Was die SIT-Plattform gezeigt hat"). Offen
   ist: ob `WKFZ = A` an einen anderen Träger als
-  die ÖGK zulässig ist (`F8041` sagt nein, die Feldtabelle schränkt nur die ÖGK
-  ein); woran ELDA eine „ungültige" Beitragskontonummer (`F6511`, `F8011`) und
+  die ÖGK zulässig ist (an die ÖGK kam `F8039`, die Feldtabelle schränkt nur
+  die ÖGK ein); woran ELDA eine „ungültige" Beitragskontonummer (`F6511`, `F8011`) und
   Postleitzahl (`F6583`, `F8051`) erkennt; welche Regel hinter der Groß- und
   Kleinschreibung von Ort und Straße steht (`F6585`, `F6587`, `F8061`,
   `F8071`); und wie der Clearingfall mit der vergebenen VSNR aussieht.
@@ -1714,7 +1755,8 @@ wird nichts davon geraten:
   mit. Eine mBGM mit verfälschter Prüfziffer wurde dagegen formal übernommen;
   das Clearing verbuchte sie nicht (`BW1837`, für diesen Zeitraum kein
   Versicherter gemeldet). Die mBGM prüft deshalb weiter nur die Stellenfolge.
-  Offen: Adressmeldung (`F8031`) und Schwerarbeit — Proben `S22`/`S44`.
+  Die Adressmeldung wies eine falsche Prüfziffer mit `F8031` ab (13.10.2026);
+  das Paket prüft sie dort seither. Offen: Schwerarbeit — Probe `S44`.
 - **Beitragssätze:** Die Rundung je Position wird nachgerechnet (`DM-D.62`),
   der Prozentsatz selbst nicht — falsche Sätze (`BW1850`) erkennt erst der
   Träger. Wie er auf Abweichungen über die Rundung hinaus reagiert, ist nicht
