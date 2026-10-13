@@ -103,6 +103,35 @@ function bestand(ctx, id, aendere = (u) => u) {
 }
 
 
+/** Ein Lohnzettel für eine N1-Person (Konto A/15, März 2025, ein Monat 3.000 €, Werte wie L01 für einen Monat). */
+function n1Lohnzettel(ctx, id, rolle, sozs) {
+  const p = ctx.rolle(rolle);
+  const jahr = Number(ctx.zrVon('V70').slice(0, 4));
+  return {
+    felder: {
+      REFN: ctx.referenzwert(id).slice(0, 30),
+      ARTL: '01',
+      BELZ: '0103',
+      ENLZ: '3103',
+      SOZS: sozs,
+      AVLN: p.vsnr.slice(0, 4),
+      AGBD: p.vsnr.slice(4),
+      ANAM: `${p.familienname} ${p.vorname}`,
+      AADR: 'Teststraße 1',
+      ALKZ: 'A',
+      APLZ: '5020',
+      AORT: 'Salzburg',
+      GESM: p.geschlecht === 'm' ? 'J' : undefined,
+      GESW: p.geschlecht === 'w' ? 'J' : undefined,
+      VOLL: 'J',
+      GEBD: p.geburtsdatum,
+    },
+    // Ein Monat: SV 18,07 % von 3.000 € = 542,10 €; KZ 245 = 3.000 − 542,10; Lohnsteuer wie L01 je Monat.
+    betraege: { B210: 300_000, BIEB: 54_210, B230: 54_210, B245: 245_790, BIEL: 29_155, B260: 29_155 },
+    _jahr: jahr,
+  };
+}
+
 /** Ändert Felder bzw. Beträge des einen Lohnzettels der Übermittlung. */
 const mit = (felder = {}, betraege = null, mehr = {}) => (u) => ({
   ...u,
@@ -267,5 +296,61 @@ module.exports = [
     rang: 46,
     baue: (ctx) =>
       bestand(ctx, 'L09', mit({ KORR: 'K', REFN: refnVon(ctx, 'L06'), BFABO: undefined, KFABO: undefined }, { B210: 0 })),
+  }),
+  fall({
+    id: 'L10',
+    titel: 'Derselbe Lohnzettel wie L04 noch einmal (gleiche Referenznummer, ohne Korrekturindikation)',
+    zweck:
+      'Was macht ELDA mit einem doppelt gesendeten Lohnzettel? Der Katalog verlangt eine je Arbeitgeber, Jahr und ' +
+      'Dienstverhältnis eindeutige Referenznummer (Feld 10); eine Berichtigung bräuchte „K". L04 wurde weder ' +
+      'berichtigt noch storniert – L10 ist sein Duplikat in einem neuen Bestand.',
+    quelle: 'Prüfkatalog L16 Feld 10 (Referenznummer); E.14 Feld 104 KORR',
+    erwartung: 'Abweisung bzw. Hinweis wegen doppelter Referenznummer – oder übernommen (dann erkennt ELDA es nicht)',
+    fenster: ['di-nm', 'mi-vm', 'mi-nm'],
+    abhaengig: ['V70', 'V71', 'L04'],
+    rang: 47,
+    baue: (ctx) =>
+      bestand(
+        ctx,
+        'L10',
+        mit(
+          { REFN: refnVon(ctx, 'L04') },
+          { B210: 600_000, BIEB: 108_420, B230: 108_420, B245: 491_580, BIEL: 583_100, B260: 583_100 },
+        ),
+      ),
+  }),
+  fall({
+    id: 'L11',
+    titel: 'Ein Bestand mit zwei Lohnzetteln (zwei L1 unter einem I1, GESA 2)',
+    zweck:
+      'So würde kasseneck die Lohnzettel eines Betriebs senden: mehrere Dienstnehmer in einer Datei. Zwei N1-Personen ' +
+      'auf A/15 (01.03.–31.03.2025, Abmeldungen V73/V75). Kommt „LF 2/2"? Codes je Zeile?',
+    quelle: 'E.13 (GESA), E.14; B.3 (LF)',
+    erwartung: 'übernommen, LF 2/2 (Warnung 1706 je Lohnzettel möglich)',
+    fenster: ['di-nm', 'mi-vm', 'mi-nm'],
+    abhaengig: ['V72', 'V73', 'V74', 'V75'],
+    rang: 48,
+    baue: (ctx) => {
+      const a = n1Lohnzettel(ctx, 'L11-1', 'arbeiterlehrling', '2');
+      const b = n1Lohnzettel(ctx, 'L11-2', 'angestelltenlehrling', '3');
+      const basis = uebermittlung(ctx, 'L11');
+      const u = {
+        ...basis,
+        arbeitgeber: { ...basis.arbeitgeber, GESA: 2 },
+        lohnzettel: [a, b].map(({ _jahr, ...lz }) => lz),
+      };
+      const opt = ctx.bestandOptionen({ dg: 'A', traeger: '15' });
+      const { versicherungstraeger: _vstr, ...lfOpt } = opt;
+      const saetze = ctx.elda.lohnzettelSaetze(u, lfOpt.erstellt);
+      const befunde = ctx.elda
+        .pruefeLohnzettel(saetze, '28', { heute: lfOpt.erstellt })
+        .filter((x) => x.status.startsWith('N'));
+      if (befunde.length > 0) throw new Error(`L16 L11 hat Befunde mit Status N: ${JSON.stringify(befunde)}`);
+      return {
+        inhalt: ctx.elda.erstelleLohnzettelBestand(u, lfOpt),
+        dateiName: ctx.dateiName('L11'),
+        referenzwerte: u.lohnzettel.map((lz) => lz.felder.REFN),
+      };
+    },
   }),
 ];
