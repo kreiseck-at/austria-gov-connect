@@ -269,4 +269,31 @@ module.exports = [
       return { ...b, inhalt };
     },
   }),
+  fall({
+    id: 'S59',
+    titel: 'Storno des Antrags S51 über stornoAntragVollstaendig (ES, E5)',
+    zweck:
+      'Prüft die neue Paketfunktion `stornoAntragVollstaendig` (vollständiger Antrag, MART 02, UIDU) ' +
+      'am bilateralen Antrag E5 – S58 hatte dasselbe am Bestand vorbei gezeigt.',
+    quelle: 'E.27, D.69; SIT S58 (13.10.2026)',
+    erwartung: 'übernommen',
+    fenster: ['di-nm', 'mi-nm'],
+    abhaengig: ['S51'],
+    rang: 41,
+    baue: (ctx) =>
+      bestand(
+        ctx,
+        'S59',
+        ctx.elda.stornoAntragVollstaendig('E5', {
+          UIDM: randomUUID(),
+          UIDU: ctx.referenzwertVon('S51'),
+          ...person(ctx, 'angestellte'),
+          dienstgeber: [dienstgeber(ctx, 'A', '15', zeitraum(ctx))],
+          AGSTAAT: 'RS',
+          BFEST: 'N',
+          ANIV: 'N',
+        }),
+        { dg: 'A', traeger: '15' },
+      ),
+  }),
 ];
