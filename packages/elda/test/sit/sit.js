@@ -12,6 +12,7 @@
 //   node test/sit/sit.js urteil   <ID> <bestanden|abweichung|blockiert|entfaellt> [--notiz …] [--befund B004]
 //   node test/sit/sit.js auswerten
 //   node test/sit/sit.js kasseneck-zuordnung   (KASSENECK_VR_PFAD, offline)
+//   node test/sit/sit.js kasseneck-klaeren <ID> (KASSENECK_VR_PFAD ab 597c79a0, offline; Q05)
 //   node test/sit/sit.js protokoll
 //   node test/sit/sit.js katalog
 //   node test/sit/sit.js generalprobe
@@ -362,7 +363,9 @@ function befehlAuswerten() {
     const inhalt = fs.readFileSync(path.join(ordner, datei));
     try {
       if (art === 'bescheinigung') {
-        console.log(`${name}: Bescheinigung (PDF, ${inhalt.length} Bytes) – ${fallZu.get(erkannt.uidm) ?? erkannt.uidm}`);
+        console.log(
+          `${name}: Bescheinigung (PDF, ${inhalt.length} Bytes) – ${fallZu.get(erkannt.uidm) ?? erkannt.uidm}`,
+        );
       } else if (art === 'mitteilung') {
         const m = elda.liesMitteilung(inhalt);
         const refs = m.meldungen
@@ -441,7 +444,9 @@ function befehlKasseneckZuordnung() {
           console.log(
             `${name}: ${lauf.fall} Mitteilung ${m.status}, Meldung ${x.status}, REFW ${x.refw} ` +
               `(${deut.art}) → ${passt ? 'zugeordnet' : 'NICHT zugeordnet'}` +
-              (x.codes.length ? `; ${x.codes.map((c) => `${c.typ ?? ''} ${c.code} ${c.text}`).join(' | ')}` : ''),
+              (x.codes.length
+                ? `; ${x.codes.map((c) => `${c.typ ?? ''} ${c.code} ${c.text}`).join(' | ')}`
+                : ''),
           );
         }
       } else if (art.art === 'protokoll' && lauf) {
@@ -473,6 +478,118 @@ function befehlKasseneckZuordnung() {
     } catch (err) {
       console.log(`${name}: nicht lesbar – ${err.message}`);
     }
+  }
+}
+
+/**
+ * Q05: „Status klären“ von kasseneck (597c79a0) offline nachstellen. Die Sende-Antwort
+ * des Falls wurde verworfen; kasseneck kennt nur Dateiname, Bytes und Zeitpunkt der
+ * Übergabe (Zustand „unterwegs“). Gerufen wird `elda-versand.klaere` aus kasseneck
+ * selbst, mit einem Firestore-Ersatz im Speicher: `vorKlaerung` liest die gesicherten
+ * Mitteilungen und ruft für den passenden Dateinamen `elda-versand.ordneZu` – so wie
+ * `elda-rueckmeldung-dienst.ordneVerloreneZu` es beim Abruf tut. Ein erneutes Senden
+ * ist ausgeschlossen: Der Transport-Ersatz bricht ab, falls kasseneck es versucht.
+ *
+ * Zwei Zeitpunkte: 5 Minuten nach der Übergabe (vor `MITTEILUNG_ABWARTEN_MS`) und
+ * 31 Minuten danach – dort zeigt sich, was ohne zugeordnete Mitteilung geschähe.
+ */
+async function befehlKasseneckKlaeren(positionen) {
+  if (!vrVerfuegbar())
+    abbruch('KASSENECK_VR_PFAD fehlt (Checkout von feature/elda-versichertenmeldung, ab 597c79a0).');
+  const id = positionen[0];
+  if (!id) abbruch('Aufruf: kasseneck-klaeren <Fall-ID>, z. B. Q05.');
+  const wurzel = process.env.KASSENECK_VR_PFAD;
+  const eldaVersand = require(path.join(wurzel, 'functions-lohn', 'elda-versand'));
+  const { ablage } = grundlagen({ fuerNetz: false });
+  const lauf = ablage
+    .ereignisse()
+    .filter((e) => e.art === 'lauf' && e.fall === id && e.statusCode === '000')
+    .at(-1);
+  if (!lauf) abbruch(`${id} wurde noch nicht mit 000 gesendet.`);
+  if (!lauf.antwortVerworfen) console.log(`Hinweis: Bei ${id} wurde die Antwort nicht verworfen.`);
+  const uebergabe = Date.parse(lauf.zeit);
+
+  const ordner = path.join(ablage.basis, 'ruecksendungen');
+  const mitteilungen = (fs.existsSync(ordner) ? fs.readdirSync(ordner).sort() : [])
+    .filter((d) => elda.artDerRuecksendung(d.replace(/^\d+__/, '')).art === 'mitteilung')
+    .map((d) => {
+      try {
+        return elda.liesMitteilung(fs.readFileSync(path.join(ordner, d)));
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  for (const minuten of [5, 31]) {
+    // Firestore-Ersatz: ein Dokument „unterwegs“ – Bytes liegen vor, die Antwort fehlt.
+    let doc = {
+      status: 'unterwegs',
+      dateiname: lauf.dateiName,
+      bestand_base64: 'vorhanden',
+      letzte_uebergabe_ms: uebergabe,
+      erstellt_am: { toMillis: () => uebergabe },
+    };
+    const ereignisse = [];
+    const ref = {
+      path: `sit/${id}`,
+      get: async () => ({ data: () => doc }),
+      update: async (x) => {
+        doc = { ...doc, ...x };
+      },
+      delete: async () => {
+        doc = null;
+      },
+      collection: () => ({ add: async (e) => ereignisse.push(e) }),
+    };
+    const db = {
+      runTransaction: async (f) =>
+        f({
+          get: async (r) => r.get(),
+          update: (r, x) => {
+            doc = { ...doc, ...x };
+          },
+        }),
+      // Zugangsdaten nur als Platzhalter: kommt kasseneck bis zum Senden, greift der Transport-Ersatz.
+      doc: () => ({
+        get: async () => ({ data: () => ({ elda: { seriennummer: 'sit', kundenpasswort_hash: 'sit' } }) }),
+      }),
+    };
+    const versand = eldaVersand({
+      db,
+      eldaApiKey: { value: () => 'sit' },
+      decryptSecret: async () => 'sit',
+      transferFactory: () => {
+        throw new Error('kasseneck würde jetzt erneut senden');
+      },
+      jetzt: () => uebergabe + minuten * 60 * 1000,
+    });
+    let gefunden = null;
+    const vorKlaerung = async () => {
+      const m = mitteilungen.find((x) => x.dateiname === lauf.dateiName);
+      if (m) {
+        gefunden = m;
+        await versand.ordneZu({ ref, dateiname: m.dateiname, protokollnummer: m.protokollnummer });
+      }
+      return { ok: true };
+    };
+    let ergebnis;
+    try {
+      ergebnis = await versand.klaere({
+        uid: 'sit',
+        ref,
+        vorKlaerung,
+        log: { bezeichnung: 'SIT', kennung: id },
+      });
+    } catch (err) {
+      ergebnis = { fehler: err.message };
+    }
+    console.log(
+      `${id} nach ${minuten} min: Mitteilung zum Dateinamen ${gefunden ? `gefunden (Status ${gefunden.status})` : 'nicht gefunden'}; ` +
+        `kasseneck → Zustand ${ergebnis.zustand ?? doc?.status ?? '–'}${doc?.elda?.zustand ? ` (${doc.elda.zustand})` : ''}` +
+        `${ergebnis.text ? ` – ${ergebnis.text}` : ''}${ergebnis.fehler ? ` – ${ergebnis.fehler}` : ''}` +
+        `; Ereignisse: ${ereignisse.map((e) => e.art).join(', ') || '–'}`,
+    );
   }
 }
 
@@ -769,8 +886,11 @@ async function befehlLauf(positionen, optionen) {
         statusCode: r.statusCode,
         ok: r.ok,
         meldung: schwaerze(r.meldung),
-        protokollnummer: r.protokollnummer,
-        dateiId: r.dateiId,
+        // Q05: die Antwort gilt als verloren – Protokollnummer und Datei-ID werden nicht
+        // festgehalten; zugeordnet wird später nur über die Mitteilung (`kasseneck-klaeren`).
+        protokollnummer: fall.antwortVerwerfen ? undefined : r.protokollnummer,
+        dateiId: fall.antwortVerwerfen ? undefined : r.dateiId,
+        antwortVerworfen: fall.antwortVerwerfen ? true : undefined,
         eldaZeitstempel: r.eldaZeitstempel,
         anzahl: r.ruecksendungen?.length,
         ruecksendungen: r.ruecksendungen?.map((x) => ohneSeriennummer(x.dateiName, config.seriennummer)),
@@ -781,7 +901,9 @@ async function befehlLauf(positionen, optionen) {
       });
       const text =
         r.fehler ??
-        `${r.statusCode}${r.protokollnummer ? ` Protokollnummer ${r.protokollnummer}` : ''}${r.meldung ? ` „${schwaerze(r.meldung)}"` : ''}`;
+        (fall.antwortVerwerfen
+          ? `${r.statusCode} – Antwort verworfen (Protokollnummer nicht festgehalten; zuordnen mit \`kasseneck-klaeren ${fall.id}\`)`
+          : `${r.statusCode}${r.protokollnummer ? ` Protokollnummer ${r.protokollnummer}` : ''}${r.meldung ? ` „${schwaerze(r.meldung)}"` : ''}`);
       console.log(`${fall.id} ${fall.aktion}${fall.aufrufe > 1 ? ` (${aufruf})` : ''} → ${text}`);
       if (lauf.http?.wartung) abbruch('SIT in Wartung (HTTP 403 „Wartung") – Lauf beendet.');
       // Bekannter ELDA-Fehler auf der SIT (lswh, 05.10.2026): Auflisten bei leerer
@@ -917,6 +1039,8 @@ async function main() {
       return befehlAuswerten();
     case 'kasseneck-zuordnung':
       return befehlKasseneckZuordnung();
+    case 'kasseneck-klaeren':
+      return befehlKasseneckKlaeren(positionen);
     case 'protokoll':
       return befehlProtokoll();
     case 'katalog':

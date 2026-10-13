@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { FENSTER } = require('./fenster');
 
-const GRUPPEN = Object.freeze(['Z', 'T', 'B', 'V', 'M', 'S', 'R', 'C', 'W', 'K', 'L', 'D', 'J']);
+const GRUPPEN = Object.freeze(['Z', 'T', 'B', 'V', 'M', 'S', 'R', 'C', 'W', 'K', 'Q', 'L', 'D', 'J']);
 const AKTIONEN = Object.freeze(['auflisten', 'senden', 'empfangen', 'beobachten']);
 const GEFAHREN = Object.freeze([null, 'sperre', 'verbraucht']);
 
@@ -54,6 +54,9 @@ function validiereFall(fall) {
   if (fall.rang !== undefined && !Number.isInteger(fall.rang)) fehler('rang muss eine ganze Zahl sein');
   if (fall.braucht !== undefined && !['kasseneck', 'kasseneck-vr', 'kasseneck-l16'].includes(fall.braucht))
     fehler(`braucht unbekannt: ${fall.braucht}`);
+  if (fall.antwortVerwerfen !== undefined && fall.antwortVerwerfen !== true)
+    fehler('antwortVerwerfen ist true oder fehlt');
+  if (fall.antwortVerwerfen && fall.aktion !== 'senden') fehler('antwortVerwerfen gibt es nur beim Senden');
 }
 
 /** Vorläufe, die in dieser Woche noch nicht erfolgreich gelaufen sind. */

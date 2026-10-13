@@ -40,7 +40,7 @@ test('validiereFall lehnt Unvollständiges und Unbekanntes ab', () => {
   validiereFall(fall('T01', { aktion: 'beobachten', aus: ['V01'], baue: undefined }));
   const falsch = [
     [fall('v01'), /id/],
-    [fall('Q01'), /Gruppe/],
+    [fall('X01'), /Gruppe/],
     [fall('V01', { zweck: '' }), /zweck/],
     [fall('V01', { aktion: 'loeschen' }), /Aktion/],
     [fall('V01', { gefahr: 'boom' }), /Gefahr/],

@@ -110,8 +110,19 @@ const SART = {
   K01: 'M3',
   K02: 'M8',
   K03: 'M4',
+  K04: 'M9',
+  K11: 'M3',
+  K12: 'M4',
+  K13: 'M4',
+  Q05: 'M3',
+  T03: 'M3',
 };
 const VSTR = {
+  K11: '15',
+  K12: '15',
+  K13: '15',
+  Q05: '15',
+  T03: '15',
   V02: '15',
   V09: '15',
   V13: '15',
@@ -219,9 +230,7 @@ const feld = (satz, pos, laenge) => satz.slice(pos - 1, pos - 1 + laenge);
 
 test('der Katalog lädt und jeder Fall mit baue ist gebaut worden', () => {
   assert.ok(KATALOG.length >= 25);
-  for (const f of KATALOG.filter(
-    (x) => x.aktion !== 'beobachten' && !brueckeFehlt(x),
-  )) {
+  for (const f of KATALOG.filter((x) => x.aktion !== 'beobachten' && !brueckeFehlt(x))) {
     assert.ok(GEBAUT.has(f.id), f.id);
   }
 });
@@ -235,7 +244,7 @@ test('jeder Sendefall: drei Sätze, VR, TM, simuliertes Erstellungsdatum, Serien
     assert.equal(feld(vorlauf, 21, 2), id === 'B11' ? 'DM' : 'TM', `${id}: PROJ`);
     assert.equal(feld(vorlauf, 23, 2), 'VR', `${id}: BEST`);
     const erwartetesDatum = id === 'B12' ? ttmmjjjj(wienerZeit(ctx.jetzt).datum) : ttmmjjjj(ctx.zr);
-    if (id !== 'T02') assert.equal(feld(vorlauf, 31, 8), erwartetesDatum, `${id}: EDAT`);
+    if (id !== 'T02' && id !== 'T03') assert.equal(feld(vorlauf, 31, 8), erwartetesDatum, `${id}: EDAT`);
     for (const satz of s) {
       assert.equal(feld(satz, 12, 7), '0765432', `${id}: OBUS`);
       assert.equal(feld(satz, 19, 2), VSTR[id] ?? '14', `${id}: VSTR`);
@@ -514,7 +523,10 @@ test('Di-Zusatzfälle: jede Verfälschung sitzt genau dort, wo der Fall sie beha
   const s = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt);
   // M52: Lehrlinge mit A04, keine A03.
   const m52 = s('M52');
-  assert.ok(m52.some((z) => z.startsWith('V1') && feld(z, 21, 3) === 'A04'), 'M52: A04');
+  assert.ok(
+    m52.some((z) => z.startsWith('V1') && feld(z, 21, 3) === 'A04'),
+    'M52: A04',
+  );
   assert.ok(!m52.some((z) => z.startsWith('V1') && feld(z, 21, 3) === 'A03'), 'M52: keine A03');
   // M60 REFP leer, M61 BZRM 122018, M64 JAGB X, M65 BKNR leer.
   assert.equal(feld(s('M60')[1], 21, 40).trim(), '');
