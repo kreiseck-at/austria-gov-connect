@@ -86,8 +86,8 @@ function uebermittlung(ctx, id) {
 }
 
 /** Baut den Bestand LF; die Prüfung des Pakets darf keinen Befund mit Status N liefern. */
-function bestand(ctx, id) {
-  const u = uebermittlung(ctx, id);
+function bestand(ctx, id, aendere = (u) => u) {
+  const u = aendere(uebermittlung(ctx, id));
   const opt = ctx.bestandOptionen({ dg: 'A', traeger: '15' });
   const { versicherungstraeger: _vstr, ...lfOpt } = opt;
   const saetze = ctx.elda.lohnzettelSaetze(u, lfOpt.erstellt);
@@ -101,6 +101,23 @@ function bestand(ctx, id) {
     referenzwerte: [u.lohnzettel[0].felder.REFN],
   };
 }
+
+
+/** Ändert Felder bzw. Beträge des einen Lohnzettels der Übermittlung. */
+const mit = (felder = {}, betraege = null, mehr = {}) => (u) => ({
+  ...u,
+  lohnzettel: [
+    {
+      ...u.lohnzettel[0],
+      ...mehr,
+      felder: { ...u.lohnzettel[0].felder, ...felder },
+      betraege: betraege ?? u.lohnzettel[0].betraege,
+    },
+  ],
+});
+
+/** Gleiche Referenznummer wie der Lohnzettel aus `fallId` (Berichtigung/Storno, E.14 Feld KORR). */
+const refnVon = (ctx, fallId) => ctx.referenzwertVon(fallId);
 
 module.exports = [
   fall({
@@ -135,5 +152,120 @@ module.exports = [
       const i1 = setzeFeld(b.inhalt, 2, FELDER_I1.find((f) => f.name === 'STNRA'), falsch);
       return { ...b, inhalt: setzeFeld(i1, 3, FELDER_L1['28'].find((f) => f.name === 'STNRA'), falsch) };
     },
+  }),
+  fall({
+    id: 'L03',
+    titel: 'L16 wie L01 mit Korrekturindikation „A" (Anspruchsjahr)',
+    zweck:
+      'L01 kam mit Warnung 1706 „Uebermittlung ausserhalb des Aufrollungszeitraumes nicht zulaessig" (Katalog F1706: ' +
+      'Jahr < laufendes Jahr, Eingang nach 30.04., Korrekturindikation ungleich „A"). Bewusste Probe: Fachlich ist „A" ' +
+      'nur für Bezüge nach § 19 EStG gedacht (E.14 Feld KORR) – hier geht es nur darum, ob 1706 dann ausbleibt.',
+    quelle: 'E.14 Feld 104 KORR (DM-Org 42, S. 228); Prüfkatalog L16 F1706, F9031 (A bei Art 01 zulässig)',
+    erwartung: 'übernommen ohne 1706',
+    fenster: ['di-nm', 'mi-vm', 'mi-nm'],
+    abhaengig: ['V70', 'V71'],
+    rang: 42,
+    baue: (ctx) => bestand(ctx, 'L03', mit({ KORR: 'A' })),
+  }),
+  fall({
+    id: 'L04',
+    titel: 'L16 wie L01 mit stark überhöhter Lohnsteuer (KZ 260 × 10)',
+    zweck:
+      'Rechnet ELDA auf der SIT das Normverhältnis (F7002/F7003, Rechenblatt)? KZ 260 bleibt mit den Vorfeldern ' +
+      'stimmig (F7004). Das Rechenblatt für 2025 kennt das Paket nicht.',
+    quelle: 'Prüfkatalog L16 F7002/F7003/F7004',
+    erwartung: '7003 (Lohnsteuer zu hoch) als Hinweis – oder keine Reaktion',
+    fenster: ['di-nm', 'mi-vm', 'mi-nm'],
+    abhaengig: ['V70', 'V71'],
+    rang: 42,
+    baue: (ctx) =>
+      bestand(
+        ctx,
+        'L04',
+        mit({}, { B210: 600_000, BIEB: 108_420, B230: 108_420, B245: 491_580, BIEL: 583_100, B260: 583_100 }),
+      ),
+  }),
+  fall({
+    id: 'L08',
+    titel: 'Berichtigter Lohnzettel zu L01 (KORR „K", gleiche Referenznummer, geänderte Beträge)',
+    zweck:
+      'Erste Berichtigung über ELDA: gleiche Referenznummer, Jahr, Arbeitgeber, Arbeitnehmer und Lohnzettelart wie L01, ' +
+      'Bruttobezüge 6.200 € statt 6.000 €. Beträge nach denselben Annahmen wie L01 neu gerechnet.',
+    quelle: 'E.14 Feld 104 KORR („K" … Voraussetzung: gleiche Referenznummer …), DM-Org 42 S. 228',
+    erwartung: 'übernommen (Warnung 1706 wie L01 möglich)',
+    fenster: ['di-nm', 'mi-vm', 'mi-nm'],
+    abhaengig: ['V70', 'V71', 'L01'],
+    rang: 43,
+    baue: (ctx) =>
+      bestand(
+        ctx,
+        'L08',
+        mit(
+          { KORR: 'K', REFN: refnVon(ctx, 'L01') },
+          { B210: 620_000, BIEB: 112_034, B230: 112_034, B245: 507_966, BIEL: 63_225, B260: 63_225 },
+        ),
+      ),
+  }),
+  fall({
+    id: 'L05',
+    titel: 'Storno-Lohnzettel zu L01 (KORR „S", Kennzahlen unverändert)',
+    zweck:
+      'E.14 Feld KORR: „S" kennzeichnet einen Storno; es ist „nicht mehr notwendig alle Kennzahlen auf 0 zu setzen". ' +
+      'D.31/D.32 beschreiben dagegen noch den Storno mit KZ 210 = 0, übrige Beträge leer und KORR „K". L05 prüft die ' +
+      'Variante „S", L09 die alte Variante.',
+    quelle: 'E.14 Feld 104 KORR (DM-Org 42, S. 228); D.31/D.32 (S. 109)',
+    erwartung: 'übernommen',
+    fenster: ['di-nm', 'mi-vm', 'mi-nm'],
+    abhaengig: ['V70', 'V71', 'L01', 'L08'],
+    rang: 44,
+    baue: (ctx) => bestand(ctx, 'L05', mit({ KORR: 'S', REFN: refnVon(ctx, 'L01') })),
+  }),
+  fall({
+    id: 'L06',
+    titel: 'L16 mit Kinderblock und Familienbonus Plus (ein Kind, Februar–März)',
+    zweck:
+      'Erster Kinderblock über ELDA: Kind 1 erfunden (prüfziffernrichtige VSNR), Familienbeihilfe-Bezieher, ganzer ' +
+      'Familienbonus für zwei Monate (2 × 166,68 €), Lohnsteuer entsprechend vermindert. Eigene Referenznummer.',
+    quelle: 'E.14 Kinderblock (Felder 196 ff.), Felder 142–146; Prüfkatalog L16 F9200 ff., KA00–KA63',
+    erwartung: 'übernommen (ggf. Hinweise)',
+    fenster: ['di-nm', 'mi-vm', 'mi-nm'],
+    abhaengig: ['V70', 'V71'],
+    rang: 45,
+    baue: (ctx) =>
+      bestand(
+        ctx,
+        'L06',
+        mit(
+          { BFABO: 'J', KFABO: '1' },
+          { B210: 600_000, BIEB: 108_420, B230: 108_420, B245: 491_580, FABO: 33_336, BIEL: 24_974, B260: 24_974 },
+          {
+            kinder: [
+              {
+                KFAM: 'Weinzierl',
+                KVON: 'Livia',
+                KSTAAT: 'A',
+                KVSNR: '1235150315',
+                KAFBZ: 'J',
+                KBGFP: '02',
+                KEGFP: '03',
+              },
+            ],
+          },
+        ),
+      ),
+  }),
+  fall({
+    id: 'L09',
+    titel: 'Storno-Lohnzettel zu L06 nach D.31/D.32 (KZ 210 = 0, übrige Beträge leer, KORR „K")',
+    zweck:
+      'Die alte Storno-Form aus D.31/D.32 – widerspricht der Feldbeschreibung in E.14 („K" = Berichtigung, „S" = Storno). ' +
+      'Welche Lesart nimmt ELDA?',
+    quelle: 'D.31, D.32 (DM-Org 42, S. 109); E.14 Feld 104; Prüfkatalog F3602',
+    erwartung: 'übernommen als Storno – oder Abweisung/Hinweis',
+    fenster: ['di-nm', 'mi-vm', 'mi-nm'],
+    abhaengig: ['V70', 'V71', 'L06'],
+    rang: 46,
+    baue: (ctx) =>
+      bestand(ctx, 'L09', mit({ KORR: 'K', REFN: refnVon(ctx, 'L06'), BFABO: undefined, KFABO: undefined }, { B210: 0 })),
   }),
 ];
