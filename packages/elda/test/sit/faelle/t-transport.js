@@ -27,6 +27,22 @@ module.exports = [
     baue: (ctx) => ({ ...ctx.bestandVon('V01'), referenzwerte: [] }),
   },
   {
+    id: 'T03',
+    titel: 'dieselbe Datei wie V40 (Mo 12.10.) an einem späteren Testtag noch einmal senden',
+    zweck:
+      'T02 (gleiche Datei Minuten später) kam mit 000 durch. Die ELDA-FAQ für Dienstgeber (elda.at, contentid ' +
+      '10007.838884) nennt E17 „Datei … ist bereits vorhanden“ = „Die Datei wurde mit identischem Inhalt bereits ' +
+      'einmal gesendet und erfolgreich verarbeitet.“ Greift die Erkennung erst nach der Verarbeitung? Byte-gleich ' +
+      'samt Dateiname, über `ctx.bestandVon` wie T02.',
+    quelle: 'Schnittstellenbeschreibung V4 (Status 405 duplikatVon); ELDA-FAQ Dienstgeber (E17)',
+    erwartung: '? – 405 „duplikatVon“, E17 in der Mitteilung oder wieder 000',
+    fenster: ['mi-vm', 'mi-nm'],
+    gefahr: null,
+    abhaengig: ['V40'],
+    aktion: 'senden',
+    baue: (ctx) => ({ ...ctx.bestandVon('V40'), referenzwerte: [] }),
+  },
+  {
     id: 'T15',
     titel: 'eine schon abgeholte Rücksendung ein zweites Mal empfangen',
     zweck:
