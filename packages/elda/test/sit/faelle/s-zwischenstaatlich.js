@@ -250,4 +250,23 @@ module.exports = [
       return { ...b, inhalt: setzeFeld(b.inhalt, 2, feldVon('VSNR'), falscheVsnr(ctx.rolle('arbeiter').vsnr)) };
     },
   }),
+  fall({
+    id: 'S58',
+    titel: 'Storno des Antrags S50 als vollständiger Satz (ES, E1, MART 02 + UIDU)',
+    zweck:
+      'S53 (nur UIDU) und S57 (mit Konto und Person) wurden abgewiesen; S57 verlangte zusätzlich Geschlecht, ' +
+      'Staatsangehörigkeit und die Anschrift des Dienstgebers. Klärt, ob ELDA den Storno als vollständige ' +
+      'Wiederholung des Antrags mit Meldungsart 02 und Verweis auf die UIDM des Originals erwartet.',
+    quelle: 'E.27, E.27.2 (Storno), D.68, D.69; SIT S53/S57 (13.10.2026)',
+    erwartung: 'übernommen',
+    fenster: ['di-vm', 'di-nm', 'mi-nm'],
+    abhaengig: ['S50'],
+    rang: 41,
+    baue: (ctx) => {
+      const b = bestand(ctx, 'S58', entsendungE1(ctx, randomUUID()), { dg: 'A', traeger: '14' });
+      let inhalt = setzeFeld(b.inhalt, 2, feldVon('MART'), '02');
+      inhalt = setzeFeld(inhalt, 2, feldVon('UIDU'), ctx.referenzwertVon('S50'));
+      return { ...b, inhalt };
+    },
+  }),
 ];
