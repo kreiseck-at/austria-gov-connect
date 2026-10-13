@@ -312,12 +312,13 @@ module.exports.push(
     titel: 'kasseneck (neuer Stand): Abmeldung K11 zum 31.03.2026 – vor dem BV-Beginn, ohne BVEN (M4)',
     zweck:
       'Das Dienstverhältnis endet vor dem BV-Beginn (02.04.2026); seit bc20286e schickt kasseneck dann kein BVEN. ' +
-      'Erwartung: kein VW1942 (Gegenstück zu K03 und V83). Gesendet am simulierten 01.05.2026, also verspätet.',
+      'Erwartung: kein VW1942 (Gegenstück zu K03 und V83). Läuft in mi-vm (sim. 01.04.2026) vor der mBGM 03/2026 ' +
+      '(M71), ersatzweise mi-nm (sim. 01.05.2026, dann verspätet).',
     quelle: `${QUELLE} (8908f6b8); versichertenmeldung-core.felderAbmeldung (bvab), bvBeginnDesDv`,
     erwartung: 'übernommen; Clearing: kein VW1942',
-    fenster: ['mi-nm'],
+    fenster: ['mi-vm', 'mi-nm'],
     abhaengig: ['K11'],
-    rang: 30,
+    rang: 33,
     baue: (ctx) =>
       abmeldungNeu(ctx, 'K12', {
         ...K11,
@@ -351,9 +352,9 @@ module.exports.push(
       'Erwartung: kein VW1942, weil BVAB gemeldet war (Befund 13.10.2026).',
     quelle: `${QUELLE} (8908f6b8); versichertenmeldung-core.felderAbmeldung (bvab)`,
     erwartung: 'übernommen; Clearing: kein VW1942',
-    fenster: ['mi-nm'],
+    fenster: ['mi-vm', 'mi-nm'],
     abhaengig: ['Q05'],
-    rang: 31,
+    rang: 34,
     baue: (ctx) =>
       abmeldungNeu(ctx, 'K13', {
         ...Q05,
