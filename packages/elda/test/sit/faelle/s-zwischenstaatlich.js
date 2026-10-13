@@ -296,4 +296,143 @@ module.exports = [
         { dg: 'A', traeger: '15' },
       ),
   }),
+  fall({
+    id: 'S70',
+    titel: 'Antrag Beschäftigung bei mehreren Dienstgebern (ES, E3)',
+    zweck:
+      'Satzart E3 war nie gesendet: ein österreichischer Dienstgeber (A/14) und ein slowenischer ' +
+      '(Ersatzname, ohne Beitragskonto), MARGDG je Dienstgeber, Arbeitsorte AT und SI. Wird E3 auf der ' +
+      'SIT verarbeitet, und kommt eine Bescheinigung zurück?',
+    quelle: 'E.27, E.27.1 (E3); Paket-Test „E3: mindestens zwei Dienstgeber, MARGDG zwingend"',
+    erwartung: 'übernommen, Rücksendung es_<UIDM>_….pdf – oder Abweisung mit Code',
+    fenster: ['di-vm', 'di-nm', 'mi-nm'],
+    abhaengig: ['V01'],
+    rang: 42,
+    baue: (ctx) => {
+      const d = ctx.dienstgeber('A');
+      const beginn = plusTage(ctx.zr, 14);
+      return bestand(
+        ctx,
+        'S70',
+        ctx.elda.antragZwischenstaatlich('E3', {
+          UIDM: randomUUID(),
+          ...person(ctx, 'arbeiter'),
+          dienstgeber: [
+            dienstgeber(ctx, 'A', '14', { DGWS: '04', ...zeitraum(ctx), BEAT: 'N', ANKZ: 'N', MARGDG: 'N' }),
+            {
+              DGNA: 'Kleiderservice Nadler KG',
+              DGKFZ: 'SI',
+              DGSTR: 'Testna ulica 4',
+              DGPLZ: '1000',
+              DGORT: 'Ljubljana',
+              DGWS: '04',
+              ...zeitraum(ctx),
+              BEAT: 'N',
+              ANKZ: 'N',
+              MARGDG: 'N',
+            },
+          ],
+          ANATJ: 'J',
+          arbeitsorte: [
+            {
+              AOST: 'AT',
+              AOKBS: 'J',
+              AOFNSN: d.name,
+              AOSTRA: d.anschrift.strasse,
+              AOPLZL: d.anschrift.plz,
+              AOORT: d.anschrift.ort,
+            },
+            { AOST: 'SI', AOKBS: 'N' },
+          ],
+          AZRV: ctx.ttmmjjjj(beginn),
+          AZRB: ctx.ttmmjjjj(plusTage(beginn, 364)),
+          ANFL: 'N',
+        }),
+        { dg: 'A', traeger: '14' },
+      );
+    },
+  }),
+  fall({
+    id: 'S71',
+    titel: 'Antrag selbständige und unselbständige Tätigkeit (ES, E4)',
+    zweck:
+      'Satzart E4 war nie gesendet: ein Dienstgeber (A/15) und eine selbständige Tätigkeit in Slowenien ' +
+      '(Ersatzname), Arbeitsorte AT (unselbständig) und SI (selbständig).',
+    quelle: 'E.27, E.27.1 (E4); Paket-Test „E4: selbständige Tätigkeit und AUET sind zwingend"',
+    erwartung: 'übernommen, Rücksendung es_<UIDM>_….pdf – oder Abweisung mit Code',
+    fenster: ['di-vm', 'di-nm', 'mi-nm'],
+    abhaengig: ['V02'],
+    rang: 42,
+    baue: (ctx) => {
+      const beginn = plusTage(ctx.zr, 14);
+      return bestand(
+        ctx,
+        'S71',
+        ctx.elda.antragZwischenstaatlich('E4', {
+          UIDM: randomUUID(),
+          ...person(ctx, 'angestellte'),
+          dienstgeber: [dienstgeber(ctx, 'A', '15', { DGWS: '04', ...zeitraum(ctx), BEAT: 'N', ANKZ: 'N', MARGDG: 'N' })],
+          selbstaendig: [
+            {
+              STFNA: "Blumen G'schenk e.U.",
+              STSTR: 'Marktgasse 5',
+              STKFZ: 'SI',
+              STPLZ: '2000',
+              STORT: 'Maribor',
+              STAS: ctx.ttmmjjjj(ctx.zr),
+              START: 'Blumenhandel',
+              MARGST: 'N',
+            },
+          ],
+          ANATJ: 'J',
+          arbeitsorte: [
+            { AOST: 'AT', AOKBS: 'N', AUET: 'U' },
+            { AOST: 'SI', AOKBS: 'N', AUET: 'S' },
+          ],
+          AZRV: ctx.ttmmjjjj(beginn),
+          AZRB: ctx.ttmmjjjj(plusTage(beginn, 364)),
+          ANFL: 'N',
+        }),
+        { dg: 'A', traeger: '15' },
+      );
+    },
+  }),
+  fall({
+    id: 'S72',
+    titel: 'Antrag Telearbeit an den Dachverband (ES, EA, VSTR 99)',
+    zweck:
+      'Satzart EA war auf der SIT nicht angekündigt: Telearbeit aus Deutschland, zuständig ist der ' +
+      'Dachverband (VSTR 99). Verarbeitet die SIT EA, und welcher Träger antwortet?',
+    quelle: 'E.27, E.27.3, D.4 (VSTR 99); Paket-Test „EA: Telearbeit geht an den Dachverband (VSTR 99)"',
+    erwartung: 'übernommen – oder Abweisung (EA/VSTR 99 auf der SIT nicht freigegeben)',
+    fenster: ['di-vm', 'di-nm', 'mi-nm'],
+    abhaengig: ['V01'],
+    rang: 42,
+    baue: (ctx) => {
+      const beginn = plusTage(ctx.zr, 14);
+      return bestand(
+        ctx,
+        'S72',
+        ctx.elda.antragZwischenstaatlich('EA', {
+          UIDM: randomUUID(),
+          ...person(ctx, 'arbeiter'),
+          dienstgeber: [dienstgeber(ctx, 'A', '14', { DGWS: '04' })],
+          arbeitsorte: [
+            {
+              AOST: 'DE',
+              AOKBS: 'J',
+              AOFNSN: 'Wohnung',
+              AOSTRA: 'Beispielweg 2',
+              AOPLZL: '83395',
+              AOORT: 'Freilassing',
+            },
+          ],
+          AUSMTE: 'J',
+          ANTVON: ctx.ttmmjjjj(beginn),
+          ANTBIS: ctx.ttmmjjjj(plusTage(beginn, 364)),
+        }),
+        { dg: 'A', traeger: '99' },
+      );
+    },
+  }),
 ];

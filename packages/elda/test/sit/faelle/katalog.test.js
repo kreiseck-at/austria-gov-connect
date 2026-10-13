@@ -348,6 +348,10 @@ test('FH- und SM-Fälle: Bestand, Version, Satzlänge, Satzart, Abwandlung nur i
     S31: ['FH', '03', 850, '80'],
     S32: ['FH', '03', 850, '81'],
     S33: ['FH', '03', 850, '80'],
+    S35: ['FH', '03', 850, '82'],
+    S36: ['FH', '03', 850, '85'],
+    S37: ['FH', '03', 850, '84'],
+    S38: ['FH', '03', 850, '83'],
     S40: ['SM', '02', 800, '65'],
     S41: ['SM', '02', 800, '66'],
     S42: ['SM', '02', 800, '65'],
@@ -550,5 +554,19 @@ test('L-Fälle: Bestand LF, TM, Version 28, VSTR 94, Informationssatz und ein Lo
     assert.equal(feld(l1, 1, 2), 'L1', `${id}: Satzart L1`);
     assert.equal(feld(i1, 51, 9), id === 'L02' ? '911234566' : '911234565', `${id}: STNRA I1`);
     assert.equal(feld(l1, 639, 9), id === 'L02' ? '911234566' : '911234565', `${id}: STNRA L1`);
+  }
+});
+
+test('ES-Satzarten E3, E4, EA: Satzart und Träger (EA an den Dachverband, VSTR 99)', () => {
+  for (const [id, sart, vstr] of [
+    ['S70', 'E3', '14'],
+    ['S71', 'E4', '15'],
+    ['S72', 'EA', '99'],
+  ]) {
+    const { ergebnis } = GEBAUT.get(id);
+    const s = saetze(ergebnis.inhalt);
+    assert.equal(feld(s[0], 23, 2), 'ES', `${id}: BEST`);
+    assert.equal(feld(s[1], 1, 2), sart, `${id}: Satzart`);
+    for (const satz of s) assert.equal(feld(satz, 19, 2), vstr, `${id}: VSTR`);
   }
 });

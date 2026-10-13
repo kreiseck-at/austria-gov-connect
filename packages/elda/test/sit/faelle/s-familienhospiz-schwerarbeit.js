@@ -265,4 +265,98 @@ module.exports = [
     baue: (ctx) =>
       geaendert(sm(ctx, 'S44', 'schwerarbeitsmeldung'), FELDER_E22, 'VSNR', falscheVsnr(ctx.rolle(PERSON).vsnr)),
   }),
+  // --- Weitere FH-Satzarten (Di 13.10.): Richtigstellung, Storno, Änderung ---------
+  // Reihenfolge: S31 Anmeldung (di-vm) → S36 Richtigstellung Beginn +2 Tage (di-vm,
+  // danach) → S32 Abmeldung (di-nm) → S37 Storno Abmeldung (mi-vm) → S35 Änderung
+  // der Karenzart (mi-vm, danach) → S38 Storno Anmeldung (mi-nm). Storno und
+  // Richtigstellung nennen laut D.13 das ADAT der Meldung, auf die sie sich beziehen;
+  // nach S36 ist das der richtiggestellte Beginn.
+  fall({
+    id: 'S36',
+    titel: 'Richtigstellung Anmeldung Familienhospiz: Beginn zwei Tage später (FH 85)',
+    zweck: 'Satzart 85 nie gesendet: ADAT = Beginn aus S31, RDAT = richtiger Beginn (+2 Tage).',
+    quelle: 'E.12, E.12.1 (85), E.12.2, D.13',
+    erwartung: 'übernommen',
+    fenster: ['di-vm', 'di-nm'],
+    abhaengig: ['S31'],
+    rang: 27,
+    baue: (ctx) =>
+      familienhospiz(ctx, {
+        fall: 'S36',
+        art: 'familienhospizRichtigstellungAnmeldung',
+        rolle: PERSON,
+        dg: DG,
+        traeger: TRAEGER,
+        felder: {
+          ADAT: d(ctx, ctx.zrVon('S31')),
+          RDAT: d(ctx, plusTage(ctx.zrVon('S31'), 2)),
+          KART: ctx.elda.KARENZART.PFLEGEKARENZ,
+        },
+      }),
+  }),
+  fall({
+    id: 'S37',
+    titel: 'Storno Abmeldung Familienhospiz (FH 84)',
+    zweck: 'Satzart 84 nie gesendet: storniert die Abmeldung S32; ADAT = Ende aus S32.',
+    quelle: 'E.12, E.12.1 (84), D.13',
+    erwartung: 'übernommen',
+    fenster: ['mi-vm', 'mi-nm'],
+    abhaengig: ['S32'],
+    rang: 27,
+    baue: (ctx) =>
+      familienhospiz(ctx, {
+        fall: 'S37',
+        art: 'familienhospizStornoAbmeldung',
+        rolle: PERSON,
+        dg: DG,
+        traeger: TRAEGER,
+        felder: { ADAT: d(ctx, plusTage(ctx.zrVon('S32'), -1)), KART: ctx.elda.KARENZART.PFLEGEKARENZ },
+      }),
+  }),
+  fall({
+    id: 'S35',
+    titel: 'Änderungsmeldung Familienhospiz: Karenzart 04 → 03 (FH 82)',
+    zweck:
+      'Satzart 82 nie gesendet: berichtigt die Karenzart der (richtiggestellten) Anmeldung, nachdem die ' +
+      'Abmeldung storniert ist. ADAT = richtiggestellter Beginn.',
+    quelle: 'E.12, E.12.1 (82), E.12.2, D.13',
+    erwartung: 'übernommen',
+    fenster: ['mi-vm', 'mi-nm'],
+    abhaengig: ['S36', 'S37'],
+    rang: 28,
+    baue: (ctx) =>
+      familienhospiz(ctx, {
+        fall: 'S35',
+        art: 'familienhospizAenderungsmeldung',
+        rolle: PERSON,
+        dg: DG,
+        traeger: TRAEGER,
+        felder: {
+          ADAT: d(ctx, plusTage(ctx.zrVon('S31'), 2)),
+          KART: ctx.elda.KARENZART.FAMILIENHOSPIZKARENZ,
+        },
+      }),
+  }),
+  fall({
+    id: 'S38',
+    titel: 'Storno Anmeldung Familienhospiz (FH 83)',
+    zweck: 'Satzart 83 nie gesendet: storniert die (richtiggestellte, geänderte) Anmeldung.',
+    quelle: 'E.12, E.12.1 (83), D.13',
+    erwartung: 'übernommen',
+    fenster: ['mi-nm'],
+    abhaengig: ['S35'],
+    rang: 29,
+    baue: (ctx) =>
+      familienhospiz(ctx, {
+        fall: 'S38',
+        art: 'familienhospizStornoAnmeldung',
+        rolle: PERSON,
+        dg: DG,
+        traeger: TRAEGER,
+        felder: {
+          ADAT: d(ctx, plusTage(ctx.zrVon('S31'), 2)),
+          KART: ctx.elda.KARENZART.FAMILIENHOSPIZKARENZ,
+        },
+      }),
+  }),
 ];
