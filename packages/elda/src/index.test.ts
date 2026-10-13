@@ -202,3 +202,10 @@ test('index exportiert den Lohnzettel Finanz (L16)', () => {
     assert.equal((elda as Record<string, unknown>)[intern], undefined, `sollte intern sein: ${intern}`);
   }
 });
+
+test('index exportiert l16Regel: Mitteilungscodes ohne „F" finden die Katalogzeile', () => {
+  assert.equal(elda.l16Regel('1706')?.code, 'F1706');
+  assert.equal(elda.l16Regel('F9991')?.code, 'F9991');
+  assert.equal(elda.l16Regel('KA20')?.code, 'KA20');
+  assert.equal(elda.l16Regel('0000'), undefined);
+});
