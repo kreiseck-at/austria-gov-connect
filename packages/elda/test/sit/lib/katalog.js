@@ -52,7 +52,7 @@ function validiereFall(fall) {
     fehler('aufrufe muss 1, 2 oder 3 sein');
   }
   if (fall.rang !== undefined && !Number.isInteger(fall.rang)) fehler('rang muss eine ganze Zahl sein');
-  if (fall.braucht !== undefined && !['kasseneck', 'kasseneck-vr'].includes(fall.braucht))
+  if (fall.braucht !== undefined && !['kasseneck', 'kasseneck-vr', 'kasseneck-l16'].includes(fall.braucht))
     fehler(`braucht unbekannt: ${fall.braucht}`);
 }
 

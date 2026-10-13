@@ -29,6 +29,7 @@
 // Lohnsteuer nur mit dem Rechenblatt für 2026.
 
 const { setzeFeld } = require('../lib/bausteine');
+const { kasseneckL16 } = require('../lib/kasseneck');
 const { FELDER_I1 } = require('../../../dist/felder-e13.js');
 const { FELDER_L1 } = require('../../../dist/felder-e14.js');
 
@@ -147,6 +148,86 @@ const mit = (felder = {}, betraege = null, mehr = {}) => (u) => ({
 
 /** Gleiche Referenznummer wie der Lohnzettel aus `fallId` (Berichtigung/Storno, E.14 Feld KORR). */
 const refnVon = (ctx, fallId) => ctx.referenzwertVon(fallId);
+
+/**
+ * L12: der L16, wie kasseneck ihn baut – `baueL16Uebermittlung` aus
+ * `l16-elda-core.js` (Branch feature/l16-elda) auf synthetischen
+ * Monatslohnzetteln in der Form von `lohnabrechnung-core` (Struktur wie im
+ * kasseneck-Test `l16-elda-core.test.js`, Werte erfunden: zwei Monate je
+ * 3.000 €, SV 542,10 €, Lohnsteuer 291,55 € wie L01).
+ */
+function kasseneckLohnzettel(ctx, id) {
+  const k = kasseneckL16();
+  const p = ctx.rolle('arbeiter');
+  const jahr = Number(ctx.zrVon('V70').slice(0, 4));
+  const iso = (ttmmjjjj) => `${ttmmjjjj.slice(4, 8)}-${ttmmjjjj.slice(2, 4)}-${ttmmjjjj.slice(0, 2)}`;
+  const beleg = (monat) => ({
+    id: monat,
+    grundlagen: {
+      dienstnehmerGruppe: 'arbeiter',
+      eintritt: `${jahr}-02-01`,
+      austritt: `${jahr}-03-31`,
+      wochenstunden: 38.5,
+      kvBasisStunden: 38.5,
+    },
+    brutto: {
+      gesamtLaufend: 300_000,
+      gesamtSZ: 0,
+      sonderzahlung: { innerhalbSechstel: 0, ueberSechstel: 0 },
+      ueberstunden: { steuerfreiTeil68: 0 },
+    },
+    sv: { dnLaufend: { betrag: 54_210 }, dnSZ: { betrag: 0 } },
+    lst: {
+      lstLaufend: 29_155,
+      szBesteuerung: { lstSZ: 0, abs10RestCent: 0, ueberSechstel: { brutto: 0, svAnteil: 0 } },
+      pendlerpauschale: { betrag: 0 },
+      absetzbetraege: { avab: { angewendet: false }, familienbonus: { angewendet: false }, pendlereuro: { betrag: 0 } },
+    },
+    netto: {
+      abzuege: [
+        { art: 'sv_dn_laufend', betrag: 54_210 },
+        { art: 'lst_laufend', betrag: 29_155 },
+      ],
+    },
+  });
+  const dg = ctx.dienstgeber('A');
+  const { uebermittlung, hinweise } = k.baueL16Uebermittlung({
+    payslips: [beleg(`${jahr}-02`), beleg(`${jahr}-03`)],
+    jahr,
+    employeeId: 'SIT-L12',
+    mitarbeiter: {
+      svnr: p.vsnr,
+      vorname: p.vorname,
+      nachname: p.familienname,
+      strasse: 'Teststraße',
+      hausnummer: '1',
+      plz: '5020',
+      ort: 'Salzburg',
+      land: 'A',
+      birthDate: iso(p.geburtsdatum),
+    },
+    betrieb: {
+      name: dg.name,
+      street: dg.anschrift.strasse,
+      zip: dg.anschrift.plz,
+      city: dg.anschrift.ort,
+      steuernummer: '91-123/4565',
+      land: 'A',
+    },
+    jahrAbgeschlossen: false,
+  });
+  const opt = ctx.bestandOptionen({ dg: 'A', traeger: '15' });
+  const { versicherungstraeger: _vstr, ...lfOpt } = opt;
+  const { befunde } = k.pruefeL16Uebermittlung(uebermittlung, { erstellt: lfOpt.erstellt, heute: lfOpt.erstellt });
+  const n = befunde.filter((b) => b.status.startsWith('N'));
+  if (n.length > 0) throw new Error(`${id}: kasseneck-L16 hat Befunde mit Status N: ${JSON.stringify(n)}`);
+  return {
+    inhalt: k.erstelleLohnzettelBestand(uebermittlung, lfOpt),
+    dateiName: ctx.dateiName(id),
+    referenzwerte: uebermittlung.lohnzettel.map((lz) => lz.felder.REFN),
+    hinweise,
+  };
+}
 
 module.exports = [
   fall({
@@ -352,5 +433,21 @@ module.exports = [
         referenzwerte: u.lohnzettel.map((lz) => lz.felder.REFN),
       };
     },
+  }),
+  fall({
+    id: 'L12',
+    titel: 'L16 2025 für den Arbeiter aus V70/V71, gebaut von kasseneck (l16-elda-core)',
+    zweck:
+      'Derselbe Dienstnehmer wie L01, aber der Satz stammt aus dem Produkt: kasseneck baut aus seinen ' +
+      'Monatslohnzetteln (synthetisch) die Übermittlung (Kennzahlen, soziale Stellung, Voll-/Teilzeit, ' +
+      'Referenznummer), prüft sie mit dem Paket und schreibt den Bestand. Klärt, ob der kasseneck-L16 ' +
+      'auf der SIT so durchgeht wie L01.',
+    quelle: 'kasseneck feature/l16-elda: functions-lohn/l16-elda-core.js; E.13/E.14 (Version 28); SIT L01',
+    erwartung: 'übernommen mit W 1706 (Lohnzettel 2025 nach dem 30.04.2026)',
+    fenster: ['di-nm', 'mi-vm', 'mi-nm'],
+    abhaengig: ['V70', 'V71'],
+    braucht: 'kasseneck-l16',
+    rang: 49,
+    baue: (ctx) => kasseneckLohnzettel(ctx, 'L12'),
   }),
 ];
