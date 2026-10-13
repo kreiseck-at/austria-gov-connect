@@ -557,6 +557,17 @@ test('L-Fälle: Bestand LF, TM, Version 28, VSTR 94, Informationssatz und ein Lo
   }
 });
 
+test('L10 wiederholt die Referenznummer von L04; L11 trägt zwei Lohnzettel unter einem Informationssatz', () => {
+  const refn = (id, nr) => feld(saetze(GEBAUT.get(id).ergebnis.inhalt)[nr], 66, 30);
+  assert.equal(refn('L10', 2), refn('L04', 2));
+  const s = saetze(GEBAUT.get('L11').ergebnis.inhalt);
+  assert.deepEqual(
+    s.map((z) => z.slice(0, 2)),
+    ['00', 'I1', 'L1', 'L1', '99'],
+  );
+  assert.notEqual(feld(s[2], 66, 30), feld(s[3], 66, 30));
+});
+
 test('ES-Satzarten E3, E4, EA: Satzart und Träger (EA an den Dachverband, VSTR 99)', () => {
   for (const [id, sart, vstr] of [
     ['S70', 'E3', '14'],
