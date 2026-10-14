@@ -15,6 +15,13 @@
 //   M91     mBGM 02/2026: B053, 27 SV-Tage (2.700,00 €), ohne BV, VERG 2, VVON 02.
 //   M92     mBGM 03/2026: B053, 3.000,00 €, BV ab 02.03. (Resttage 30 → voll), VERG 1.
 //
+// Gegenprobe F1 (Fenster mi-nm, sim. 01.05.2026):
+//   M90 kam mit BW1862 zurück („keine Versicherungszeit SV“ 03/2026, beide Lehrlinge). V90/V91 waren formal
+//   übernommen, ohne Clearing. Beide Personen hatten auf A/14 noch ein offenes Dienstverhältnis aus 2025
+//   (Abmeldungen V15/V50 mit VW1942 nicht verarbeitet); V97/V99 haben es erst zwei Minuten NACH V90/V91
+//   geschlossen. Vermutung: Eine Anmeldung bei offenem Dienstverhältnis auf demselben Konto wird ohne
+//   Rückmeldung nicht gespeichert (vgl. V34). V93/V94 melden jetzt – nach V97/V99 – erneut an, M94 wiederholt M90.
+//
 // Quellen der Sätze und Grenzen (kasseneck lohnparameter/2026.json, dort belegt):
 //   Lehrling T01 = DN 13,07 % + DG 15,38 % = 28,45 % (ÖGK 10008.802672); Sonderzahlungen
 //   Lehrling ebenso 13,07 % + 15,38 % = 28,45 % (T02). AlV-Anteil Lehrling 1,15 %.
@@ -30,6 +37,7 @@ const { meldung } = require('../lib/bausteine');
 
 const fall = (mehr) => ({ gefahr: null, abhaengig: [], aktion: 'senden', ...mehr });
 const MI_VM = ['mi-vm'];
+const MI_NM = ['mi-nm'];
 const d = (ctx, iso) => ctx.ttmmjjjj(iso);
 
 const T_LEHRLING = 28.45;
@@ -93,6 +101,50 @@ function lehrlingsAnmeldung(id, rolle, bber) {
     });
 }
 
+function lehrlingsMbgm(id) {
+  return (ctx) => {
+    const r1 = ctx.referenzwert(`${id}-1`);
+    const r2 = ctx.referenzwert(`${id}-2`);
+    const ab1 = 230_000;
+    const ab2 = 95_000;
+    const sz2 = 95_000;
+    return paket(
+      ctx,
+      id,
+      [
+        eintrag(ctx, r1, 'arbeiterlehrling', 'SV_MIT_ZEIT', {
+          beschaeftigtengruppe: 'B045',
+          beginnDerVerrechnung: 1,
+          basen: [
+            {
+              typ: 'AB',
+              betragCent: ab1,
+              positionen: [pos(ctx, 'T01', T_LEHRLING, ab1), pos(ctx, 'A05', A05, ab1)],
+            },
+          ],
+        }),
+        eintrag(ctx, r2, 'angestelltenlehrling', 'SV_MIT_ZEIT', {
+          beschaeftigtengruppe: 'B044',
+          beginnDerVerrechnung: 1,
+          basen: [
+            {
+              typ: 'AB',
+              betragCent: ab2,
+              positionen: [pos(ctx, 'T01', T_LEHRLING, ab2), pos(ctx, 'A04', A04, ab2)],
+            },
+            {
+              typ: 'SZ',
+              betragCent: sz2,
+              positionen: [pos(ctx, 'T02', T_LEHRLING, sz2), pos(ctx, 'A04', A04, sz2)],
+            },
+          ],
+        }),
+      ],
+      { dg: 'A', traeger: '14', bzr: '032026', referenzwerte: [r1, r2] },
+    );
+  };
+}
+
 module.exports = [
   fall({
     id: 'V90',
@@ -128,47 +180,7 @@ module.exports = [
     fenster: MI_VM,
     abhaengig: ['V90', 'V91'],
     rang: 30,
-    baue: (ctx) => {
-      const r1 = ctx.referenzwert('M90-1');
-      const r2 = ctx.referenzwert('M90-2');
-      const ab1 = 230_000;
-      const ab2 = 95_000;
-      const sz2 = 95_000;
-      return paket(
-        ctx,
-        'M90',
-        [
-          eintrag(ctx, r1, 'arbeiterlehrling', 'SV_MIT_ZEIT', {
-            beschaeftigtengruppe: 'B045',
-            beginnDerVerrechnung: 1,
-            basen: [
-              {
-                typ: 'AB',
-                betragCent: ab1,
-                positionen: [pos(ctx, 'T01', T_LEHRLING, ab1), pos(ctx, 'A05', A05, ab1)],
-              },
-            ],
-          }),
-          eintrag(ctx, r2, 'angestelltenlehrling', 'SV_MIT_ZEIT', {
-            beschaeftigtengruppe: 'B044',
-            beginnDerVerrechnung: 1,
-            basen: [
-              {
-                typ: 'AB',
-                betragCent: ab2,
-                positionen: [pos(ctx, 'T01', T_LEHRLING, ab2), pos(ctx, 'A04', A04, ab2)],
-              },
-              {
-                typ: 'SZ',
-                betragCent: sz2,
-                positionen: [pos(ctx, 'T02', T_LEHRLING, sz2), pos(ctx, 'A04', A04, sz2)],
-              },
-            ],
-          }),
-        ],
-        { dg: 'A', traeger: '14', bzr: '032026', referenzwerte: [r1, r2] },
-      );
-    },
+    baue: lehrlingsMbgm('M90'),
   }),
   fall({
     id: 'V92',
@@ -247,5 +259,42 @@ module.exports = [
         { dg: 'B', traeger: '15', freieDN: true, bzr: '032026', referenzwerte: [r] },
       );
     },
+  }),
+  fall({
+    id: 'V93',
+    titel: 'F1-Gegenprobe: Anmeldung Arbeiterlehrling zum 01.03.2026 nach dem Abschluss V97 (A/14)',
+    zweck:
+      'Wie V90, jetzt nachdem V97 das alte Dienstverhältnis geschlossen hat. Kommt zu M94 kein BW1862, war das ' +
+      'offene Dienstverhältnis der Grund, warum V90 nicht gespeichert wurde.',
+    quelle: 'E.29.2; SIT V90/M90 (BW1862), V97',
+    erwartung: 'übernommen',
+    fenster: MI_NM,
+    abhaengig: ['V97'],
+    rang: 20,
+    baue: lehrlingsAnmeldung('V93', 'arbeiterlehrling', '03'),
+  }),
+  fall({
+    id: 'V94',
+    titel: 'F1-Gegenprobe: Anmeldung Angestelltenlehrling zum 01.03.2026 nach dem Abschluss V99 (A/14)',
+    zweck: 'Wie V91, jetzt nachdem V98/V99 das alte Dienstverhältnis geschlossen haben.',
+    quelle: 'E.29.2; SIT V91/M90 (BW1862), V99',
+    erwartung: 'übernommen',
+    fenster: MI_NM,
+    abhaengig: ['V99'],
+    rang: 20,
+    baue: lehrlingsAnmeldung('V94', 'angestelltenlehrling', '04'),
+  }),
+  fall({
+    id: 'M94',
+    titel: 'F1-Gegenprobe: mBGM 03/2026 Lehrlinge wie M90 (A05 bei 2.300 €, A04 auf AB und SZ)',
+    zweck:
+      'Gleiches Paket wie M90. Kein BW1862 → V93/V94 gespeichert; dann zeigt das Clearing auch die eigentliche ' +
+      'F1-Frage (BW1838/BW1850 zu A05 und zur Sonderzahlung).',
+    quelle: 'wie M90',
+    erwartung: 'übernommen; Clearing: kein BW1862, kein BW1838, kein BW1850',
+    fenster: MI_NM,
+    abhaengig: ['V93', 'V94'],
+    rang: 30,
+    baue: lehrlingsMbgm('M94'),
   }),
 ];
