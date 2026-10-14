@@ -160,7 +160,7 @@ function agrdVonKasseneck(art) {
   return AGRD[art];
 }
 
-function f6Anmeldung(id, n) {
+function f6Anmeldung(id, lfd) {
   return (ctx) => {
     const { vr } = kasseneckVr();
     return kBestand(
@@ -168,12 +168,12 @@ function f6Anmeldung(id, n) {
       id,
       'M3',
       vr.felderAnmeldung({ nutzer: nutzerA14(ctx), emp: f6Mitarbeiter(ctx), historie: [] }),
-      n,
+      lfd,
     );
   };
 }
 
-function f6Abmeldung(id, n) {
+function f6Abmeldung(id, lfd) {
   return (ctx) => {
     const { vr } = kasseneckVr();
     const agrd = agrdVonKasseneck('dn_kuendigung_elternteilzeit');
@@ -202,7 +202,7 @@ function f6Abmeldung(id, n) {
     });
     if (ergebnis.felder.AGRD !== '21')
       throw new Error(`${id}: AGRD im Satz ist ${ergebnis.felder.AGRD}, nicht 21.`);
-    return kBestand(ctx, id, 'M4', ergebnis, n);
+    return kBestand(ctx, id, 'M4', ergebnis, lfd);
   };
 }
 
