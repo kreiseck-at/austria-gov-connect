@@ -7,7 +7,7 @@
 //        MIT REFU = Referenzwert von V41.
 //   V96  M8 zur B03-Anmeldung (reserve_1, B/15, Eintritt 01.01.2025, ohne BVAB), BVAB = 01.02.2025,
 //        OHNE REFU (am Builder vorbei geleert – die Pflichtmatrix E.29.1 führt REFU bei M8 als „Z“).
-//   M90  mBGM 04/2025 auf B/15 für beide Personen mit BV (Paket-Weg wie M41).
+//   M93  mBGM 04/2025 auf B/15 für beide Personen mit BV (Paket-Weg wie M41).
 //   Beide Dienstverhältnisse laufen noch: ihre Abmeldungen V45/V47 kamen mit VW1942 und
 //   wurden nicht verarbeitet.
 //
@@ -158,10 +158,10 @@ module.exports = [
     titel: 'F3a: Richtigstellung Anmeldung V41 – nur BVAB nachgetragen, mit REFU (M8)',
     zweck:
       'Heilt eine Anmeldung ohne BVAB die BV-Zeit nachträglich? V41 (ohne BVAB) bekam BW1871 zur mBGM 03/2025 ' +
-      'und VW1942 zur Abmeldung V45. Danach M90 (mBGM 04/2025 mit BV).',
+      'und VW1942 zur Abmeldung V45. Danach M93 (mBGM 04/2025 mit BV).',
     quelle: F3_QUELLE,
     erwartung:
-      'übernommen; danach M90 für diese Person ohne BW1871 – oder BW1871 bleibt (Heilung wirkt nicht)',
+      'übernommen; danach M93 für diese Person ohne BW1871 – oder BW1871 bleibt (Heilung wirkt nicht)',
     fenster: MI_VM,
     abhaengig: ['V41'],
     rang: 40,
@@ -189,10 +189,10 @@ module.exports = [
     zweck:
       'Wie bei einer Anmeldung, die nicht von uns kam: kein Referenzwert der Originalmeldung. Die Pflichtmatrix ' +
       'verlangt REFU bei M8 („Z“) – deshalb am Builder vorbei geleert. Wird die M8 abgewiesen oder über VSNR und ' +
-      'Datum zugeordnet? Danach M90 mit BV für diese Person.',
+      'Datum zugeordnet? Danach M93 mit BV für diese Person.',
     quelle: F3_QUELLE,
     erwartung:
-      'Abweisung wegen fehlendem REFU (Pflichtfeld) – oder übernommen und BV-Zeit geheilt (M90 ohne BW1871)',
+      'Abweisung wegen fehlendem REFU (Pflichtfeld) – oder übernommen und BV-Zeit geheilt (M93 ohne BW1871)',
     fenster: MI_VM,
     abhaengig: ['B03'],
     rang: 40,
@@ -216,7 +216,7 @@ module.exports = [
     },
   }),
   fall({
-    id: 'M90',
+    id: 'M93',
     titel: 'F3: mBGM 04/2025 mit BV für die Personen aus V95 und V96 (B/15, Paket-Weg)',
     zweck:
       'Gegenprobe zur Heilung: Ohne BV-Zeit käme BW1871 (wie M41 für V41). Kommt es für eine der beiden ' +
@@ -228,9 +228,9 @@ module.exports = [
     rang: 45,
     baue: (ctx) => {
       const konto = ctx.konto('B', { traeger: '15' });
-      const refA = ctx.referenzwert('M90-1');
-      const refB = ctx.referenzwert('M90-2');
-      const paketref = ctx.referenzwert('M90');
+      const refA = ctx.referenzwert('M93-1');
+      const refB = ctx.referenzwert('M93-2');
+      const paketref = ctx.referenzwert('M93');
       const saetze = ctx.elda.erstelleMbgmPaket(
         [mbgmEintrag(ctx, refA, 'angestellte'), mbgmEintrag(ctx, refB, 'reserve_1')],
         {
@@ -243,10 +243,10 @@ module.exports = [
         },
       );
       const befunde = [...ctx.elda.pruefeAbfolge(saetze), ...ctx.elda.pruefeMbgmPaket(saetze)];
-      if (befunde.length > 0) throw new Error(`M90 hat Befunde: ${JSON.stringify(befunde).slice(0, 300)}`);
+      if (befunde.length > 0) throw new Error(`M93 hat Befunde: ${JSON.stringify(befunde).slice(0, 300)}`);
       return {
         inhalt: ctx.elda.erstelleMbgmBestand(saetze, ctx.bestandOptionen({ dg: 'B', traeger: '15' })),
-        dateiName: ctx.dateiName('M90'),
+        dateiName: ctx.dateiName('M93'),
         referenzwerte: [paketref, refA, refB],
       };
     },
