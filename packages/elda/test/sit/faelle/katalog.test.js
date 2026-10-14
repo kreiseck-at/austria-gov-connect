@@ -40,6 +40,13 @@ const IM_FENSTER = {
 };
 
 const SART = {
+  V95: 'M8',
+  V96: 'M8',
+  V97: 'M4',
+  V98: 'S4',
+  V99: 'M4',
+  K20: 'M3',
+  K21: 'M4',
   V01: 'M3',
   V02: 'M3',
   V03: 'M3',
@@ -118,6 +125,8 @@ const SART = {
   T03: 'M3',
 };
 const VSTR = {
+  V95: '15',
+  V96: '15',
   K11: '15',
   K12: '15',
   K13: '15',
@@ -162,7 +171,7 @@ const VSTR = {
   V84: '15',
   B13: '15',
 };
-const REFU_AUS = { V09: 'V02', V11: 'V05', V19: 'V15', V20: 'V12', V43: 'V40', V58: 'V57' };
+const REFU_AUS = { V95: 'V41', V98: 'V50', V09: 'V02', V11: 'V05', V19: 'V15', V20: 'V12', V43: 'V40', V58: 'V57' };
 
 const ersterFenster = (fall) => (fall.fenster === 'jedes' ? 'mo-vm' : fall.fenster[0]);
 
