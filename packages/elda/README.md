@@ -117,7 +117,7 @@ unterschiedlich weit belegt:
 | Versichertenmeldung reduziert (E.29) | `VR` | SIT-Plattform, Oktober 2026 |
 | Monatliche Beitragsgrundlagenmeldung (E.32) | `MB` | Produktion seit 05.08.2026, SIT-Plattform |
 | VSNR-Anforderung (E.30), Adresse Versicherter (E.31) | `VS`, `AV` | SIT-Plattform, Oktober 2026 |
-| Familienhospizkarenz/Pflegekarenz (E.12), Schwerarbeitsmeldung (E.22) | `FH`, `SM` | Familienhospiz: SIT-Plattform, Oktober 2026; Schwerarbeit: SIT-Fälle angelegt |
+| Familienhospizkarenz/Pflegekarenz (E.12), Schwerarbeitsmeldung (E.22) | `FH`, `SM` | SIT-Plattform, Oktober 2026 (Meldung und Storno) |
 | Antrag auf zwischenstaatliche Bescheinigung (E.27) | `ES` | SIT-Plattform, Oktober 2026 (E1–E5, EA, Storno) |
 | Lohnzettel Finanz (E.13/E.14) | `LF` | SIT-Plattform, Oktober 2026 |
 
@@ -325,8 +325,10 @@ Beobachtet auf der SIT-Plattform (Oktober 2026):
 - `405` (Duplikat) kam **nie**: Dieselbe Datei, byte-gleich mit derselben
   Datenträgernummer und denselben Referenzwerten, wurde zweimal mit `000`
   angenommen (07.10. und erneut 12.10.2026), und auch das Clearing meldete
-  nichts. Gegen Doppelversand schützt
-  sich der Absender selbst.
+  nichts — ebenso am 14.10.2026, als das Original schon verarbeitet war. Die
+  ELDA-FAQ für Dienstgeber nennt für die Produktion `E17` „Datei … ist bereits
+  vorhanden" (identischer Inhalt, bereits erfolgreich verarbeitet). Gegen
+  Doppelversand schützt sich der Absender selbst.
 - `559` kam nie: ELDA nimmt die Anfrage auch mit `Content-Type: application/xml`
   an (zuletzt 12.10.2026). Ebenso blieb ein leeres `created` am 12.10.2026 beim
   SOAP-Fault statt `555`.
@@ -421,7 +423,7 @@ Rücksendungen ein, eine je Sendung, nicht je Meldung:
 | `mitteilung_<Protokollnummer>.xml` | `mitteilung` | ob ELDA die Meldungen **formal** übernommen hat — je Bestand und je Meldung (Referenznummer, Zeile) |
 | `mbd_<Protokollnummer>_<Beitragskontonummer>` | `protokoll` | dasselbe als Klartext-Protokoll (ISO-8859-15) mit Beträgen, Beschäftigtengruppe, Verrechnungsbasis; bei der Versichertenmeldung zusätzlich eine Bestätigung für Dienstgeber und Dienstnehmer |
 | `cm_<Nummer>.xml` | `clearing` | **erst nach der fachlichen Verarbeitung** beim Träger, wenn etwas zu klären ist: Clearing-Datensatz 2.0 |
-| `es_<UIDM>_<Nummer>.pdf` | `bescheinigung` | zu einem Antrag auf zwischenstaatliche Bescheinigung (Kapitel E.27): die amtssignierte PDF-Ausfertigung, etwa PD A1; zugeordnet über die UIDM des Antrags (`art.uidm`). Auf der SIT kam sie zu übernommenen Anträgen am nächsten Testtag (13.10.2026) |
+| `es_<UIDM>_<Nummer>.pdf` | `bescheinigung` | zu einem Antrag auf zwischenstaatliche Bescheinigung (Kapitel E.27): die amtssignierte PDF-Ausfertigung, etwa PD A1; zugeordnet über die UIDM des Antrags (`art.uidm`). Auf der SIT kam sie zu übernommenen Anträgen am nächsten Testtag (13.10.2026). Nach einem Storno kommt eine zweite PDF **mit derselben UIDM** — die Storno-Bestätigung („… ziehen die … ausgestellte Bescheinigung PD A1 zurück"); am Dateinamen ist sie von der Bescheinigung nicht zu unterscheiden, nur am Inhalt |
 
 ```ts
 import { artDerRuecksendung, liesMitteilung, liesClearing, MELDUNG_STATUS } from '@kreiseck/elda';
@@ -543,8 +545,30 @@ muss für die Produktion nicht ebenso gelten:
     `BW1874` „Für die Beschäftigung von 07.02.2025 - laufend wurde im
     Beitragszeitraum 02/2025 für den Bereich BV keine entsprechende
     Beitragsgrundlage gemeldet" — die ÖGK erwartet BV dann ab dem ersten Tag.
-  - Mit **`BVAB` = Eintritt + 1 Monat** und ohne `BVAB` kam zum Eintrittsmonat
-    kein Clearing; die Antwort zum Folgemonat mit BV steht noch aus.
+  - Mit **`BVAB` = Eintritt + 1 Monat** kam weder zum Eintrittsmonat (ohne BV)
+    noch zum Folgemonat (mit BV) ein Clearing, und die Abmeldung mit `BVEN`
+    wurde verarbeitet (14.10.2026). Ebenso beim freien Dienstnehmer
+    (Beschäftigtengruppe `B053`).
+  - Endet das Dienstverhältnis **vor** dem BV-Beginn (Austritt im ersten
+    Monat), kam die Abmeldung mit `BVEN` als `VW1942`; ohne `BVEN` wurde sie
+    verarbeitet.
+  - **Nachtragen:** Eine Richtigstellung der Anmeldung (`M8`), die nur `BVAB`
+    ergänzt, legt die BV-Zeit nachträglich an — eine mBGM mit BV-Basis für
+    einen Monat danach kam ohne `BW1871` (14.10.2026). Ohne `REFU` weist ELDA
+    die `M8` ab (`F7041` „Feld REFERENZWERT DER URSPRUENGLICHEN MELDUNG ist zu
+    befuellen"). Ein `REFU`, der zu keiner unserer Meldungen gehört, wurde
+    übernommen und hat die BV-Zeit ebenso angelegt: Zugeordnet wird offenbar
+    über Versicherungsnummer, Beitragskonto und Beginn, der `REFU` muss nur
+    befüllt sein. Die Änderungsmeldung (`M6`) führt `BVAB` nicht.
+  - Steht die BV-Zeit, kommt für jeden Monat ohne BV-Basis `BW2032` „Für die
+    Beschäftigung von 01.01.2025 - laufend wurde im Beitragszeitraum 05/2025
+    für den Bereich BV keine entsprechende Beitragsgrundlage gemeldet" — auch
+    rückwirkend für die Monate vor dem Nachtragen.
+  - **Liegengebliebene Abmeldung reparieren** (nach `VW1942` nicht
+    verarbeitet): Eine neue Abmeldung (`M4`) ohne `BVEN` wurde verarbeitet,
+    ebenso Storno (`S4`) plus neue `M4`. Eine Richtigstellung der Abmeldung
+    (`M9`) dagegen kam als `VW1560` „Die Richtigstellung der Abmeldung kann
+    keiner Abmeldung zugeordnet werden" — es gibt ja keine verarbeitete.
 
   Folge: In der Anmeldung `BVAB` mit dem Beginn der BV-Pflicht mitschicken
   (siehe „Was geprüft wird — und was nicht").
@@ -563,13 +587,24 @@ muss für die Produktion nicht ebenso gelten:
   ELDA mit `000` beim Senden und danach in `mitteilung_<prot>.xml` mit Status
   `nicht_uebernommen`, Code, Zeilennummer und Text je Meldung — genau so, wie
   `liesMitteilung` es nach dem Schema liest.
+- **Neue Anmeldung bei noch offenem Dienstverhältnis** (14.10.2026, Befund,
+  Gegenprobe läuft): Zwei Anmeldungen auf einem Beitragskonto, auf dem für
+  dieselbe Person noch ein Dienstverhältnis offen war (dessen Abmeldung nie
+  verarbeitet wurde bzw. storniert war), kamen formal `uebernommen` und ohne
+  Clearing zurück — gespeichert wurden sie nicht: Die mBGM danach kam als
+  `BW1862` „Die mBGM wurde nicht verarbeitet, da für den Zeitraum 01.03.2026 -
+  31.03.2026 keine Versicherungszeit SV gespeichert ist", die Abmeldung mit
+  `BVEN` als `VW1942` (sie traf das alte Dienstverhältnis ohne BV-Zeit). Vor
+  einem Wiedereintritt also prüfen, ob die letzte Abmeldung verarbeitet wurde.
 - **Lehrlinge** mit der allgemeinen AV-Minderung `A01`–`A03`: `BW1838`
   (Kontrollfall) und `BW1850` (Beitragssumme weicht ab) — die Meldung wird
   verarbeitet und verbucht, aber zu niedrig; Handlung „ggf. Storno und
   Neumeldung". Richtig sind `A04`/`A05`. Dazu kommt `BW1842` (nicht dringend):
   „Der Abschlag Minderung AV auf 0% (Lg.) wäre für die gemeldete
   Verrechnungsbasis … möglich". `pruefeMbgmPaket` meldet die falsche Minderung
-  seither als Fehler `BW1838` (siehe „Prüfung der mBGM").
+  seither als Fehler `BW1838` (siehe „Prüfung der mBGM"). Mit `A04` auf
+  Beitragsgrundlage (Lehrlingssatz 28,45 %) kamen weder `BW1838` noch `BW1850`
+  (14.10.2026).
 - **Rundung auf den Cent:** `BW1917` (nicht dringend) „Zur Verrechnungsposition
   Standard-Tarifgruppenverrechnung (T01) wurde im Unterschied zum gemeldeten
   Beitrag € 270,27 der Beitrag in der Höhe von € 270,28 verbucht." Gemeldet war
@@ -603,6 +638,18 @@ muss für die Produktion nicht ebenso gelten:
   42. Ergänzung; laut 43. sind beide nur noch Warnungen). `é` im Vornamen wurde
   formal übernommen, obwohl das Zeichensatz-Dokument es für Personennamen nicht
   vorsieht — das Paket bleibt beim Dokument.
+- **mBGM im falschen Verfahren:** Ein Paket für Vorschreibebetriebe (`PV`) auf
+  einem Beitragskonto der Selbstabrechnung wurde formal übernommen; im
+  Clearing kam `BW1834` (nicht verarbeitet): „Das übermittelte mBGM Paket ist
+  für Vorschreibebetriebe vorgesehen. Sie werden als selbstabrechnender Betrieb
+  geführt … Das übermittelte mBGM Paket wird von der ÖGK storniert"
+  (14.10.2026).
+- **Clearing ohne eigenen Referenzwert:** Die amtswegigen mBGM (`BW1916`,
+  dazu `BW2032`) kamen mit Satzart `X1` und Referenzwerten der ÖGK
+  (`EXS-G1/<JJJJMM>/<Nummer>`), die Mahnungen `BW1930`/`BW1922` mit
+  `<Träger>-Intern-D-<Nummer>`. Wer Clearing den eigenen Meldungen zuordnet,
+  braucht für diese Fälle einen Weg über Beitragskonto, Versicherungsnummer
+  und Beitragszeitraum.
 - **Datenträgernummer:** Eine zweite Datei mit derselben Datenträgernummer wurde
   angenommen (13.10.2026); ELDA prüft sie auf der SIT nicht.
 - **Adressmeldung:** Eine verfälschte Prüfziffer kam als `F8031`, `WKFZ` = `A`
@@ -1394,6 +1441,12 @@ kennt das Paket nicht — es baut, was es bekommt.
 | `F5511_n`, `F5521_n` | Beginn bzw. Ende in Block `n` ist ein Tag (`TTMM`) im Tätigkeitsjahr |
 | `F5530_n` | Block `n` unvollständig (nur ein Feld, nur Beginn oder nur Ende) oder Beginn nach Ende |
 | `F5580_n` | Tätigkeitsart nicht 1, 2, 4, 5 oder 6 |
+
+Auf der SIT (14.10.2026) wurden Meldung und Storno übernommen; Tätigkeitsart 3
+kam als `F5580` zurück — ohne die Blocknummer, die der Prüfkatalog und das Paket
+anhängen (`F5580_1`). Eine falsche Prüfziffer der Versicherungsnummer kam als
+`F0040`. Die Tätigkeitsart zweistellig als `01` statt `1 ` wurde übernommen; das
+Paket bleibt bei der abgedruckten Schreibweise und weist `01` ab.
 
 Strenger als der Prüfkatalog, weil die Matrix (E.22.1) es so verlangt:
 Versicherungsnummer **und** Geburtsdatum sind beide zwingend, ebenso die
