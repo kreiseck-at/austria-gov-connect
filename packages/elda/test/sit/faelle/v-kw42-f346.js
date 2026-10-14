@@ -24,6 +24,14 @@
 //        AGRD-Tabelle von kasseneck (beendigung-core.AGRD, wie endabrechnung-core). Elternteilzeit
 //        selbst ist am kasseneck-Mitarbeiter nicht hinterlegt: AGRD hängt allein an der Beendigungsart;
 //        die Endabrechnung (Pflicht-Zugangsdatum, ARTEN_MIT_DATUM_PFLICHT) wird hier nicht durchlaufen.
+//
+// Gegenprobe F6 (Fenster mi-nm, sim. 01.05.2026):
+//   K21 kam mit VW1942 zurück, K20 ohne Clearing. Der arbeiter hatte auf A/14 noch das Dienstverhältnis
+//   aus V01 (01.01.2025, ohne BVAB) offen: V12 hatte es beendet, V20 hat V12 wieder storniert. Die
+//   amtswegigen mBGM (BW1916) für A/14 laufen bis 02/2026 weiter. Vermutung: K20 wurde wegen des offenen
+//   Dienstverhältnisses nicht gespeichert, K21 traf das alte ohne BV-Zeit.
+//   V101 beendet das alte Dienstverhältnis zum 31.01.2026 (ohne BVEN – es hatte nie BV-Zeit), danach
+//   K22/K23 = K20/K21 noch einmal über die kasseneck-Brücke.
 
 const path = require('node:path');
 const { meldung, setzeFeld } = require('../lib/bausteine');
@@ -35,6 +43,7 @@ const d = (ctx, iso) => ctx.ttmmjjjj(iso);
 const feldE29 = (name) => FELDER_E29.find((f) => f.name === name);
 const fall = (mehr) => ({ gefahr: null, abhaengig: [], aktion: 'senden', ...mehr });
 const MI_VM = ['mi-vm'];
+const MI_NM = ['mi-nm'];
 
 /** Eintritt + 1 Monat (§ 6 Abs 1 BMSVG). */
 function monatSpaeter(iso) {
@@ -149,6 +158,52 @@ function agrdVonKasseneck(art) {
   const wurzel = process.env.KASSENECK_VR_PFAD;
   const { AGRD } = require(path.join(wurzel, 'functions-lohn', 'beendigung-core'));
   return AGRD[art];
+}
+
+function f6Anmeldung(id, n) {
+  return (ctx) => {
+    const { vr } = kasseneckVr();
+    return kBestand(
+      ctx,
+      id,
+      'M3',
+      vr.felderAnmeldung({ nutzer: nutzerA14(ctx), emp: f6Mitarbeiter(ctx), historie: [] }),
+      n,
+    );
+  };
+}
+
+function f6Abmeldung(id, n) {
+  return (ctx) => {
+    const { vr } = kasseneckVr();
+    const agrd = agrdVonKasseneck('dn_kuendigung_elternteilzeit');
+    if (agrd !== '21')
+      throw new Error(`${id}: kasseneck bildet Elternteilzeit-Kündigung auf ${agrd} ab, nicht 21.`);
+    const n = nutzerA14(ctx);
+    const angemeldet = vr.felderAnmeldung({ nutzer: n, emp: f6Mitarbeiter(ctx), historie: [] });
+    const emp = f6Mitarbeiter(ctx, {
+      endDate: F6_ENDE,
+      beendigung: { art: 'dn_kuendigung_elternteilzeit' },
+    });
+    const bvab = vr.bvBeginnDesDv({
+      dv: { angemeldet: { felder: angemeldet.felder } },
+      nutzer: n,
+      emp,
+      historie: [],
+    });
+    const ergebnis = vr.felderAbmeldung({
+      nutzer: n,
+      emp,
+      endabrechnung: {
+        status: 'vollstaendig',
+        elda: { EBSV: F6_ENDE, ADAT: F6_ENDE, BVEN: F6_ENDE, AGRD: agrd },
+      },
+      bvab,
+    });
+    if (ergebnis.felder.AGRD !== '21')
+      throw new Error(`${id}: AGRD im Satz ist ${ergebnis.felder.AGRD}, nicht 21.`);
+    return kBestand(ctx, id, 'M4', ergebnis, n);
+  };
 }
 
 module.exports = [
@@ -329,16 +384,7 @@ module.exports = [
     abhaengig: ['V12'],
     braucht: 'kasseneck-vr',
     rang: 40,
-    baue: (ctx) => {
-      const { vr } = kasseneckVr();
-      return kBestand(
-        ctx,
-        'K20',
-        'M3',
-        vr.felderAnmeldung({ nutzer: nutzerA14(ctx), emp: f6Mitarbeiter(ctx), historie: [] }),
-        1,
-      );
-    },
+    baue: f6Anmeldung('K20', 1),
   }),
   fall({
     id: 'K21',
@@ -353,36 +399,7 @@ module.exports = [
     abhaengig: ['K20'],
     braucht: 'kasseneck-vr',
     rang: 42,
-    baue: (ctx) => {
-      const { vr } = kasseneckVr();
-      const agrd = agrdVonKasseneck('dn_kuendigung_elternteilzeit');
-      if (agrd !== '21')
-        throw new Error(`K21: kasseneck bildet Elternteilzeit-Kündigung auf ${agrd} ab, nicht 21.`);
-      const n = nutzerA14(ctx);
-      const angemeldet = vr.felderAnmeldung({ nutzer: n, emp: f6Mitarbeiter(ctx), historie: [] });
-      const emp = f6Mitarbeiter(ctx, {
-        endDate: F6_ENDE,
-        beendigung: { art: 'dn_kuendigung_elternteilzeit' },
-      });
-      const bvab = vr.bvBeginnDesDv({
-        dv: { angemeldet: { felder: angemeldet.felder } },
-        nutzer: n,
-        emp,
-        historie: [],
-      });
-      const ergebnis = vr.felderAbmeldung({
-        nutzer: n,
-        emp,
-        endabrechnung: {
-          status: 'vollstaendig',
-          elda: { EBSV: F6_ENDE, ADAT: F6_ENDE, BVEN: F6_ENDE, AGRD: agrd },
-        },
-        bvab,
-      });
-      if (ergebnis.felder.AGRD !== '21')
-        throw new Error(`K21: AGRD im Satz ist ${ergebnis.felder.AGRD}, nicht 21.`);
-      return kBestand(ctx, 'K21', 'M4', ergebnis, 2);
-    },
+    baue: f6Abmeldung('K21', 2),
   }),
   fall({
     id: 'V100',
@@ -392,7 +409,8 @@ module.exports = [
       'Referenzwert der Originalmeldung nicht. Reicht ein beliebiger REFU (Zuordnung über VSNR und Datum), oder ' +
       'muss er zur Originalmeldung passen? Danach zeigt M93 (BV 04/2025), ob die BV-Zeit geheilt ist.',
     quelle: F3_QUELLE,
-    erwartung: 'übernommen und Clearing ohne Zuordnungsfehler – oder ein VW-Code „kann keiner Anmeldung zugeordnet werden“',
+    erwartung:
+      'übernommen und Clearing ohne Zuordnungsfehler – oder ein VW-Code „kann keiner Anmeldung zugeordnet werden“',
     fenster: MI_VM,
     abhaengig: ['B03'],
     rang: 40,
@@ -414,5 +432,53 @@ module.exports = [
       });
       return b;
     },
+  }),
+  // --- Gegenprobe F6 ----------------------------------------------------------------------
+  fall({
+    id: 'V101',
+    titel:
+      'F6-Gegenprobe: altes Dienstverhältnis des arbeiters auf A/14 zum 31.01.2026 beenden (M4, ohne BVEN)',
+    zweck:
+      'Das Dienstverhältnis aus V01 ist seit dem Storno V20 wieder offen. Erst wenn es beendet ist, kann K22 ' +
+      'ein neues anlegen. Ohne BVEN, weil V01 ohne BVAB angemeldet war (sonst VW1942).',
+    quelle: 'E.29.2 (M4), D.22 (Code 05); SIT V01, V12, V20, K20/K21 (VW1942), BW1916 bis 02/2026',
+    erwartung: 'übernommen und verarbeitet (kein Clearing)',
+    fenster: MI_NM,
+    abhaengig: ['V20'],
+    rang: 40,
+    baue: (ctx) =>
+      meldung(ctx, {
+        fall: 'V101',
+        art: 'abmeldung',
+        rolle: 'arbeiter',
+        dg: 'A',
+        traeger: '14',
+        felder: { GERF: 'N', ADAT: '31012026', EBSV: '31012026', AGRD: '05' },
+      }),
+  }),
+  fall({
+    id: 'K22',
+    titel: 'F6-Gegenprobe: kasseneck-Anmeldung arbeiter auf A/14, Eintritt 02.02.2026 (wie K20)',
+    zweck:
+      'Wie K20, jetzt nach V101. Kommt zu K23 kein VW1942, hat das offene alte Dienstverhältnis K20 verschluckt.',
+    quelle: 'wie K20; SIT K20/K21',
+    erwartung: 'übernommen',
+    fenster: MI_NM,
+    abhaengig: ['V101'],
+    braucht: 'kasseneck-vr',
+    rang: 41,
+    baue: f6Anmeldung('K22', 3),
+  }),
+  fall({
+    id: 'K23',
+    titel: 'F6-Gegenprobe: kasseneck-Abmeldung AGRD 21 zum 31.03.2026 mit BVEN (wie K21)',
+    zweck: 'Wie K21. Kein VW1942 → AGRD 21 und BVEN aus kasseneck werden verarbeitet.',
+    quelle: 'wie K21',
+    erwartung: 'übernommen, kein Clearing',
+    fenster: MI_NM,
+    abhaengig: ['K22'],
+    braucht: 'kasseneck-vr',
+    rang: 42,
+    baue: f6Abmeldung('K23', 4),
   }),
 ];
