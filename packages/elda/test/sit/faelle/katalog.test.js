@@ -40,6 +40,9 @@ const IM_FENSTER = {
 };
 
 const SART = {
+  V90: 'M3',
+  V91: 'M3',
+  V92: 'M3',
   V01: 'M3',
   V02: 'M3',
   V03: 'M3',
@@ -118,6 +121,7 @@ const SART = {
   T03: 'M3',
 };
 const VSTR = {
+  V92: '15',
   K11: '15',
   K12: '15',
   K13: '15',
