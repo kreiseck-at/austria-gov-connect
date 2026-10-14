@@ -384,4 +384,35 @@ module.exports = [
       return kBestand(ctx, 'K21', 'M4', ergebnis, 2);
     },
   }),
+  fall({
+    id: 'V100',
+    titel: 'F3c: Richtigstellung der B03-Anmeldung mit einem FREMDEN Referenzwert als REFU (M8)',
+    zweck:
+      'V96 (REFU leer) kam mit F7041 zurück. Bei einer Anmeldung, die nicht über uns lief, kennen wir den ' +
+      'Referenzwert der Originalmeldung nicht. Reicht ein beliebiger REFU (Zuordnung über VSNR und Datum), oder ' +
+      'muss er zur Originalmeldung passen? Danach zeigt M93 (BV 04/2025), ob die BV-Zeit geheilt ist.',
+    quelle: F3_QUELLE,
+    erwartung: 'übernommen und Clearing ohne Zuordnungsfehler – oder ein VW-Code „kann keiner Anmeldung zugeordnet werden“',
+    fenster: MI_VM,
+    abhaengig: ['B03'],
+    rang: 40,
+    baue: (ctx) => {
+      const ein = ctx.zrVon('B03');
+      const b = meldung(ctx, {
+        fall: 'V100',
+        art: 'richtigstellungAnmeldung',
+        rolle: 'reserve_1',
+        dg: 'B',
+        traeger: '15',
+        felder: {
+          REFU: 'FREMD-ANMELDUNG-UNBEKANNT',
+          ADAT: d(ctx, ein),
+          RDAT: d(ctx, ein),
+          VWAZ: ctx.elda.wochenarbeitszeit(40, 0),
+          BVAB: d(ctx, monatSpaeter(ein)),
+        },
+      });
+      return b;
+    },
+  }),
 ];
