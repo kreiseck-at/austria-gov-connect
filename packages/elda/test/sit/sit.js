@@ -619,7 +619,7 @@ function befehlPlan(optionen) {
   const jetzt = offlineJetzt();
   const fenster = optionen.fenster ?? aktivesFenster(jetzt);
   if (!fenster) abbruch('Kein Fenster aktiv – mit --fenster angeben, z. B. --fenster mo-vm.');
-  zrDatum(fenster);
+  zrDatum(fenster, jetzt);
   const ereignisse = ablage.ereignisse();
   const plan = planFuer(
     katalog,
@@ -627,7 +627,7 @@ function befehlPlan(optionen) {
     statusJeFall(katalog, ereignisse),
     gelaufenInWoche(ereignisse, wocheVon(jetzt)),
   );
-  console.log(`Plan für ${fenster} (simuliert ${zrDatum(fenster)}), Woche ${wocheVon(jetzt)}:`);
+  console.log(`Plan für ${fenster} (simuliert ${zrDatum(fenster, jetzt)}), Woche ${wocheVon(jetzt)}:`);
   for (const { fall, grund } of plan.reihenfolge) {
     console.log(
       `  ${fall.id}  ${fall.aktion.padEnd(10)} ${grund === 'vorlauf' ? '[Vorlauf] ' : ''}${fall.titel}${fall.gefahr ? `  ⚠ ${fall.gefahr}` : ''}`,
@@ -659,7 +659,7 @@ function befehlZeigen(positionen, optionen) {
     softwareId: SOFTWARE_ID,
     seriennummer: seriennummer({ pflicht: false }),
   });
-  console.log(`Trockenlauf in ${fenster} (simuliert ${zrDatum(fenster)}) – es wird nichts gesendet.`);
+  console.log(`Trockenlauf in ${fenster} (simuliert ${zrDatum(fenster, jetzt)}) – es wird nichts gesendet.`);
   const fehlt = fehlendeVorlaeufe(fall, gelaufenInWoche(ereignisse, wocheVon(jetzt)));
   if (fehlt.length)
     console.log(`  Hinweis: braucht ${fehlt.join(', ')} in dieser Woche – noch nicht gelaufen.`);

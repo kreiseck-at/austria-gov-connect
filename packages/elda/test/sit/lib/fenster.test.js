@@ -4,7 +4,9 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   FENSTER,
+  ZEITREISEN,
   GUELTIG_BIS,
+  zeitreiseAm,
   TESTFREIE_TAGE,
   wienerZeit,
   aktivesFenster,
@@ -42,14 +44,41 @@ test('aktivesFenster: nur Mo–Mi in den Fenstern, nicht an testfreien Tagen, ni
   assert.equal(aktivesFenster(new Date('2026-10-08T05:30:00Z')), null); // Do 07:30 – Wartung
   assert.equal(aktivesFenster(new Date('2026-10-05T04:30:00Z')), null); // Mo 06:30 – Wartung
   assert.equal(aktivesFenster(new Date('2026-10-19T05:30:00Z')), null); // testfreier Tag
-  assert.equal(aktivesFenster(new Date('2026-11-02T06:30:00Z')), null); // nach GUELTIG_BIS
+  assert.equal(aktivesFenster(new Date('2026-12-28T06:30:00Z')), null); // nach GUELTIG_BIS
+});
+
+test('Zeitreiseumstellung: ab Mo 02.11.2026 gilt die Zeitreise 2026/27', () => {
+  // Mo 02.11.2026 07:10 Wien (Winterzeit, UTC+1)
+  const mo = new Date('2026-11-02T06:10:00Z');
+  assert.equal(aktivesFenster(mo), 'mo-vm');
+  assert.equal(zrDatum('mo-vm', mo), '2026-01-01');
+  assert.equal(zrDatum('mo-nm', mo), '2026-02-01');
+  assert.equal(zrDatum('di-vm', mo), '2026-03-01');
+  assert.equal(zrDatum('di-nm', mo), '2026-04-01');
+  assert.equal(zrDatum('mi-vm', mo), '2027-04-01');
+  assert.equal(zrDatum('mi-nm', mo), '2027-05-01');
+  // Sonntag davor gilt noch die alte Zeitreise
+  assert.equal(zrDatum('mo-vm', new Date('2026-11-01T10:00:00Z')), '2025-01-01');
+  assert.equal(zeitreiseAm('2026-11-01').name, '2025/26');
+  assert.equal(zeitreiseAm('2026-11-02').name, '2026/27');
+  // Wartung Mo 06:00–07:00 und testfreie Tage im Dezember bleiben zu
+  assert.equal(aktivesFenster(new Date('2026-11-02T05:30:00Z')), null);
+  assert.equal(aktivesFenster(new Date('2026-12-07T06:30:00Z')), null);
+  // nach der letzten Tabelle kein simuliertes Datum
+  assert.throws(() => zrDatum('mo-vm', new Date('2027-01-04T06:30:00Z')), /keine Zeitreise-Tabelle/);
+});
+
+test('Zeitreisen schließen lückenlos aneinander an', () => {
+  for (let i = 1; i < ZEITREISEN.length; i += 1) {
+    assert.equal(plusTage(ZEITREISEN[i - 1].bis, 1), ZEITREISEN[i].ab);
+  }
 });
 
 test('die Tabelle ist vollständig und plausibel', () => {
   assert.deepEqual(Object.keys(FENSTER), ['mo-vm', 'mo-nm', 'di-vm', 'di-nm', 'mi-vm', 'mi-nm']);
-  assert.equal(GUELTIG_BIS, '2026-11-01');
+  assert.equal(GUELTIG_BIS, '2026-12-23');
   assert.ok(TESTFREIE_TAGE.includes('2026-10-21'));
-  assert.equal(zrDatum('mi-vm'), '2026-04-01');
+  assert.equal(zrDatum('mi-vm', new Date('2026-10-07T06:00:00Z')), '2026-04-01');
   assert.throws(() => zrDatum('do-vm'), /Unbekanntes Fenster/);
 });
 

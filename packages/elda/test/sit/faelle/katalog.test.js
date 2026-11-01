@@ -308,8 +308,8 @@ test('Daten kommen aus der Fenstertabelle', () => {
   const { FELDER_E29 } = require('../../../dist/felder-e29.js');
   const { pos, laenge } = FELDER_E29.find((f) => f.name === 'ADAT');
   const adat = (id) => feld(saetze(GEBAUT.get(id).ergebnis.inhalt)[1], pos, laenge);
-  assert.equal(adat('V01'), ttmmjjjj(zrDatum('mo-vm')));
-  assert.equal(adat('V03'), ttmmjjjj(zrDatum('mo-nm')));
+  assert.equal(adat('V01'), ttmmjjjj(zrDatum('mo-vm', IM_FENSTER['mo-vm'])));
+  assert.equal(adat('V03'), ttmmjjjj(zrDatum('mo-nm', IM_FENSTER['mo-nm'])));
   assert.equal(adat('V12'), '01042025'); // Ende am simulierten Tag von di-nm
   assert.equal(adat('V13'), '07032025'); // UEL bis sechs Tage nach di-vm
   assert.equal(adat('V15'), '28022025'); // Vortag von di-vm
@@ -410,7 +410,7 @@ test('FH- und SM-Fälle: Bestand, Version, Satzlänge, Satzart, Abwandlung nur i
   assert.equal(wert(FELDER_E12, fh('S31'), 'KART'), '04');
   assert.equal(wert(FELDER_E12, fh('S31'), 'STSL'), 'AUT');
   assert.equal(wert(FELDER_E12, fh('S31'), 'WORT').trimEnd(), 'Wien');
-  assert.equal(wert(FELDER_E12, fh('S31'), 'ADAT'), ttmmjjjj(zrDatum('di-vm')));
+  assert.equal(wert(FELDER_E12, fh('S31'), 'ADAT'), ttmmjjjj(zrDatum('di-vm', IM_FENSTER['di-vm'])));
   assert.equal(wert(FELDER_E12, fh('S32'), 'ADAT'), '31032025');
   assert.equal(wert(FELDER_E12, fh('S32'), 'GESL'), '0');
   assert.equal(wert(FELDER_E12, fh('S33'), 'KART'), '09');
