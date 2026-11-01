@@ -54,7 +54,8 @@ test('plan für Montag vormittags', () => {
     .map((z) => z.trim().split(/\s+/)[0])
     .filter(Boolean);
   assert.equal(ids[0], 'Z01', 'Zugang zuerst');
-  assert.equal(ids[1], 'V01', 'dann der Referenzfall');
+  assert.equal(ids[1], 'Z16', 'dann die leere Outbox, bevor etwas gesendet ist');
+  assert.equal(ids[2], 'V01', 'dann der Referenzfall');
   assert.ok(ids.indexOf('T02') > ids.indexOf('V01'), 'T02 nach V01');
   assert.ok(ids.indexOf('Z07') > ids.indexOf('B03'), 'Negativtests nach den Formproben');
   assert.doesNotMatch(r.out, /blockiert/);

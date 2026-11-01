@@ -25,6 +25,19 @@ module.exports = [
   },
   {
     ...basis,
+    id: 'Z16',
+    rang: 1,
+    titel: 'Auflisten bei leerer Outbox (Nachprüfung B004)',
+    zweck:
+      'Am 05.10.2026 lieferte das Auflisten bei leerer Outbox 500 „Interner Verarbeitungsfehler“ statt 000 mit ' +
+      'leerer Liste (B004); lswh hat eine Korrektur zugesagt. Läuft nach Z01 und dem Abholen aller Reste, bevor ' +
+      'in der Woche etwas gesendet ist – nur dann ist die Outbox sicher leer.',
+    quelle: 'Schnittstellenbeschreibung V4, ruecksendungenAuflisten; SIT B004 (05.10.2026), Zusage lswh',
+    erwartung: '000 mit 0 Rücksendungen = behoben; 500 = noch nicht behoben',
+    baue: () => ({}),
+  },
+  {
+    ...basis,
     id: 'Z07',
     titel: 'nonce leer',
     zweck: 'Prüft, ob ELDA eine leere Nonce mit dem dokumentierten Code abweist.',
