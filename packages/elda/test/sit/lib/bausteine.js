@@ -40,6 +40,15 @@ function meldung(ctx, { fall, art, rolle, dg, traeger, freieDN = false, felder, 
   };
 }
 
+/** mBGM-Eintrag ohne BV: Basis BV raus, Verrechnungsgrundlage 2 (nur SV, E.32). */
+function ohneBv(eintrag) {
+  return {
+    ...eintrag,
+    verrechnungsgrundlage: '2',
+    tarifbloecke: eintrag.tarifbloecke.map((t) => ({ ...t, basen: t.basen.filter((b) => b.typ !== 'BV') })),
+  };
+}
+
 /**
  * Ein mBGM-Paket für EIN Beitragskonto und EINEN Beitragszeitraum, gerechnet
  * mit der Lohnlogik von kasseneck (Abrechnung → `baueMeldung`), gebaut und
@@ -49,16 +58,18 @@ function meldung(ctx, { fall, art, rolle, dg, traeger, freieDN = false, felder, 
  *
  * @param a.monat Beitragszeitraum als JJJJ-MM
  * @param a.bundesland für die Abrechnung (Dienstgeberabgaben)
- * @param a.beschaeftigte [{ rolle, mitarbeiter }] – `mitarbeiter` in der
+ * @param a.beschaeftigte [{ rolle, mitarbeiter, nurSv }] – `mitarbeiter` in der
  *   Eingabeform von kasseneck (dienstnehmerGruppe, eintritt, wochenstunden, …);
- *   Name und Versicherungsnummer kommen aus den Testdaten der Rolle.
+ *   Name und Versicherungsnummer kommen aus den Testdaten der Rolle. `nurSv`
+ *   meldet die Person bewusst ohne BV (Verrechnungsgrundlage 2, Basis BV
+ *   entfernt) – wie ein Programm, das die BV-Zeit nicht kennt.
  */
 function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, optionen = {} }) {
   const k = kasseneck();
   const parameter = k.ladeParameter(Number(monat.slice(0, 4)));
   const konto = ctx.konto(dg, { traeger });
   const referenzwerte = [];
-  const eintraege = beschaeftigte.map(({ rolle, mitarbeiter }, i) => {
+  const eintraege = beschaeftigte.map(({ rolle, mitarbeiter, nurSv = false }, i) => {
     const person = ctx.rolle(rolle);
     const abrechnung = k.erstelleAbrechnung({
       mitarbeiter: { id: rolle, austritt: null, salaryType: 'monthly', ...mitarbeiter },
@@ -74,7 +85,7 @@ function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, o
     }
     const refw = ctx.referenzwert(`${fall}-${i + 1}`);
     referenzwerte.push(refw);
-    return k.mbgm.baueMeldung({
+    const eintrag = k.mbgm.baueMeldung({
       abrechnung,
       mitarbeiter: {
         versicherungsnummer: person.vsnr,
@@ -84,6 +95,7 @@ function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, o
       },
       referenzwert: refw,
     });
+    return nurSv ? ohneBv(eintrag) : eintrag;
   });
   const paketref = ctx.referenzwert(fall);
   const saetze = ctx.elda.erstelleMbgmPaket(

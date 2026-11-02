@@ -142,6 +142,13 @@ const SART = {
   Q37: 'M3',
   Q38: 'M4',
   Q39: 'M3',
+  Q40: 'M8',
+  Q41: 'M4',
+  Q42: 'M4',
+  Q43: 'M3',
+  Q44: 'M8',
+  Q45: 'M6',
+  Q46: 'M4',
 };
 const VSTR = {
   Q30: '15',
@@ -152,6 +159,13 @@ const VSTR = {
   Q36: '15',
   Q37: '15',
   Q38: '15',
+  Q40: '15',
+  Q41: '15',
+  Q42: '15',
+  Q43: '15',
+  Q44: '15',
+  Q45: '15',
+  Q46: '15',
   V95: '15',
   V96: '15',
   V100: '15',
@@ -223,7 +237,7 @@ const IM_FENSTER_KW45 = {
   'mi-vm': new Date('2026-11-04T06:30:00Z'),
   'mi-nm': new Date('2026-11-04T11:30:00Z'),
 };
-const istKw45 = (id) => /^(Q3\d|M8\d)$/.test(id);
+const istKw45 = (id) => /^(Q[34]\d|M8\d)$/.test(id);
 const zeitpunkt = (id, fenster) => (istKw45(id) ? IM_FENSTER_KW45 : IM_FENSTER)[fenster];
 
 const ersterFenster = (fall) => (fall.fenster === 'jedes' ? 'mo-vm' : fall.fenster[0]);

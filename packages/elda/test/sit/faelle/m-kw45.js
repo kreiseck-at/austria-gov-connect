@@ -9,6 +9,11 @@
 //   M81  B/15  01/2026  Q30 reserve_1 (ohne BVAB), Q33 angestellte (Austritt 31.01.), Q37 arbeiter
 //   M82  A/14  01/2026  Q34 angestellte (BVAB 01.02. – Jänner BV-frei)
 //
+// Di 07–09 = 01.03.2026, Beitragszeitraum 02/2026, jeweils nach den Abmeldungen (N4):
+//   M83  A/15  02/2026  Q31, Q32 mit BV und Austritt 28.02. (keine BV-Zeit gemeldet → BW1871?)
+//   M84  B/15  02/2026  Q30 nur SV (VERG 2, BV-Zeit per Q40 nachgetragen → BW2032?), Q37 mit BV, Austritt 28.02.
+//   M85  A/14  02/2026  Q34 nur SV (VERG 2) ab dem BV-Beginn 01.02. → BW2032?
+//
 // Q36 (geringfügig) bekommt keine mBGM: Die mBGM-Logik von kasseneck bildet für Geringfügige
 // keine Verrechnungspositionen, und für 12/2025 fehlt das Parameterwerk 2025. Die Q20-Kette
 // prüft nur F7115 bei M6/M8 – eine Mahnung dazu ist Beobachtung, kein Fehler des Falls.
@@ -115,6 +120,77 @@ module.exports = [
         monat: monatVor(ctx.zr, 1),
         bundesland: 'oberoesterreich',
         beschaeftigte: [{ rolle: 'angestellte', mitarbeiter: vollzeit('angestellter', ctx.zrVon('Q34')) }],
+      }),
+  }),
+  fall({
+    id: 'M83',
+    titel: 'mBGM Februar 2026, Konto A/15 – Q31, Q32 mit BV, Austritt 28.02. (ohne gemeldete BV-Zeit)',
+    zweck:
+      'Zweiter Monat, also BV-pflichtig; die Anmeldungen trugen kein BVAB. Gesendet nach den Abmeldungen ' +
+      'Q41/Q42 (N4). Erwartet BW1871 – die Grundlage für die Reparaturen am Nachmittag (Q07, Q14).',
+    quelle: QUELLE,
+    erwartung: 'übernommen; Clearing BW1871 für beide',
+    fenster: ['di-vm'],
+    abhaengig: ['Q31', 'Q32', 'Q41', 'Q42'],
+    rang: 14,
+    baue: (ctx) =>
+      mbgmPaket(ctx, {
+        fall: 'M83',
+        dg: 'A',
+        traeger: '15',
+        monat: monatVor(ctx.zr, 1),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          { rolle: 'reserve_2', mitarbeiter: vollzeit('arbeiter', ctx.zrVon('Q31'), vormonatsende(ctx.zr)) },
+          { rolle: 'reserve_3', mitarbeiter: vollzeit('arbeiter', ctx.zrVon('Q32'), vormonatsende(ctx.zr)) },
+        ],
+      }),
+  }),
+  fall({
+    id: 'M84',
+    titel: 'mBGM Februar 2026, Konto B/15 – Q30 nur SV (VERG 2), Q37 mit BV und Austritt 28.02.',
+    zweck:
+      'Q30: BV-Zeit ab 01.02. ist seit Q40 gemeldet, die mBGM kommt trotzdem ohne BV → BW2032? ' +
+      'Q37: kasseneck-Person mit BVAB 01.02., Abmeldung Q46 davor (N4) → kein BW1871.',
+    quelle: `${QUELLE}; E.32 (VERG)`,
+    erwartung: 'übernommen; BW2032 für Q30, kein BW1871 für Q37',
+    fenster: ['di-vm'],
+    abhaengig: ['Q30', 'Q37', 'Q40', 'Q46'],
+    rang: 14,
+    baue: (ctx) =>
+      mbgmPaket(ctx, {
+        fall: 'M84',
+        dg: 'B',
+        traeger: '15',
+        monat: monatVor(ctx.zr, 1),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          { rolle: 'reserve_1', mitarbeiter: vollzeit('arbeiter', ctx.zrVon('Q30')), nurSv: true },
+          { rolle: 'arbeiter', mitarbeiter: vollzeit('arbeiter', ctx.zrVon('Q37'), vormonatsende(ctx.zr)) },
+        ],
+      }),
+  }),
+  fall({
+    id: 'M85',
+    titel: 'mBGM Februar 2026, Konto A/14 – Q34 nur SV (VERG 2) im ersten BV-Monat',
+    zweck:
+      'Q16: Die Anmeldung trug BVAB 01.02.2026, die mBGM 02 meldet bewusst nur SV. Verlangt die ÖGK ab dem ' +
+      'BV-Beginn zwingend Verrechnungsgrundlage 1 (BW2032) oder rechnet sie still?',
+    quelle: `${QUELLE}; E.32 (VERG), D.54`,
+    erwartung: 'übernommen; Clearing BW2032 erwartet',
+    fenster: ['di-vm'],
+    abhaengig: ['Q34'],
+    rang: 14,
+    baue: (ctx) =>
+      mbgmPaket(ctx, {
+        fall: 'M85',
+        dg: 'A',
+        traeger: '14',
+        monat: monatVor(ctx.zr, 1),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          { rolle: 'angestellte', mitarbeiter: vollzeit('angestellter', ctx.zrVon('Q34')), nurSv: true },
+        ],
       }),
   }),
 ];

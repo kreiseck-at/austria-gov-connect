@@ -129,6 +129,68 @@ function q37Anmeldung(ctx) {
   };
 }
 
+// --- Di 07–09 (01.03.2026): Folgeschritte der Ketten -------------------------------
+
+const DI_VM = ['di-vm'];
+
+/** Q36 beginnt am 15. des Monats vor ihrem Anmeldetag (Anmeldung 01.01.2026 → 15.12.2025). */
+function q36Beginn(ctx) {
+  const [j, m] = ctx.zrVon('Q36').split('-').map(Number);
+  return new Date(Date.UTC(j, m - 2, 15)).toISOString().slice(0, 10);
+}
+
+/** Abmeldung zum Vortag des simulierten Datums (Monatsende), einvernehmlich, mit BV-Ende. */
+function abmeldungMitBven(id, rolle) {
+  return (ctx) => {
+    const ende = d(ctx, plusTage(ctx.zr, -1));
+    return meldung(ctx, {
+      fall: id,
+      art: 'abmeldung',
+      rolle,
+      dg: 'A',
+      traeger: '15',
+      felder: { GERF: 'N', ADAT: ende, EBSV: ende, AGRD: '03', BVEN: ende },
+    });
+  };
+}
+
+/**
+ * Q37 abmelden wie kasseneck: Kündigung durch den Dienstnehmer während der Elternteilzeit
+ * (AGRD 21), Ende am Vortag des simulierten Datums. Der BV-Beginn kommt aus dem gemeldeten
+ * BVAB der Anmeldung (`bvBeginnDesDv`) – liegt er vor dem Ende, gehört BVEN dazu.
+ */
+function q37Abmeldung(ctx) {
+  const { vr, rueck } = kasseneckVr();
+  const ende = plusTage(ctx.zr, -1);
+  const angemeldet = vr.felderAnmeldung({ nutzer: q37Nutzer(ctx), emp: q37Mitarbeiter(ctx, { startDate: ctx.zrVon('Q37') }), historie: [] });
+  const emp = q37Mitarbeiter(ctx, {
+    startDate: ctx.zrVon('Q37'),
+    endDate: ende,
+    beendigung: { art: 'kuendigung_dn', agrd: '21' },
+  });
+  const bvab = vr.bvBeginnDesDv({ dv: { angemeldet: { felder: angemeldet.felder } }, nutzer: q37Nutzer(ctx), emp, historie: [] });
+  const ergebnis = vr.felderAbmeldung({
+    nutzer: q37Nutzer(ctx),
+    emp,
+    endabrechnung: { status: 'vollstaendig', elda: { EBSV: ende, ADAT: ende, BVEN: ende, AGRD: '21' } },
+    bvab,
+  });
+  if (ergebnis.fehlend?.length)
+    throw new Error(`Q46: kasseneck meldet fehlende Angaben: ${ergebnis.fehlend.map((f) => f.text).join(' | ')}`);
+  if (ergebnis.sperre) throw new Error(`Q46: kasseneck sperrt: ${ergebnis.sperre.text}`);
+  if (ergebnis.felder.AGRD !== '21' || !ergebnis.felder.BVEN)
+    throw new Error(`Q46: erwartet AGRD 21 mit BVEN, kasseneck liefert AGRD ${ergebnis.felder.AGRD}, BVEN ${ergebnis.felder.BVEN ?? '–'}`);
+  const befunde = vr.pruefeSatz('M4', ergebnis.felder);
+  if (befunde.length) throw new Error(`Q46: kasseneck-Prüfung: ${befunde.map((b) => b.text).join(' | ')}`);
+  const referenzwert = rueck.referenzwertVr({ tag: rueck.wienerTagKurz(Date.now()), employeeId: Q37_EMPLOYEE, n: 2 });
+  const satz = vr.baueSatz('M4', { ...ergebnis.felder, REFW: referenzwert });
+  return {
+    inhalt: ctx.elda.erstelleBestand([satz], ctx.bestandOptionen({ dg: 'B', traeger: '15' })),
+    dateiName: ctx.dateiName('Q46'),
+    referenzwerte: [referenzwert],
+  };
+}
+
 module.exports = [
   fall({
     id: 'Q30',
@@ -276,5 +338,132 @@ module.exports = [
       const adat = FELDER_E29.find((f) => f.name === 'ADAT');
       return { ...b, inhalt: setzeFeld(b.inhalt, 2, adat, '31122018') };
     },
+  }),
+  fall({
+    id: 'Q40',
+    titel: 'Q10-Kette: Richtigstellung der Q30-Anmeldung mit BVAB 01.02.2026 (M8)',
+    zweck:
+      'Die BV-Zeit wird nachgetragen, die mBGM 02/2026 (M84) kommt aber nur mit SV. Kommt BW2032, und ' +
+      'verschwindet es nach der mBGM-Berichtigung mit BV am Nachmittag?',
+    quelle: `${QUELLE_ZR}; E.29.2 (M8, BVAB); SIT KW42 F3 (BW2032 nach M8)`,
+    erwartung: 'übernommen; zur M84 BW2032 (BV-Zeit ohne BV-Grundlage)',
+    fenster: DI_VM,
+    abhaengig: ['Q30'],
+    rang: 11,
+    baue: (ctx) => {
+      const beginn = d(ctx, ctx.zrVon('Q30'));
+      return meldung(ctx, {
+        fall: 'Q40',
+        art: 'richtigstellungAnmeldung',
+        rolle: 'reserve_1',
+        dg: 'B',
+        traeger: '15',
+        felder: {
+          REFU: ctx.referenzwertVon('Q30'),
+          ADAT: beginn,
+          RDAT: beginn,
+          VWAZ: ctx.elda.wochenarbeitszeit(40, 0),
+          BVAB: d(ctx, einMonatSpaeter(ctx.zrVon('Q30'))),
+        },
+      });
+    },
+  }),
+  fall({
+    id: 'Q41',
+    titel: 'Q07-Kette: Abmeldung reserve_2 von A/15 zum 28.02.2026 MIT BVEN, ohne gemeldete BV-Zeit (M4)',
+    zweck: 'Wie ein Programm, das das BV-Ende immer mitschickt. Erwartet VW1942; am Nachmittag repariert kasseneck.',
+    quelle: `${QUELLE_ZR}; SIT KW42 V45/V47 (VW1942)`,
+    erwartung: 'übernommen; Clearing VW1942',
+    fenster: DI_VM,
+    abhaengig: ['Q31'],
+    rang: 11,
+    baue: abmeldungMitBven('Q41', 'reserve_2'),
+  }),
+  fall({
+    id: 'Q42',
+    titel: 'Q14-Kette: Abmeldung reserve_3 von A/15 zum 28.02.2026 MIT BVEN, ohne gemeldete BV-Zeit (M4)',
+    zweck: 'Wie Q41; repariert wird hier rechtlich richtig (M8 mit BVAB, dann mBGM-Berichtigung).',
+    quelle: `${QUELLE_ZR}; § 6 Abs 1 BMSVG; SIT KW42 F3/F4`,
+    erwartung: 'übernommen; Clearing VW1942',
+    fenster: DI_VM,
+    abhaengig: ['Q32'],
+    rang: 11,
+    baue: abmeldungMitBven('Q42', 'reserve_3'),
+  }),
+  fall({
+    id: 'Q43',
+    titel: 'Q15/B7-Kette: Wiedereintritt angestellte auf B/15 am 01.03.2026, BVAB = Eintritt (M3)',
+    zweck:
+      'Dieselbe Person war 01.01.–31.01.2026 beim selben Dienstgeber (Q33/Q38): Wiedereintritt binnen zwölf ' +
+      'Monaten, BV ab dem ersten Tag (§ 6 Abs 1 BMSVG). Nimmt die ÖGK BVAB = Eintritt ohne Rückfrage?',
+    quelle: `${QUELLE_ZR}; § 6 Abs 1 BMSVG; E.29.2 (BVAB)`,
+    erwartung: 'übernommen; später mBGM 03 mit BV ab dem ersten Tag ohne BW1874',
+    fenster: DI_VM,
+    abhaengig: ['Q33', 'Q38'],
+    rang: 11,
+    baue: anmeldung('Q43', { rolle: 'angestellte', dg: 'B', traeger: '15', bber: '02', bvab: 'eintritt' }),
+  }),
+  fall({
+    id: 'Q44',
+    titel: 'Q20-Kette: Richtigstellung der Q36-Anmeldung (Beginn 15.12.2025) ohne Wochenarbeitszeit (M8)',
+    zweck: 'F7115 gilt für ADAT > 31.12.2025 – greift sie bei einer Richtigstellung zu einem DV aus 2025?',
+    quelle: `${QUELLE_ZR}; Prüfkatalog VR (F7115)`,
+    erwartung: 'übernommen ohne F7115 (Beginn 2025)',
+    fenster: DI_VM,
+    abhaengig: ['Q36'],
+    rang: 12,
+    baue: (ctx) => {
+      const beginn = q36Beginn(ctx);
+      return meldung(ctx, {
+        fall: 'Q44',
+        art: 'richtigstellungAnmeldung',
+        rolle: 'geringfuegig',
+        dg: 'A',
+        traeger: '15',
+        felder: {
+          REFU: ctx.referenzwertVon('Q36'),
+          ADAT: d(ctx, beginn),
+          RDAT: d(ctx, beginn),
+          BVAB: d(ctx, einMonatSpaeter(beginn)),
+        },
+      });
+    },
+  }),
+  fall({
+    id: 'Q45',
+    titel: 'Q20-Kette: Änderungsmeldung Q36 Arbeiter → Angestellter zum 01.03.2026 ohne Wochenarbeitszeit (M6)',
+    zweck:
+      'Das Änderungsdatum liegt in 2026, das Dienstverhältnis begann 2025. Verlangt ELDA die Wochenarbeitszeit ' +
+      '(F7115) auch bei einer Änderung zu einem DV aus 2025?',
+    quelle: `${QUELLE_ZR}; Prüfkatalog VR (F7115); E.29.2 (M6)`,
+    erwartung: 'offen: F7115 oder übernommen',
+    fenster: DI_VM,
+    abhaengig: ['Q36', 'Q44'],
+    rang: 13,
+    baue: (ctx) =>
+      meldung(ctx, {
+        fall: 'Q45',
+        art: 'aenderungsmeldung',
+        rolle: 'geringfuegig',
+        dg: 'A',
+        traeger: '15',
+        felder: { ADAT: d(ctx, ctx.zr), BBER: '02', GERF: 'J', FRDV: 'N' },
+      }),
+  }),
+  fall({
+    id: 'Q46',
+    titel: 'F6-Gegenprobe: kasseneck-Abmeldung arbeiter von B/15 zum 28.02.2026, AGRD 21 mit BVEN (M4)',
+    zweck:
+      'Kündigung durch den Dienstnehmer während der Elternteilzeit, über den Versandweg von kasseneck. Die ' +
+      'Anmeldung Q37 trug BVAB 01.02.2026 – kommt diesmal kein VW1942?',
+    quelle:
+      'kasseneck feature/elda-versichertenmeldung (versichertenmeldung-core.felderAbmeldung, bvBeginnDesDv); ' +
+      'D.22 (AGRD 21); SIT KW42 K20–K23',
+    erwartung: 'übernommen; kein VW1942',
+    fenster: DI_VM,
+    abhaengig: ['Q37'],
+    braucht: 'kasseneck-vr',
+    rang: 13,
+    baue: q37Abmeldung,
   }),
 ];
