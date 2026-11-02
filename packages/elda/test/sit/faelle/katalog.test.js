@@ -140,6 +140,8 @@ const SART = {
   Q35: 'M3',
   Q36: 'M3',
   Q37: 'M3',
+  Q38: 'M4',
+  Q39: 'M3',
 };
 const VSTR = {
   Q30: '15',
@@ -149,6 +151,7 @@ const VSTR = {
   Q35: '15',
   Q36: '15',
   Q37: '15',
+  Q38: '15',
   V95: '15',
   V96: '15',
   V100: '15',
@@ -208,6 +211,21 @@ const REFU_AUS = {
   V58: 'V57',
 };
 
+/**
+ * Die KW45-Fälle bauen auf der Zeitreise 2026/27 auf (Mo nm = 01.02.2026) und rechnen die mBGM mit dem
+ * Parameterwerk 2026 – sie brauchen einen Zeitpunkt in KW45 (Winterzeit).
+ */
+const IM_FENSTER_KW45 = {
+  'mo-vm': new Date('2026-11-02T06:30:00Z'),
+  'mo-nm': new Date('2026-11-02T11:30:00Z'),
+  'di-vm': new Date('2026-11-03T06:30:00Z'),
+  'di-nm': new Date('2026-11-03T11:30:00Z'),
+  'mi-vm': new Date('2026-11-04T06:30:00Z'),
+  'mi-nm': new Date('2026-11-04T11:30:00Z'),
+};
+const istKw45 = (id) => /^(Q3\d|M8\d)$/.test(id);
+const zeitpunkt = (id, fenster) => (istKw45(id) ? IM_FENSTER_KW45 : IM_FENSTER)[fenster];
+
 const ersterFenster = (fall) => (fall.fenster === 'jedes' ? 'mo-vm' : fall.fenster[0]);
 
 const ABLAGE = erstelleAblage(fs.mkdtempSync(path.join(WURZEL, 'sit-faelle-')));
@@ -233,7 +251,7 @@ function baueAlle(ablage) {
     // Die mBGM-Fälle rechnen mit kasseneck; ohne Checkout (CI) bauen sie nicht.
     if (brueckeFehlt(fall)) return;
     const fenster = ersterFenster(fall);
-    const jetzt = IM_FENSTER[fenster];
+    const jetzt = zeitpunkt(fall.id, fenster);
     const ctx = baueKontext({
       fenster,
       testdaten: TESTDATEN,

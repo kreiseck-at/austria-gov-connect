@@ -35,7 +35,9 @@
 //                      Q33 mBGM 03 mit BV ab dem ersten Tag (B7)
 //   Mi 07–09 (01.04.2027): Clearing der Apr-2026-Verarbeitung lesen; F5 (A25–A27) über das Paket
 
-const { meldung } = require('../lib/bausteine');
+const { meldung, setzeFeld } = require('../lib/bausteine');
+const { FELDER_E29 } = require('../../../dist/felder-e29.js');
+const { plusTage } = require('../lib/fenster');
 const { kasseneckVr } = require('../lib/kasseneck');
 
 const d = (ctx, iso) => ctx.ttmmjjjj(iso);
@@ -234,5 +236,45 @@ module.exports = [
     braucht: 'kasseneck-vr',
     rang: 13,
     baue: q37Anmeldung,
+  }),
+  fall({
+    id: 'Q38',
+    titel: 'Q15/B7-Kette: Abmeldung angestellte von B/15 zum 31.01.2026, vor dem BV-Beginn (M4)',
+    zweck:
+      'Q33 endet nach einem Monat, bevor die BV (BVAB 01.02.) begonnen hat – also ohne BVEN. Gesendet vor der ' +
+      'mBGM 01/2026 (M81, N4). Grundlage für den Wiedereintritt am 01.03. mit BV ab dem ersten Tag.',
+    quelle: `${QUELLE_ZR}; E.29.2 (M4), D.22; § 6 Abs 1 BMSVG`,
+    erwartung: 'übernommen; kein VW1942 (kein BVEN gemeldet)',
+    fenster: ['mo-nm'],
+    abhaengig: ['Q33'],
+    rang: 11,
+    baue: (ctx) => {
+      const ende = d(ctx, plusTage(ctx.zr, -1));
+      return meldung(ctx, {
+        fall: 'Q38',
+        art: 'abmeldung',
+        rolle: 'angestellte',
+        dg: 'B',
+        traeger: '15',
+        felder: { GERF: 'N', ADAT: ende, EBSV: ende, AGRD: '03' },
+      });
+    },
+  }),
+  fall({
+    id: 'Q39',
+    titel: 'F7062-Grenze: Anmeldung freier_dn auf A/14 mit Beginn 31.12.2018 (M3)',
+    zweck:
+      'Der Text von F7062 nennt „Datum vor 01.01.2018“, V62 (01.01.2018) wurde trotzdem abgewiesen; das Paket ' +
+      'prüft gegen 01.01.2019. Weist ELDA auch den 31.12.2018 ab, ist die Grenze 2019 und nur der Text veraltet.',
+    quelle: 'Prüfkatalog Blatt VR (F7062); SIT V62 (KW42); pruefung-e29.ts',
+    erwartung: 'F7062, Abweisung (dann stimmt die Grenze 2019 im Paket)',
+    fenster: ['mo-nm'],
+    rang: 12,
+    // Das Paket ließe den Satz nicht bauen (F7062 ab 2019) – also mit gültigem Datum bauen und ADAT danach setzen.
+    baue: (ctx) => {
+      const b = anmeldung('Q39', { rolle: 'freier_dn', dg: 'A', traeger: '14', bvab: null })(ctx);
+      const adat = FELDER_E29.find((f) => f.name === 'ADAT');
+      return { ...b, inhalt: setzeFeld(b.inhalt, 2, adat, '31122018') };
+    },
   }),
 ];
