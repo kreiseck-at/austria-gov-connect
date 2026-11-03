@@ -21,10 +21,65 @@
 // Beträge wie in m-kw42-kette.js: 3.000 € Vollzeit, Geringfügig 500 €. Gerechnet
 // mit der Lohnlogik von kasseneck ohne Endabrechnung.
 
+//
+// Di 12–14 = 01.04.2026, Beitragszeitraum 03/2026 plus Berichtigungen (Selbstabrechnung:
+// Änderung immer als Storno der zuletzt gesendeten mBGM + neue mBGM, ÖGK-FAK 3.2.7):
+//   M86  B/15  02/2026  Q30: Storno aus M84 (nur SV) + neue mBGM mit BV IM SELBEN PAKET
+//   M87  A/15  02/2026  Q32: Storno aus M83 (mit BV, BW1871) – eigenes Paket wie M54 (KW42)
+//   M88  A/15  02/2026  Q32 neu mit BV nach Q48/Q49; Q35 erste echte mBGM 02 (nach amtswegiger?)
+//   M89  A/15  01/2026  Q35 echte mBGM nach BW1916 (Q17)
+//   M95  B/15  03/2026  Q30 mit BV; Q43 Wiedereintritt mit BV ab dem ersten Tag (B7)
+
 const { mbgmPaket } = require('../lib/bausteine');
+const { plusTage } = require('../lib/fenster');
+const { FELDER_MBGM, FELDER_VERRECHNUNGSBASIS } = require('../../../dist/felder-e32.js');
 
 const fall = (mehr) => ({ gefahr: null, aktion: 'senden', braucht: 'kasseneck', ...mehr });
 const MO_NM = ['mo-nm'];
+const DI_NM = ['di-nm'];
+
+const lies = (satz, tabelle, name) => {
+  const f = tabelle.find((x) => x.name === name);
+  return satz.slice(f.pos - 1, f.pos - 1 + f.laenge);
+};
+const saetzeVon = (inhalt) => inhalt.toString('latin1').split(/\r?\n/);
+
+/**
+ * Storno der mBGM einer Rolle aus dem gesendeten Paket `ursprung`. REFU, VSNR und VSUM
+ * stammen aus dem Original – über sie ordnet die ÖGK das Storno zu (FAK 3.2.7).
+ */
+function stornoAus(ctx, fall, ursprung, rolle) {
+  const vsnr = ctx.rolle(rolle).vsnr;
+  const treffer = saetzeVon(ctx.bestandVon(ursprung).inhalt).filter(
+    (s) => /^G\d/.test(s) && lies(s, FELDER_MBGM, 'VSNR') === vsnr,
+  );
+  if (treffer.length !== 1) throw new Error(`${fall}: ${treffer.length} mBGM für ${rolle} in ${ursprung} statt einer`);
+  const [satz] = treffer;
+  if (!satz.startsWith('G1')) throw new Error(`${fall}: ${ursprung} meldet ${rolle} als ${satz.slice(0, 2)}, erwartet G1`);
+  return {
+    referenzwert: ctx.referenzwert(`${fall}-S`),
+    referenzUrspruenglicheMeldung: lies(satz, FELDER_MBGM, 'REFW').trim(),
+    versicherungsnummer: vsnr,
+    summeCent: Number(lies(satz, FELDER_MBGM, 'VSUM')),
+  };
+}
+
+/** Verrechnungsbasen (VBTY) der mBGM einer Rolle in einem gebauten Paket. */
+function basenVon(ctx, inhalt, rolle) {
+  const vsnr = ctx.rolle(rolle).vsnr;
+  const s = saetzeVon(inhalt);
+  const start = s.findIndex((z) => /^G\d/.test(z) && lies(z, FELDER_MBGM, 'VSNR') === vsnr);
+  if (start < 0) return null;
+  const basen = [];
+  for (const z of s.slice(start + 1)) {
+    if (/^(G\d|R\d|PE|99)/.test(z)) break;
+    if (z.startsWith('BS')) basen.push(lies(z, FELDER_VERRECHNUNGSBASIS, 'VBTY'));
+  }
+  return basen;
+}
+
+/** Beitragszeitraum des gesendeten Pakets `id`: Monat vor seinem simulierten Tag. */
+const monatVon = (ctx, id) => monatVor(ctx.zrVon(id), 1);
 const QUELLE = 'E.32; kasseneck functions-lohn/mbgm-core.js, lohnabrechnung-core.js; SIT-Portal Zeitreise 2026/27';
 
 /** Monat `zurueck` Monate vor `iso` als JJJJ-MM. */
@@ -192,5 +247,132 @@ module.exports = [
           { rolle: 'angestellte', mitarbeiter: vollzeit('angestellter', ctx.zrVon('Q34')), nurSv: true },
         ],
       }),
+  }),
+  fall({
+    id: 'M86',
+    titel: 'Q10-Kette: Berichtigung mBGM 02/2026 von Q30 – Storno + neue mBGM mit BV in EINEM Paket (B/15)',
+    zweck:
+      'Q30 kam in M84 nur mit SV, obwohl die BV-Zeit seit Q40 gemeldet ist. Storno der Original-mBGM und ' +
+      'Neumeldung mit BV stehen im selben Paket (M54/M55 in KW42 waren zwei Pakete). Nimmt die ÖGK beides ' +
+      'in einem an, und verschwindet BW2032?',
+    quelle: `${QUELLE}; E.32.2.8, E.32.2.2.2 (Storno), ÖGK-FAK 3.2.7`,
+    erwartung: 'übernommen; Clearing ohne Zuordnungsfehler, kein BW2032 mehr für Q30 02/2026',
+    fenster: DI_NM,
+    abhaengig: ['Q30', 'Q40', 'M84'],
+    rang: 14,
+    baue: (ctx) =>
+      mbgmPaket(ctx, {
+        fall: 'M86',
+        dg: 'B',
+        traeger: '15',
+        monat: monatVon(ctx, 'M84'),
+        bundesland: 'oberoesterreich',
+        stornos: [stornoAus(ctx, 'M86', 'M84', 'reserve_1')],
+        beschaeftigte: [{ rolle: 'reserve_1', mitarbeiter: vollzeit('arbeiter', ctx.zrVon('Q30')) }],
+      }),
+  }),
+  fall({
+    id: 'M87',
+    titel: 'Q14-Kette: Storno der mBGM 02/2026 von Q32 aus M83 (A/15, eigenes Paket)',
+    zweck:
+      'M83 meldete Q32 mit BV ohne gespeicherte BV-Zeit (BW1871: „Grundlage nicht gespeichert“). Lässt sich ' +
+      'diese mBGM trotzdem stornieren, oder gibt es nichts zuzuordnen?',
+    quelle: `${QUELLE}; E.32.2.8, ÖGK-FAK 3.2.7; SIT M54 (KW42)`,
+    erwartung: 'übernommen; Clearing offen: Rückverrechnung ohne Fehler oder Storno nicht zuordenbar',
+    fenster: DI_NM,
+    abhaengig: ['M83', 'Q48', 'Q49'],
+    rang: 14,
+    baue: (ctx) =>
+      mbgmPaket(ctx, {
+        fall: 'M87',
+        dg: 'A',
+        traeger: '15',
+        monat: monatVon(ctx, 'M83'),
+        bundesland: 'oberoesterreich',
+        stornos: [stornoAus(ctx, 'M87', 'M83', 'reserve_3')],
+        beschaeftigte: [],
+      }),
+  }),
+  fall({
+    id: 'M88',
+    titel: 'mBGM 02/2026 A/15 – Q32 neu mit BV (nach M8 und Storno), Q35 erste echte mBGM 02',
+    zweck:
+      'Q14: nach BV-Zeit (Q48), Abmeldung (Q49) und Storno (M87) die mBGM mit BV – kommt BW1871 noch? ' +
+      'Q17: Q35 bekam für 02 keine mBGM; wurde sie amtswegig angelegt, und was passiert mit der echten?',
+    quelle: `${QUELLE}; E.32.2.8; SIT-README (BW1916)`,
+    erwartung: 'übernommen; kein BW1871 für Q32; für Q35 Hinweis, Differenz oder nichts (offen)',
+    fenster: DI_NM,
+    abhaengig: ['Q32', 'Q35', 'M87'],
+    rang: 15,
+    baue: (ctx) => {
+      const monat = monatVon(ctx, 'M83');
+      return mbgmPaket(ctx, {
+        fall: 'M88',
+        dg: 'A',
+        traeger: '15',
+        monat,
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          { rolle: 'reserve_3', mitarbeiter: vollzeit('arbeiter', ctx.zrVon('Q32'), vormonatsende(ctx.zrVon('M83'))) },
+          { rolle: 'arbeiter', mitarbeiter: vollzeit('arbeiter', ctx.zrVon('Q35')) },
+        ],
+      });
+    },
+  }),
+  fall({
+    id: 'M89',
+    titel: 'Q17-Kette: echte mBGM 01/2026 für Q35 nach der amtswegigen mBGM (BW1916), A/15',
+    zweck:
+      'Die ÖGK hat für Q35 01/2026 eine mBGM von Amts wegen angelegt (BW1916, nur SV). Jetzt kommt die echte ' +
+      'mit denselben Daten wie kasseneck sie rechnet. Ersetzt sie die amtswegige, mit Hinweis oder Differenz?',
+    quelle: `${QUELLE}; SIT-README (BW1930, BW1916); Clearing 01.02.2026`,
+    erwartung: 'übernommen; Clearing offen: Hinweis, Differenz oder nichts',
+    fenster: DI_NM,
+    abhaengig: ['Q35', 'M80'],
+    rang: 14,
+    baue: (ctx) =>
+      mbgmPaket(ctx, {
+        fall: 'M89',
+        dg: 'A',
+        traeger: '15',
+        monat: monatVon(ctx, 'M80'),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [{ rolle: 'arbeiter', mitarbeiter: vollzeit('arbeiter', ctx.zrVon('Q35')) }],
+      }),
+  }),
+  fall({
+    id: 'M95',
+    titel: 'mBGM 03/2026 B/15 – Q30 mit BV, Q43 Wiedereintritt mit BV ab dem ersten Tag (B7)',
+    zweck:
+      'Q43 war bis 31.01. beim selben Dienstgeber (Q33/Q38) und tritt am 01.03. wieder ein: kein ' +
+      'beitragsfreier erster Monat (§ 6 Abs 1 BMSVG). kasseneck rechnet das über `bvVorEnde`. Nimmt die ÖGK ' +
+      'BV im Eintrittsmonat ohne BW1874/BW2032?',
+    quelle: `${QUELLE}; § 6 Abs 1 BMSVG; lohnabrechnung-core.js (bvVorEnde)`,
+    erwartung: 'übernommen; Clearing ohne BW1874/BW2032 für Q43',
+    fenster: DI_NM,
+    abhaengig: ['Q30', 'Q40', 'Q38', 'Q43'],
+    rang: 14,
+    baue: (ctx) => {
+      const b = mbgmPaket(ctx, {
+        fall: 'M95',
+        dg: 'B',
+        traeger: '15',
+        monat: monatVor(ctx.zr, 1),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          { rolle: 'reserve_1', mitarbeiter: vollzeit('arbeiter', ctx.zrVon('Q30')) },
+          {
+            rolle: 'angestellte',
+            mitarbeiter: {
+              ...vollzeit('angestellter', ctx.zrVon('Q43')),
+              bvVorEnde: plusTage(ctx.zrVon('Q38'), -1),
+            },
+          },
+        ],
+      });
+      const basen = basenVon(ctx, b.inhalt, 'angestellte');
+      if (!basen?.includes('BV')) throw new Error(`M95: Q43 ohne BV im Eintrittsmonat (Basen ${basen})`);
+      return b;
+    },
   }),
 ];

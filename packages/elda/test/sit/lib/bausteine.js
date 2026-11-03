@@ -54,7 +54,8 @@ function ohneBv(eintrag) {
  * mit der Lohnlogik von kasseneck (Abrechnung → `baueMeldung`), gebaut und
  * geprüft mit diesem Paket. Ein einziger Prüfbefund (`pruefeAbfolge`,
  * `pruefeMbgmPaket`) bricht ab – gesendet wird nur, was kasseneck auch senden
- * würde. Das Paket muss alle im Monat Beschäftigten des Kontos enthalten.
+ * würde. Die erste mBGM eines Monats enthält alle im Monat Beschäftigten des
+ * Kontos; eine Berichtigung nur die Personen, deren mBGM storniert wird.
  *
  * @param a.monat Beitragszeitraum als JJJJ-MM
  * @param a.bundesland für die Abrechnung (Dienstgeberabgaben)
@@ -63,8 +64,11 @@ function ohneBv(eintrag) {
  *   Name und Versicherungsnummer kommen aus den Testdaten der Rolle. `nurSv`
  *   meldet die Person bewusst ohne BV (Verrechnungsgrundlage 2, Basis BV
  *   entfernt) – wie ein Programm, das die BV-Zeit nicht kennt.
+ * @param a.stornos fertige Storno-Einträge (Stornomeldung), stehen im Paket vor
+ *   den neuen mBGM. Ihre Referenzwerte folgen in `referenzwerte` nach denen der
+ *   neuen mBGM.
  */
-function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, optionen = {} }) {
+function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, stornos = [], optionen = {} }) {
   const k = kasseneck();
   const parameter = k.ladeParameter(Number(monat.slice(0, 4)));
   const konto = ctx.konto(dg, { traeger });
@@ -99,7 +103,7 @@ function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, o
   });
   const paketref = ctx.referenzwert(fall);
   const saetze = ctx.elda.erstelleMbgmPaket(
-    eintraege,
+    [...stornos, ...eintraege],
     k.mbgm.bauePaketOptionen({
       elda: { beitragskontonummer: konto.bknr },
       dienstgebername: ctx.dienstgeber(dg).name,
@@ -116,7 +120,7 @@ function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, o
   return {
     inhalt: ctx.elda.erstelleMbgmBestand(saetze, ctx.bestandOptionen({ dg, traeger, ...optionen })),
     dateiName: ctx.dateiName(fall),
-    referenzwerte: [paketref, ...referenzwerte],
+    referenzwerte: [paketref, ...referenzwerte, ...stornos.map((s) => s.referenzwert)],
   };
 }
 

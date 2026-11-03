@@ -30,9 +30,10 @@
 //   Di 07–09 (01.03.): Q30 mBGM 02 ohne BV + M8 mit BVAB; Q31/Q32 Abmeldung zum 28.02. mit BVEN
 //                      (→ VW1942); Q34 mBGM 02 nur SV; Q33 Wiedereintritt 01.03. mit BVAB = Eintritt;
 //                      Q36 M8/M6 ohne VWAZ; Q37 Abmeldung AGRD 21 über kasseneck
-//   Di 12–14 (01.04.): Q30 mBGM-Berichtigung 02 mit BV; Q31 neue M4 ohne BVEN über kasseneck (Q07);
-//                      Q32 M8 mit BVAB + mBGM-Berichtigung (Q14); Q35 echte mBGM 01 nach BW1916 (Q17);
-//                      Q33 mBGM 03 mit BV ab dem ersten Tag (B7)
+//   Di 12–14 (01.04.): Q30 mBGM-Berichtigung 02 mit BV (M86); Q31 neue M4 ohne BVEN über kasseneck
+//                      (Q47, Q07); Q32 M8 mit BVAB (Q48), Abmeldung mit BVEN neu (Q49), Storno + neue
+//                      mBGM 02 (M87/M88, Q14); Q35 echte mBGM 01/02 nach BW1916 (M89/M88, Q17);
+//                      Q43 mBGM 03 mit BV ab dem ersten Tag (M95, B7)
 //   Mi 07–09 (01.04.2027): Clearing der Apr-2026-Verarbeitung lesen; F5 (A25–A27) über das Paket
 
 const { meldung, setzeFeld } = require('../lib/bausteine');
@@ -187,6 +188,59 @@ function q37Abmeldung(ctx) {
   return {
     inhalt: ctx.elda.erstelleBestand([satz], ctx.bestandOptionen({ dg: 'B', traeger: '15' })),
     dateiName: ctx.dateiName('Q46'),
+    referenzwerte: [referenzwert],
+  };
+}
+
+// --- Di 12–14 (01.04.2026): Reparaturen nach VW1942 --------------------------------
+
+const DI_NM = ['di-nm'];
+
+/** Ende der Abmeldung `vorlauf` (Vortag ihres simulierten Tages) als JJJJ-MM-TT. */
+const endeVon = (ctx, vorlauf) => plusTage(ctx.zrVon(vorlauf), -1);
+
+/**
+ * Q07: Q31 (reserve_2, A/15, ohne BVAB angemeldet) neu abmelden wie kasseneck nach VW1942
+ * zur Abmeldung Q41 – `keineBvZeit` lässt BVEN weg, Ende und Grund bleiben wie in Q41.
+ */
+function q31Abmeldung(ctx) {
+  const { vr, rueck } = kasseneckVr();
+  const ende = endeVon(ctx, 'Q41');
+  const p = ctx.rolle('reserve_2');
+  const nutzer = {
+    elda: { beitragskontonummer: ctx.konto('A', { traeger: '15' }).bknr },
+    company_name: ctx.dienstgeber('A').name,
+  };
+  const emp = {
+    firstName: p.vorname,
+    lastName: p.familienname,
+    svnr: p.vsnr,
+    startDate: ctx.zrVon('Q31'),
+    endDate: ende,
+    workerGroup: 'arbeiter',
+    employmentType: 'fulltime',
+    weeklyHours: 40,
+    beendigung: { art: 'einvernehmlich', agrd: '03' },
+  };
+  const ergebnis = vr.felderAbmeldung({
+    nutzer,
+    emp,
+    endabrechnung: { status: 'vollstaendig', elda: { EBSV: ende, ADAT: ende, BVEN: ende, AGRD: '03' } },
+    bvab: null,
+    keineBvZeit: true,
+  });
+  if (ergebnis.fehlend?.length)
+    throw new Error(`Q47: kasseneck meldet fehlende Angaben: ${ergebnis.fehlend.map((f) => f.text).join(' | ')}`);
+  if (ergebnis.sperre) throw new Error(`Q47: kasseneck sperrt: ${ergebnis.sperre.text}`);
+  if (ergebnis.felder.BVEN) throw new Error(`Q47: erwartet ohne BVEN, kasseneck liefert BVEN ${ergebnis.felder.BVEN}`);
+  if (ergebnis.felder.AGRD !== '03') throw new Error(`Q47: erwartet AGRD 03, kasseneck liefert ${ergebnis.felder.AGRD}`);
+  const befunde = vr.pruefeSatz('M4', ergebnis.felder);
+  if (befunde.length) throw new Error(`Q47: kasseneck-Prüfung: ${befunde.map((b) => b.text).join(' | ')}`);
+  const referenzwert = rueck.referenzwertVr({ tag: rueck.wienerTagKurz(Date.now()), employeeId: 'sitQ31res2', n: 1 });
+  const satz = vr.baueSatz('M4', { ...ergebnis.felder, REFW: referenzwert });
+  return {
+    inhalt: ctx.elda.erstelleBestand([satz], ctx.bestandOptionen({ dg: 'A', traeger: '15' })),
+    dateiName: ctx.dateiName('Q47'),
     referenzwerte: [referenzwert],
   };
 }
@@ -465,5 +519,73 @@ module.exports = [
     braucht: 'kasseneck-vr',
     rang: 13,
     baue: q37Abmeldung,
+  }),
+  fall({
+    id: 'Q47',
+    titel: 'Q07-Kette: kasseneck meldet Q31 neu ab, zum 28.02.2026 OHNE BVEN nach VW1942 (M4)',
+    zweck:
+      'Die Abmeldung Q41 mit BV-Ende kam mit VW1942 zurück. kasseneck schickt eine neue Abmeldung mit ' +
+      'demselben Ende, aber ohne BVEN (`keineBvZeit`). Wird sie verarbeitet – verspätet, aber ohne Clearing?',
+    quelle:
+      'kasseneck feature/elda-clearing (versichertenmeldung-core.felderAbmeldung, keineBvZeitBeiOegk); ' +
+      `${QUELLE_ZR}; SIT KW42 V45/V47`,
+    erwartung: 'übernommen; Clearing ohne VW1942, Abmeldung verarbeitet (Meldeverstoß wegen Verspätung möglich)',
+    fenster: DI_NM,
+    abhaengig: ['Q31', 'Q41'],
+    braucht: 'kasseneck-vr',
+    rang: 11,
+    baue: q31Abmeldung,
+  }),
+  fall({
+    id: 'Q48',
+    titel: 'Q14-Kette: Richtigstellung der Q32-Anmeldung mit BVAB 01.02.2026 (M8)',
+    zweck:
+      'Der rechtlich richtige Weg nach VW1942 (Q42): die BV-Zeit ab dem zweiten Monat nachtragen. Danach ' +
+      'die Abmeldung mit BVEN neu (Q49) und die mBGM 02 mit BV über Storno + Neumeldung (M87/M88).',
+    quelle: `${QUELLE_ZR}; § 6 Abs 1 BMSVG; E.29.2 (M8, BVAB); SIT KW42 F3`,
+    erwartung: 'übernommen; BV-Zeit ab 01.02.2026 gespeichert',
+    fenster: DI_NM,
+    abhaengig: ['Q32', 'Q42'],
+    rang: 11,
+    baue: (ctx) => {
+      const beginn = d(ctx, ctx.zrVon('Q32'));
+      return meldung(ctx, {
+        fall: 'Q48',
+        art: 'richtigstellungAnmeldung',
+        rolle: 'reserve_3',
+        dg: 'A',
+        traeger: '15',
+        felder: {
+          REFU: ctx.referenzwertVon('Q32'),
+          ADAT: beginn,
+          RDAT: beginn,
+          VWAZ: ctx.elda.wochenarbeitszeit(40, 0),
+          BVAB: d(ctx, einMonatSpaeter(ctx.zrVon('Q32'))),
+        },
+      });
+    },
+  }),
+  fall({
+    id: 'Q49',
+    titel: 'Q14-Kette: Abmeldung reserve_3 von A/15 zum 28.02.2026 MIT BVEN, nach der BV-Zeit aus Q48 (M4)',
+    zweck:
+      'Dieselbe Abmeldung wie Q42, jetzt mit gespeicherter BV-Zeit. Wird sie verarbeitet, oder hat die ÖGK den ' +
+      'Clearingfall zu Q42 (Status „in Arbeit“) nach der M8 schon selbst erledigt (dann Doppel)?',
+    quelle: `${QUELLE_ZR}; § 6 Abs 1 BMSVG; E.29.2 (M4, BVEN)`,
+    erwartung: 'übernommen; kein VW1942 – oder ein Hinweis auf eine schon verarbeitete Abmeldung',
+    fenster: DI_NM,
+    abhaengig: ['Q42', 'Q48'],
+    rang: 12,
+    baue: (ctx) => {
+      const ende = d(ctx, endeVon(ctx, 'Q42'));
+      return meldung(ctx, {
+        fall: 'Q49',
+        art: 'abmeldung',
+        rolle: 'reserve_3',
+        dg: 'A',
+        traeger: '15',
+        felder: { GERF: 'N', ADAT: ende, EBSV: ende, AGRD: '03', BVEN: ende },
+      });
+    },
   }),
 ];
