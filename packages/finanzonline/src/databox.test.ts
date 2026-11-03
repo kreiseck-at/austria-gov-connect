@@ -72,7 +72,8 @@ test('liste wirft FonSessionExpiredError bei rc=-1 (Session abgelaufen)', async 
   await assert.rejects(() => db.liste({ erltyp: 'P' }), FonSessionExpiredError);
 });
 
-test('liste formatiert von/bis als YYYY-MM-DDThh:mm:ss ohne Z/Millisekunden', async () => {
+/** Schickt `liste({ von, bis })` ab und liefert die gesendeten ts_zust_von/ts_zust_bis. */
+async function gesendetesFenster(von: Date, bis: Date): Promise<{ von?: string; bis?: string }> {
   let sentBody = '';
   const db = createDatabox(s, {
     transport: {
@@ -82,11 +83,51 @@ test('liste formatiert von/bis als YYYY-MM-DDThh:mm:ss ohne Z/Millisekunden', as
       }) as unknown as typeof fetch,
     },
   });
-  const von = new Date('2026-07-01T08:30:00Z');
-  const bis = new Date('2026-07-05T08:30:00Z');
   await db.liste({ von, bis });
-  assert.match(sentBody, /<ts_zust_von>2026-07-01T08:30:00<\/ts_zust_von>/);
-  assert.match(sentBody, /<ts_zust_bis>2026-07-05T08:30:00<\/ts_zust_bis>/);
+  return {
+    von: /<ts_zust_von>([^<]*)<\/ts_zust_von>/.exec(sentBody)?.[1],
+    bis: /<ts_zust_bis>([^<]*)<\/ts_zust_bis>/.exec(sentBody)?.[1],
+  };
+}
+
+// FinanzOnline liest ts_zust_von/ts_zust_bis als Wiener Ortszeit ohne Offset. Live geprüft
+// am 03.11.2026: Eine Zustellung mit ts_zust 20:20:59+01:00 lag im Fenster 20:15:59–20:25:59,
+// nicht im Fenster 19:15:59–19:25:59 (UTC-Uhrzeit derselben Zustellung).
+test('liste sendet von/bis als Wiener Ortszeit ohne Offset (Winterzeit, live geprüft)', async () => {
+  const f = await gesendetesFenster(new Date('2026-11-03T19:15:59Z'), new Date('2026-11-03T19:25:59.999Z'));
+  assert.deepEqual(f, { von: '2026-11-03T20:15:59', bis: '2026-11-03T20:25:59' });
+});
+
+test('liste sendet von/bis als Wiener Ortszeit (Sommerzeit, +02:00)', async () => {
+  const f = await gesendetesFenster(new Date('2026-07-01T08:30:00Z'), new Date('2026-07-05T08:30:00Z'));
+  assert.deepEqual(f, { von: '2026-07-01T10:30:00', bis: '2026-07-05T10:30:00' });
+});
+
+test('liste rechnet über den Datumswechsel und die Zeitumstellungen richtig um', async () => {
+  // 31.12. 23:30 UTC ist in Wien schon Neujahr
+  assert.deepEqual(
+    await gesendetesFenster(new Date('2026-12-31T23:30:00Z'), new Date('2027-01-01T00:00:00Z')),
+    {
+      von: '2027-01-01T00:30:00',
+      bis: '2027-01-01T01:00:00',
+    },
+  );
+  // Beginn Sommerzeit 29.03.2026 01:00 UTC: 01:59:59 MEZ, dann 03:00:00 MESZ
+  assert.deepEqual(
+    await gesendetesFenster(new Date('2026-03-29T00:59:59Z'), new Date('2026-03-29T01:00:00Z')),
+    {
+      von: '2026-03-29T01:59:59',
+      bis: '2026-03-29T03:00:00',
+    },
+  );
+  // Ende Sommerzeit 25.10.2026 01:00 UTC: 02:30 kommt in Wien zweimal vor
+  assert.deepEqual(
+    await gesendetesFenster(new Date('2026-10-25T00:30:00Z'), new Date('2026-10-25T01:30:00Z')),
+    {
+      von: '2026-10-25T02:30:00',
+      bis: '2026-10-25T02:30:00',
+    },
+  );
 });
 
 test('liste liefert mehrere Einträge bei mehreren result-Blöcken', async () => {

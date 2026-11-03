@@ -277,6 +277,18 @@ nach SemVer keine Fehlerbehebung, auch wenn der Anlass eine war.
 
 ## @kreiseck/finanzonline
 
+### 0.2.1 — 2026-11-04
+
+- **Fix:** `liste({ von, bis })` sendet `ts_zust_von`/`ts_zust_bis` jetzt als
+  Wiener Ortszeit. Bisher ging die UTC-Uhrzeit ohne Offset hinaus; FinanzOnline
+  liest den Wert aber als Wiener Zeit. Jedes Fenster war dadurch um eine
+  (Winterzeit) bzw. zwei Stunden (Sommerzeit) nach vorne verschoben, und
+  Zustellungen kurz vor `bis` fehlten in der Liste. Live geprüft am 03.11.2026:
+  Eine Zustellung mit `ts_zust` 20:20:59+01:00 liegt im Fenster
+  20:15:59–20:25:59, nicht im Fenster 19:15:59–19:25:59. Betrifft auch
+  `rkdbProtokolle({ von, bis })`. Die Umrechnung hängt nicht von
+  `process.env.TZ` ab.
+
 ### 0.2.0 — 2026-07-25
 
 - **Fix:** `normalizeFileart` ist jetzt case-insensitiv. FON liefert `fileart`
