@@ -34,9 +34,11 @@
 //                      (Q47, Q07); Q32 M8 mit BVAB (Q48), Abmeldung mit BVEN neu (Q49), Storno + neue
 //                      mBGM 02 (M87/M88, Q14); Q35 echte mBGM 01/02 nach BW1916 (M89/M88, Q17);
 //                      Q43 mBGM 03 mit BV ab dem ersten Tag (M95, B7)
-//   Mi 07–09 (01.04.2027): Clearing der Apr-2026-Verarbeitung lesen; F5 (A25–A27) über das Paket
+//   Mi 07–09 (01.04.2027): Clearing der Apr-2026-Verarbeitung lesen; Q21: L16 2026 für Q37 über das
+//                      Paket mit Geschlecht, Berichtigung und Storno (Q50–Q52); Q19 zweite mBGM
+//                      ohne Storno (M96). F5 (A25–A27) wartet auf die Einkommensgrenzen 2027 (WP7).
 
-const { meldung, setzeFeld } = require('../lib/bausteine');
+const { meldung, lohnzettel, setzeFeld } = require('../lib/bausteine');
 const { FELDER_E29 } = require('../../../dist/felder-e29.js');
 const { plusTage } = require('../lib/fenster');
 const { kasseneckVr } = require('../lib/kasseneck');
@@ -243,6 +245,81 @@ function q31Abmeldung(ctx) {
     dateiName: ctx.dateiName('Q47'),
     referenzwerte: [referenzwert],
   };
+}
+
+// --- Mi 07–09 (01.04.2027): L16 2026 (Q21) -------------------------------------------
+
+const MI_VM = ['mi-vm'];
+const STEUERNUMMER_ERSATZ = '911234565'; // prüfziffernrichtig erfunden, wie die L-Fälle
+
+/**
+ * Beträge eines L16 über zwei Monate mit gleichem Monatsbezug, gerechnet mit
+ * kasseneck (Parameterwerk 2026, Arbeiter, Oberösterreich, ohne Sonderzahlung):
+ * 3.000 € → SV-DN 542,10 € (18,07 %), Lohnsteuer 283,82 €; 3.100 € → 560,17 € bzw.
+ * 308,40 €. KZ 230 = SV − KZ 225 (F4800), KZ 245 = KZ 210 − KZ 230 (F6401).
+ */
+const L16_BETRAEGE = {
+  3000: { B210: 600_000, BIEB: 108_420, B230: 108_420, B245: 491_580, BIEL: 56_764, B260: 56_764 },
+  3100: { B210: 620_000, BIEB: 112_034, B230: 112_034, B245: 507_966, BIEL: 61_680, B260: 61_680 },
+};
+
+/**
+ * L16 2026 für Q37 (arbeiter, B/15, Eintritt 01.01.2026, Ende 28.02.2026 laut Q46)
+ * über das Paket, Version 28 (fachlich gültig für Zeiträume ab 2024; Version 29 erst
+ * für Zeiträume ab 2027). Geschlecht aus den Testdaten – genau das fehlt dem
+ * kasseneck-Weg (L12, W2801).
+ */
+function l16Q37(ctx, fall, { korr, refn, monatlich = 3000 } = {}) {
+  const p = ctx.rolle('arbeiter');
+  const dg = ctx.dienstgeber('B');
+  const beginn = ctx.zrVon('Q37');
+  const ende = endeVon(ctx, 'Q46');
+  const jahr = Number(beginn.slice(0, 4));
+  if (Number(ende.slice(0, 4)) !== jahr) throw new Error(`${fall}: Dienstverhältnis Q37 reicht über ${jahr} hinaus`);
+  const tagMonat = (iso) => `${iso.slice(8, 10)}${iso.slice(5, 7)}`;
+  return lohnzettel(ctx, {
+    fall,
+    dg: 'B',
+    traeger: '15',
+    uebermittlung: {
+      version: '28',
+      jahr,
+      arbeitgeber: {
+        STNRA: STEUERNUMMER_ERSATZ,
+        ANAM: dg.name,
+        AADR: dg.anschrift.strasse,
+        ALKZ: 'A',
+        APLZ: dg.anschrift.plz,
+        AORT: dg.anschrift.ort,
+        GESA: 1,
+      },
+      lohnzettel: [
+        {
+          felder: {
+            REFN: refn ?? ctx.referenzwert(fall).slice(0, 30),
+            ARTL: '01',
+            BELZ: tagMonat(beginn),
+            ENLZ: tagMonat(ende),
+            SOZS: '2',
+            AVLN: p.vsnr.slice(0, 4),
+            AGBD: p.vsnr.slice(4),
+            ANAM: `${p.familienname} ${p.vorname}`,
+            AADR: 'Teststraße 1',
+            ALKZ: 'A',
+            APLZ: '5020',
+            AORT: 'Salzburg',
+            GESW: p.geschlecht === 'w' ? 'J' : undefined,
+            GESM: p.geschlecht === 'm' ? 'J' : undefined,
+            GESD: p.geschlecht === 'x' ? 'J' : undefined,
+            VOLL: 'J',
+            GEBD: p.geburtsdatum,
+            ...(korr ? { KORR: korr } : {}),
+          },
+          betraege: L16_BETRAEGE[monatlich],
+        },
+      ],
+    },
+  });
 }
 
 module.exports = [
@@ -587,5 +664,46 @@ module.exports = [
         felder: { GERF: 'N', ADAT: ende, EBSV: ende, AGRD: '03', BVEN: ende },
       });
     },
+  }),
+  fall({
+    id: 'Q50',
+    titel: 'Q21: L16 2026 für Q37 (arbeiter, B/15, 01.01.–28.02.2026) über das Paket MIT Geschlecht (LF, Version 28)',
+    zweck:
+      'In KW42 kam der L16 2025 mit W 1706 (Aufrollungszeitraum, gegen das echte Datum) und auf dem kasseneck-Weg ' +
+      'mit W 2801 (Geschlecht leer). Für 2026 ist das Jahr laufend: Bleibt 1706 aus? Mit gesetztem Geschlecht: Bleibt ' +
+      '2801 aus? Nebenbei: Version 28 am simulierten 01.04.2027 (Version 29 zwingend ab 01.03.2027) – prüft ELDA die ' +
+      'Version gegen das simulierte oder das echte Datum?',
+    quelle: 'E.13, E.14 (Version 28, Felder GESW/GESM/GESD, KORR); Prüfkatalog L16 F1706, F2801',
+    erwartung: 'übernommen LF 1/1 ohne 1706 und ohne 2801',
+    fenster: MI_VM,
+    abhaengig: ['Q37', 'Q46'],
+    rang: 20,
+    baue: (ctx) => l16Q37(ctx, 'Q50'),
+  }),
+  fall({
+    id: 'Q51',
+    titel: 'Q21: Berichtigter L16 2026 zu Q50 (KORR „K“, gleiche Referenznummer, 3.100 € je Monat)',
+    zweck:
+      'Die Berichtigung, die kasseneck nach einer Lohnkorrektur für 2026 senden wird: gleiche Referenznummer, Jahr, ' +
+      'Arbeitgeber, Arbeitnehmer und Lohnzettelart wie Q50, Beträge neu gerechnet.',
+    quelle: 'E.14 Feld 104 KORR („K“ … gleiche Referenznummer)',
+    erwartung: 'übernommen ohne 1706 und ohne 2801',
+    fenster: MI_VM,
+    abhaengig: ['Q37', 'Q46', 'Q50'],
+    rang: 21,
+    baue: (ctx) => l16Q37(ctx, 'Q51', { korr: 'K', refn: ctx.referenzwertVon('Q50'), monatlich: 3100 }),
+  }),
+  fall({
+    id: 'Q52',
+    titel: 'Q21: Storno-L16 2026 zu Q50/Q51 (KORR „S“, Kennzahlen wie zuletzt gemeldet)',
+    zweck:
+      'Storno nach E.14 („nicht mehr notwendig alle Kennzahlen auf 0 zu setzen“) für ein laufendes Jahr. In KW42 ' +
+      '(L05, 2025) übernommen mit 1706.',
+    quelle: 'E.14 Feld 104 KORR (DM-Org 42, S. 228)',
+    erwartung: 'übernommen ohne 1706',
+    fenster: MI_VM,
+    abhaengig: ['Q37', 'Q46', 'Q50', 'Q51'],
+    rang: 22,
+    baue: (ctx) => l16Q37(ctx, 'Q52', { korr: 'S', refn: ctx.referenzwertVon('Q50'), monatlich: 3100 }),
   }),
 ];

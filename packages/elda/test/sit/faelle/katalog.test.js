@@ -243,8 +243,18 @@ const IM_FENSTER_KW45 = {
   'mi-vm': new Date('2026-11-04T06:30:00Z'),
   'mi-nm': new Date('2026-11-04T11:30:00Z'),
 };
-const istKw45 = (id) => /^(Q[34]\d|M8\d|M95)$/.test(id);
+const istKw45 = (id) => /^(Q[3-5]\d|M8\d|M9[56])$/.test(id);
+/** Lohnzettel (LF) unter den KW45-Fällen – nicht Bestand VR. */
+const L16_KW45 = ['Q50', 'Q51', 'Q52'];
 const zeitpunkt = (id, fenster) => (istKw45(id) ? IM_FENSTER_KW45 : IM_FENSTER)[fenster];
+
+/**
+ * Ohne Checkout baut ein Fall nicht – und auch keiner, der auf ihm aufbaut (Q50 hängt an der
+ * kasseneck-Person Q37, ohne selbst kasseneck zu brauchen).
+ */
+function fehltKette(fall, nachId = new Map(KATALOG.map((f) => [f.id, f]))) {
+  return Boolean(brueckeFehlt(fall)) || fall.abhaengig.some((id) => fehltKette(nachId.get(id), nachId));
+}
 
 const ersterFenster = (fall) => (fall.fenster === 'jedes' ? 'mo-vm' : fall.fenster[0]);
 
@@ -269,7 +279,7 @@ function baueAlle(ablage) {
     for (const id of fall.abhaengig) bau(nachId.get(id));
     if (fall.aktion === 'beobachten') return;
     // Die mBGM-Fälle rechnen mit kasseneck; ohne Checkout (CI) bauen sie nicht.
-    if (brueckeFehlt(fall)) return;
+    if (fehltKette(fall)) return;
     const fenster = ersterFenster(fall);
     const jetzt = zeitpunkt(fall.id, fenster);
     const ctx = baueKontext({
@@ -312,14 +322,14 @@ const feld = (satz, pos, laenge) => satz.slice(pos - 1, pos - 1 + laenge);
 
 test('der Katalog lädt und jeder Fall mit baue ist gebaut worden', () => {
   assert.ok(KATALOG.length >= 25);
-  for (const f of KATALOG.filter((x) => x.aktion !== 'beobachten' && !brueckeFehlt(x))) {
+  for (const f of KATALOG.filter((x) => x.aktion !== 'beobachten' && !fehltKette(x))) {
     assert.ok(GEBAUT.has(f.id), f.id);
   }
 });
 
 test('jeder Sendefall: drei Sätze, VR, TM, simuliertes Erstellungsdatum, Seriennummer, Träger, Satzart', () => {
   for (const [id, { ergebnis, ctx }] of GEBAUT) {
-    if (!Buffer.isBuffer(ergebnis.inhalt) || /^[MSL]/.test(id)) continue;
+    if (!Buffer.isBuffer(ergebnis.inhalt) || /^[MSL]/.test(id) || L16_KW45.includes(id)) continue;
     const s = saetze(ergebnis.inhalt, id === 'B03' ? '\n' : '\r\n');
     assert.equal(s.length, 3, `${id}: Vorlauf, Meldung, Schluss`);
     const [vorlauf, meldungssatz] = s;
@@ -648,6 +658,39 @@ test('L-Fälle: Bestand LF, TM, Version 28, VSTR 94, Informationssatz und ein Lo
     assert.equal(feld(l1, 1, 2), 'L1', `${id}: Satzart L1`);
     assert.equal(feld(i1, 51, 9), id === 'L02' ? '911234566' : '911234565', `${id}: STNRA I1`);
     assert.equal(feld(l1, 639, 9), id === 'L02' ? '911234566' : '911234565', `${id}: STNRA L1`);
+  }
+});
+
+test('Q50–Q52: L16 2026 über das Paket – LF, VSTR 94, Geschlecht gesetzt, Berichtigung und Storno mit der Referenznummer von Q50', () => {
+  const l1 = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[2];
+  for (const id of L16_KW45) {
+    if (!GEBAUT.has(id)) continue;
+    const { ergebnis } = GEBAUT.get(id);
+    const s = saetze(ergebnis.inhalt);
+    assert.equal(s.length, 4, `${id}: Vorlauf, I1, L1, Schluss`);
+    assert.equal(feld(s[0], 23, 2), 'LF', `${id}: BEST`);
+    for (const satz of s) assert.equal(feld(satz, 19, 2), '94', `${id}: VSTR`);
+    assert.equal(feld(l1(id), 280, 3).trim().length, 1, `${id}: genau ein Geschlecht (GESW/GESM/GESD)`);
+  }
+  if (!GEBAUT.has('Q52')) return;
+  assert.equal(feld(l1('Q50'), 656, 1), ' ', 'Q50: ohne KORR');
+  assert.equal(feld(l1('Q51'), 656, 1), 'K', 'Q51: KORR K');
+  assert.equal(feld(l1('Q52'), 656, 1), 'S', 'Q52: KORR S');
+  assert.equal(feld(l1('Q51'), 66, 30), feld(l1('Q50'), 66, 30), 'Q51: REFN wie Q50');
+  assert.equal(feld(l1('Q52'), 66, 30), feld(l1('Q50'), 66, 30), 'Q52: REFN wie Q50');
+});
+
+test('Z04/Z05: falscher Digest bzw. derselbe Digest groß – nur Mi nm, mit Gefahrhinweis', () => {
+  const echt = 'ab01'.repeat(32);
+  const body = `<securityParameters><kundenpasswort>${echt}</kundenpasswort></securityParameters>`;
+  const z = (id) => KATALOG.find((f) => f.id === id);
+  const wert = (id) => /<kundenpasswort>([^<]*)</.exec(z(id).baue().manipulation({ body, headers: {} }).body)[1];
+  assert.match(wert('Z04'), /^[0-9a-f]{128}$/);
+  assert.notEqual(wert('Z04'), echt);
+  assert.equal(wert('Z05'), echt.toUpperCase());
+  for (const id of ['Z04', 'Z05']) {
+    assert.deepEqual(z(id).fenster, ['mi-nm'], `${id}: nur Mi nm`);
+    assert.ok(z(id).gefahr, `${id}: Gefahrhinweis`);
   }
 });
 

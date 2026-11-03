@@ -3,6 +3,7 @@
 // Z – Zugang und Sicherheitsparameter. Ziel: jeden Status 55x einmal sehen.
 // Alle Fälle hier rufen nur `ruecksendungenAuflisten` – das verändert nichts.
 
+const { createHash } = require('node:crypto');
 const { setzeElement, leereElement, setzeHeader, elementWert } = require('../lib/manipulation');
 
 const basis = {
@@ -35,6 +36,49 @@ module.exports = [
     quelle: 'Schnittstellenbeschreibung V4, ruecksendungenAuflisten; SIT B004 (05.10.2026), Zusage lswh',
     erwartung: '000 mit 0 Rücksendungen = behoben; 500 = noch nicht behoben',
     baue: () => ({}),
+  },
+  {
+    ...basis,
+    id: 'Z04',
+    // Sperrgefahr: nur am Ende des letzten Fensters der Woche, ein Versuch, NACH dem letzten
+    // Abholen (Kampagnenplan, Regel 3) – deshalb nie in der Liste des Auto-Laufs.
+    fenster: ['mi-nm'],
+    gefahr: 'sperre',
+    rang: 98,
+    titel: 'falsches Kundenpasswort (eigene SIT-Seriennummer)',
+    zweck:
+      'Ein gültig gebildeter SHA-512-Digest eines falschen Passworts im Feld kundenpasswort. Zeigt den Code ' +
+      '(erwartet 558) und ob schon ein Fehlversuch sperrt – das nächste Z01 (Mo der Folgewoche) sagt es.',
+    quelle: 'Schnittstellenbeschreibung V4, SecurityParameters, Status 558; Kampagnenplan Regel 3',
+    erwartung: '558',
+    baue: () => ({
+      manipulation: setzeElement(
+        'kundenpasswort',
+        createHash('sha512').update('falsches-sit-kundenpasswort', 'utf8').digest('hex'),
+      ),
+    }),
+  },
+  {
+    ...basis,
+    id: 'Z05',
+    fenster: ['mi-nm'],
+    gefahr: 'sperre',
+    rang: 99,
+    titel: 'Kundenpasswort-Hash in Großbuchstaben',
+    zweck:
+      'Der richtige Digest, nur in Großbuchstaben. Vergleicht ELDA den Hex-Wert ohne Rücksicht auf die ' +
+      'Schreibung (000) oder ist das ein falsches Passwort (558)? Davon hängt ab, ob das Paket einen groß ' +
+      'geschriebenen Hash weiter abweisen muss (loeseKundenpasswortHash). Der Mitschnitt schwärzt auch die ' +
+      'Großschreibung (transport.js).',
+    quelle: 'Schnittstellenbeschreibung V4, SecurityParameters (SHA-512 hex), Status 558',
+    erwartung: '558 oder 000',
+    baue: () => ({
+      manipulation: (anfrage) => {
+        const hash = elementWert(anfrage.body, 'kundenpasswort');
+        if (!/^[0-9a-f]{128}$/.test(hash ?? '')) throw new Error('Z05: kein SHA-512-Digest in kundenpasswort');
+        return setzeElement('kundenpasswort', hash.toUpperCase())(anfrage);
+      },
+    }),
   },
   {
     ...basis,

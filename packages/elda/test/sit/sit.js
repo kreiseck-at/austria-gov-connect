@@ -700,6 +700,8 @@ function befehlGeneralprobe() {
 
     const nachId = new Map(katalog.map((f) => [f.id, f]));
     const fertig = new Set();
+    // Ohne Brücke übersprungen – und damit auch jeder Fall, der auf einem davon aufbaut.
+    const uebersprungen = new Set();
     let fehler = 0;
     let nummer = 0;
     const bau = (fall) => {
@@ -709,7 +711,14 @@ function befehlGeneralprobe() {
       if (fall.aktion === 'beobachten') return;
       const fehlt = brueckeFehlt(fall);
       if (fehlt) {
+        uebersprungen.add(fall.id);
         console.log(`übersprungen ${fall.id}: braucht ${fehlt}`);
+        return;
+      }
+      const ohneVorlauf = fall.abhaengig.filter((id) => uebersprungen.has(id));
+      if (ohneVorlauf.length > 0) {
+        uebersprungen.add(fall.id);
+        console.log(`übersprungen ${fall.id}: baut auf ${ohneVorlauf.join(', ')} (ohne Brücke übersprungen)`);
         return;
       }
       const fenster = fall.fenster === 'jedes' ? 'mo-vm' : fall.fenster[0];

@@ -29,6 +29,9 @@
 //   M88  A/15  02/2026  Q32 neu mit BV nach Q48/Q49; Q35 erste echte mBGM 02 (nach amtswegiger?)
 //   M89  A/15  01/2026  Q35 echte mBGM nach BW1916 (Q17)
 //   M95  B/15  03/2026  Q30 mit BV; Q43 Wiedereintritt mit BV ab dem ersten Tag (B7)
+//
+// Mi 07–09 = 01.04.2027 (Clearing der Sammelverarbeitung danach: Mi nm):
+//   M96  A/14  01/2026  Q34 zweite mBGM ohne Storno, 3.100 € statt 3.000 € (Q19)
 
 const { mbgmPaket } = require('../lib/bausteine');
 const { plusTage } = require('../lib/fenster');
@@ -37,6 +40,7 @@ const { FELDER_MBGM, FELDER_VERRECHNUNGSBASIS } = require('../../../dist/felder-
 const fall = (mehr) => ({ gefahr: null, aktion: 'senden', braucht: 'kasseneck', ...mehr });
 const MO_NM = ['mo-nm'];
 const DI_NM = ['di-nm'];
+const MI_VM = ['mi-vm'];
 
 const lies = (satz, tabelle, name) => {
   const f = tabelle.find((x) => x.name === name);
@@ -374,5 +378,33 @@ module.exports = [
       if (!basen?.includes('BV')) throw new Error(`M95: Q43 ohne BV im Eintrittsmonat (Basen ${basen})`);
       return b;
     },
+  }),
+  fall({
+    id: 'M96',
+    titel: 'Q19: zweite mBGM 01/2026 für Q34 (A/14) OHNE Storno, 3.100 € statt 3.000 €',
+    zweck:
+      'M82 hat 01/2026 für Q34 gemeldet (übernommen, ohne Clearing). Ersetzt eine zweite mBGM für denselben ' +
+      'Monat und dieselbe Person ohne Storno die erste, meldet die ÖGK eine Doppelmeldung, oder summiert sie? ' +
+      'Daran hängt, ob kasseneck jede Berichtigung als Storno + neue mBGM senden muss (FAK 3.2.7 sagt ja – hier ' +
+      'die Gegenprobe). Clearing aus der Sammelverarbeitung nach diesem Fenster, also Mi nm.',
+    quelle: `${QUELLE}; ÖGK-FAK 3.2.7`,
+    erwartung: 'übernommen; Clearing Mi nm: Hinweis auf eine zweite mBGM bzw. Differenz – nicht still summiert',
+    fenster: MI_VM,
+    abhaengig: ['Q34', 'M82'],
+    rang: 14,
+    baue: (ctx) =>
+      mbgmPaket(ctx, {
+        fall: 'M96',
+        dg: 'A',
+        traeger: '14',
+        monat: monatVon(ctx, 'M82'),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          {
+            rolle: 'angestellte',
+            mitarbeiter: { ...vollzeit('angestellter', ctx.zrVon('Q34')), grossSalaryCents: 310_000 },
+          },
+        ],
+      }),
   }),
 ];

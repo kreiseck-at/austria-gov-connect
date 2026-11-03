@@ -148,6 +148,27 @@ test('ein Geheimnis mit Umlaut wird auch in der Byte-Sicht geschwärzt', async (
   assert.ok(!alles.includes('Schlüssel-Ä1'), alles);
 });
 
+test('Z05: der echte Passwort-Hash in Großbuchstaben geht raus, steht aber nicht im Mitschnitt', async () => {
+  const { ablage, lauf, gesehen, echterFetch } = aufbau();
+  const hash = 'ab01'.repeat(32);
+  const gross = (anfrage) => ({ ...anfrage, body: anfrage.body.replace(hash, hash.toUpperCase()) });
+  const f = erstelleSitFetch({
+    ablage,
+    lauf,
+    geheimnisse: { ...GEHEIM, kundenpasswortHash: hash },
+    manipulation: gross,
+    echterFetch,
+    ...offen,
+  });
+  await f(SIT, { body: BODY.replace('f'.repeat(128), hash), headers: {} });
+  assert.ok(gesehen[0].init.body.includes(hash.toUpperCase()), 'gesendet wird die Großschreibung');
+  const alles = dateien(lauf.ordner)
+    .map((n) => lies(lauf.ordner, n))
+    .join('\n');
+  assert.ok(!alles.toLowerCase().includes(hash), alles);
+  assert.match(alles, /\*\*\*kundenpasswortHash_gross\*\*\*/);
+});
+
 test('der Payload steht nie im Mitschnitt', async () => {
   const { ablage, lauf, gesehen, echterFetch } = aufbau();
   const f = erstelleSitFetch({ ablage, lauf, geheimnisse: GEHEIM, echterFetch, ...offen });
