@@ -1,6 +1,7 @@
 import { steuerFuerSatz } from './berechne';
 import type { U30Fehler, U30FehlerCode } from './fehler';
 import { istKennzahl, istSatzKennzahl, kennzahlInfo, type Kennzahl } from './kennzahlen';
+import { schnappschuss } from './schnappschuss';
 import type { U30Erklaerung, U30Paket } from './typen';
 import { laufenderMonat, zrVonBis } from './zeitraum';
 
@@ -10,6 +11,19 @@ const MAX_ERKLAERUNGEN = 9999;
 const MAX_KUNDENINFO = 50;
 const VST_MUSTER = /^[0-9][0-9,a-zA-Z]{0,3}$/; // XSD: [0-9]{1}[0-9,a-z,A-Z]{0,3}
 const ERSTER_ZEITRAUM = '2022-01'; // ältere Zeiträume haben ein anderes Schema (KZ 009/010)
+const PAKET_FELDER = new Set(['paketNr', 'uebermittler', 'erklaerungen', 'erstellt']);
+const ERKLAERUNG_FELDER = new Set([
+  'steuernummer',
+  'zeitraum',
+  'kennzahlen',
+  'vst',
+  'ueberschussVerwenden',
+  'rechnungskopien',
+  'kundeninfo',
+  'berichtigung',
+  'erwarteteSteuer',
+  'satzNr',
+]);
 
 /** Betrag in Cent als deutscher Euro-Text, z. B. 297819 → `2.978,19`. */
 export function euro(cent: number): string {
@@ -78,11 +92,15 @@ const kzText = (kz: Kennzahl): string => `KZ ${kennzahlInfo(kz).nummer}`;
  * `jetzt` (Standard: aktuelle Zeit) bestimmt laufenden Monat und laufendes
  * Jahr in Wiener Zeit.
  */
-export function pruefeU30(paket: U30Paket, optionen?: { jetzt?: Date }): U30Fehler[] {
+export function pruefeU30(eingabe: U30Paket, optionen?: { jetzt?: Date }): U30Fehler[] {
+  const paket = schnappschuss(eingabe);
   const fehler: U30Fehler[] = [];
   const melde: Melde = (code, nachricht, extra = {}) => fehler.push({ code, nachricht, ...extra });
   const lauf = laufenderMonat(optionen?.jetzt ?? new Date());
 
+  for (const feld of Object.keys(paket)) {
+    if (!PAKET_FELDER.has(feld)) melde('FELD_UNBEKANNT', `Unbekanntes Feld „${feld}" im Paket.`, { feld });
+  }
   if (!istNr(paket.paketNr)) {
     melde('PAKETNR_UNGUELTIG', `Paketnummer muss eine ganze Zahl von 1 bis ${MAX_NR} sein.`, {
       feld: 'paketNr',
@@ -111,7 +129,7 @@ export function pruefeU30(paket: U30Paket, optionen?: { jetzt?: Date }): U30Fehl
   }
 
   const satzNummern = new Set<number>();
-  const zeitraeume = new Set<string>();
+  const zeitraeume: Array<{ steuernummer: string; zrvon: string; zrbis: string }> = [];
   paket.erklaerungen.forEach((e, i) => {
     if (e?.satzNr !== undefined && !istNr(e.satzNr)) {
       melde('SATZNR_UNGUELTIG', `Satznummer muss eine ganze Zahl von 1 bis ${MAX_NR} sein.`, {
@@ -130,15 +148,18 @@ export function pruefeU30(paket: U30Paket, optionen?: { jetzt?: Date }): U30Fehl
     }
     const zr = zrVonBis(e?.zeitraum);
     if (zr && typeof e?.steuernummer === 'string') {
-      const schluessel = `${e.steuernummer}|${zr.zrvon}|${zr.zrbis}`;
-      if (zeitraeume.has(schluessel)) {
+      const steuernummer = e.steuernummer;
+      const ueberlappt = zeitraeume.some(
+        (z) => z.steuernummer === steuernummer && z.zrvon <= zr.zrbis && zr.zrvon <= z.zrbis,
+      );
+      if (ueberlappt) {
         melde(
           'ERKLAERUNG_DOPPELT',
-          `Für Steuernummer ${e.steuernummer} und Zeitraum ${zr.zrvon} bis ${zr.zrbis} steht schon eine Erklärung im Paket.`,
+          `Für Steuernummer ${steuernummer} überschneidet sich der Zeitraum ${zr.zrvon} bis ${zr.zrbis} mit einer anderen Erklärung im Paket.`,
           { erklaerung: i },
         );
       }
-      zeitraeume.add(schluessel);
+      zeitraeume.push({ steuernummer, ...zr });
     }
     pruefeErklaerung(e ?? ({} as U30Erklaerung), lauf, (code, nachricht, extra = {}) =>
       melde(code, nachricht, { erklaerung: i, ...extra }),
@@ -149,6 +170,16 @@ export function pruefeU30(paket: U30Paket, optionen?: { jetzt?: Date }): U30Fehl
 }
 
 function pruefeErklaerung(e: U30Erklaerung, lauf: string, melde: Melde): void {
+  for (const feld of Object.keys(e)) {
+    if (!ERKLAERUNG_FELDER.has(feld))
+      melde('FELD_UNBEKANNT', `Unbekanntes Feld „${feld}" in der Erklärung.`, { feld });
+  }
+  for (const feld of ['berichtigung', 'ueberschussVerwenden', 'rechnungskopien'] as const) {
+    const wert: unknown = e[feld];
+    if (wert !== undefined && typeof wert !== 'boolean') {
+      melde('SCHALTER_UNGUELTIG', `${feld} muss true oder false sein.`, { feld });
+    }
+  }
   const befund = steuernummerBefund(e.steuernummer);
   if (befund === 'ungueltig') {
     melde('STEUERNUMMER_UNGUELTIG', 'Steuernummer muss aus 9 Ziffern ohne Trennzeichen bestehen.', {

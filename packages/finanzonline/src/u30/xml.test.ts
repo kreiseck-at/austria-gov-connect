@@ -169,7 +169,7 @@ test('alle 45 Kennzahlen in XSD-Reihenfolge (Schema ab 07/2026)', async () => {
   assert.equal(xsd.gueltig, true, xsd.fehler.join('\n'));
 });
 
-test('Kennzahl 0 wird weggelassen, KZ 000 mit 0 nicht', () => {
+test('Kennzahl 0 wird weggelassen, KZ 000 mit 0 nicht', async () => {
   const xml = baueU30Xml(paket(2001, [e({ kennzahlen: { kz000: 0, kz022: 0, kz060: 0, kz070: 0 } })]), {
     jetzt,
   });
@@ -177,22 +177,32 @@ test('Kennzahl 0 wird weggelassen, KZ 000 mit 0 nicht', () => {
     xml,
     golden('nullmeldung-q3-2026.xml').replace('<PAKET_NR>1004</PAKET_NR>', '<PAKET_NR>2001</PAKET_NR>'),
   );
+  assert.equal(
+    (
+      await pruefeGegenXsd(
+        baueU30Xml(paket(2001, [e({ kennzahlen: { kz000: 0, kz022: 0, kz060: 0, kz070: 0 } })]), { jetzt }),
+      )
+    ).gueltig,
+    true,
+  );
 });
 
-test('Erstellungszeit in Wiener Zeit (Sommerzeit)', () => {
+test('Erstellungszeit in Wiener Zeit (Sommerzeit)', async () => {
   const p: U30Paket = { paketNr: 2002, erklaerungen: [e({})], erstellt: new Date('2026-07-01T21:59:58Z') };
   const xml = baueU30Xml(p, { jetzt });
   assert.match(
     xml,
     /<DATUM_ERSTELLUNG type="datum">2026-07-01<\/DATUM_ERSTELLUNG><UHRZEIT_ERSTELLUNG type="uhrzeit">23:59:58<\/UHRZEIT_ERSTELLUNG>/,
   );
+  assert.equal((await pruefeGegenXsd(baueU30Xml(p, { jetzt }))).gueltig, true);
 });
 
-test('Parteienvertreter: IDENTIFIKATIONSBEGRIFF = uebermittler, FASTNR = Klient', () => {
+test('Parteienvertreter: IDENTIFIKATIONSBEGRIFF = uebermittler, FASTNR = Klient', async () => {
   const p: U30Paket = { paketNr: 2003, uebermittler: '911234573', erklaerungen: [e({})], erstellt: jetzt };
   const xml = baueU30Xml(p, { jetzt });
   assert.match(xml, /<IDENTIFIKATIONSBEGRIFF>911234573<\/IDENTIFIKATIONSBEGRIFF>/);
   assert.match(xml, /<FASTNR>911234565<\/FASTNR>/);
+  assert.equal((await pruefeGegenXsd(baueU30Xml(p, { jetzt }))).gueltig, true);
 });
 
 test('ungültiges Paket: U30PruefError, kein XML', () => {
@@ -200,4 +210,28 @@ test('ungültiges Paket: U30PruefError, kein XML', () => {
     () => baueU30Xml(paket(1003, [e({ steuernummer: '911234566' })]), { jetzt }),
     (err: unknown) => err instanceof U30PruefError && err.fehler[0]?.code === 'STEUERNUMMER_PRUEFZIFFER',
   );
+});
+
+test('Momentaufnahme: ein Getter wird genau einmal gelesen, Prüfung und XML sehen denselben Wert', async () => {
+  let lesungen = 0;
+  const kennzahlen = { kz000: 100000 } as Record<string, number>;
+  Object.defineProperty(kennzahlen, 'kz022', {
+    enumerable: true,
+    get() {
+      lesungen += 1;
+      return lesungen === 1 ? 100000 : 12.5;
+    },
+  });
+  const xml = baueU30Xml(paket(2004, [e({ kennzahlen })]), { jetzt });
+  assert.equal(lesungen, 1);
+  assert.match(xml, /<KZ022 type="kz">1000\.00<\/KZ022>/);
+  const xsd = await pruefeGegenXsd(xml);
+  assert.equal(xsd.gueltig, true, xsd.fehler.join('\n'));
+});
+
+test('Prototyp-Kennzahlen gelangen nie ins XML', () => {
+  const k = Object.create({ kz022: 50 }) as Record<string, number>;
+  k['kz000'] = 0;
+  const xml = baueU30Xml(paket(2005, [e({ kennzahlen: k })]), { jetzt });
+  assert.doesNotMatch(xml, /KZ022/);
 });

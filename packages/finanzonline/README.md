@@ -24,7 +24,7 @@ vor dem Senden alles sichtbar und prüfbar ist. Alle Beträge in **ganzen Cent**
 
 ```ts
 import { createSession } from '@kreiseck/finanzonline-core';
-import { berechneU30, createU30, pruefeU30, type U30Paket } from '@kreiseck/finanzonline';
+import { berechneU30, createU30, istUebernommen, pruefeU30, type U30Paket } from '@kreiseck/finanzonline';
 
 const paket: U30Paket = {
   paketNr: 1003, // vom Aufrufer, eindeutig halten (Zuordnung des Protokolls)
@@ -59,8 +59,11 @@ const r = await u30.sende(paket); // Test (T)
 
 // 4. Protokoll abholen (kommt nach Sekunden bis Minuten; markiert als gelesen)
 const [eintrag] = await u30.protokolle({ von: vorher, bis: new Date(), paketNr: 1003 });
-// eintrag.protokoll.ergebnis: 'vollstaendig' | 'teilweise' | 'nicht'
-// eintrag.protokoll.saetze[0].fehler: FEHLTEXT von FinanzOnline
+// eintrag.xml: Roh-XML (aufbewahren); eintrag.protokoll fehlt, wenn unlesbar (Grund in eintrag.fehler)
+if (eintrag?.protokoll) {
+  istUebernommen(eintrag.protokoll, 1); // true | false | undefined (= Protokoll sagt es nicht sicher)
+  // eintrag.protokoll.saetze[0]?.fehler: FEHLTEXT von FinanzOnline
+}
 await session.logout();
 ```
 
@@ -87,6 +90,21 @@ Wichtig:
   `erwarteteSteuer` macht das vor dem Senden sichtbar (`STEUER_WEICHT_AB`).
 - Testprotokolle löscht FinanzOnline 31 Tage nach Zustellung; das Roh-XML
   steht in `eintrag.xml` zum Aufbewahren.
+- **Eingebracht ist eine Erklärung erst, wenn das Protokoll es belegt.**
+  `istUebernommen` liefert `true` nur bei positivem Beleg, `false` bei
+  Ablehnung und `undefined`, wenn das Protokoll es nicht sicher sagt
+  (`ergebnis: 'unbekannt'`, z. B. ein noch unbekanntes Format) — dann nicht als
+  eingebracht werten und das Roh-XML ansehen.
+- **Unklarer Ausgang nach dem Senden** (Zeitüberschreitung, `FonTransportError`,
+  `FonProtocolError`, HTTP-Fehler ohne Fault): Ob FinanzOnline das Paket
+  bekommen hat, ist dann unbekannt. **Nicht neu senden**, sondern zuerst
+  `protokolle({ paketNr })` abfragen. Eine zweite echte Übermittlung desselben
+  Zeitraums gilt als Berichtigung — und davon nimmt die Schnittstelle laut
+  Anbietern nur eine an.
+- Die Eingabe muss reine Daten sein: Es zählen nur eigene, aufzählbare
+  Eigenschaften (je einmal gelesen). Unbekannte Felder (`FELD_UNBEKANNT`) und
+  Schalter, die nicht `true`/`false` sind (`SCHALTER_UNGUELTIG`), werden
+  gemeldet statt still ignoriert.
 
 Hintergrund, Quellen und Testlauf: `docs/research/2026-11-03-finanzonline-inventar.md`,
 Design: `docs/superpowers/specs/2026-11-04-u30-design.md` (im Repository).

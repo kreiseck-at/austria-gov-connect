@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FonProtocolError } from '@kreiseck/finanzonline-core';
-import { paketNrAusFilebez, parseU30Protokoll } from './protokoll';
+import { istUebernommen, paketNrAusFilebez, parseU30Protokoll } from './protokoll';
 
 // Echte Testprotokolle aus der FinanzOnline-DataBox vom 03.11.2026 (Testmodus T),
 // nur die Steuernummer durch die Ersatznummer 911234565 ersetzt.
@@ -144,4 +144,35 @@ test('paketNrAusFilebez', () => {
   assert.equal(paketNrAusFilebez('Webservice_RKDB_2026-07-22'), undefined);
   assert.equal(paketNrAusFilebez('Webservice_U30_ohne_nummer'), undefined);
   assert.equal(paketNrAusFilebez(''), undefined);
+});
+
+// --- Fix-Durchgang nach Review ---
+
+test('istUebernommen: nur bei positivem Beleg true, bei unbekanntem Format undefined', () => {
+  assert.equal(istUebernommen(parseU30Protokoll(ECHT_OK), 1), true);
+  const nok = parseU30Protokoll(ECHT_NOK);
+  assert.equal(istUebernommen(nok, 1), false);
+  assert.equal(istUebernommen(nok, 2), true); // „nicht (vollständig)": Sätze ohne FEHLTEXT gelten als eingebracht
+  const unbekannt = parseU30Protokoll(KOPF('1', '10.00.00', '1') + '<TEXT>Verarbeitung läuft</TEXT></XML>');
+  assert.equal(unbekannt.ergebnis, 'unbekannt');
+  assert.equal(istUebernommen(unbekannt, 1), undefined);
+  const abgelehnt = parseU30Protokoll(
+    KOPF('1', '10.00.00', '1') + '<TEXT>… nicht eingebracht.</TEXT><SATZNR>INFO_DATEN</SATZNR></XML>',
+  );
+  assert.equal(istUebernommen(abgelehnt, 1), false);
+});
+
+test('Buffer wird nach der XML-Deklaration dekodiert (ISO-8859-1)', () => {
+  const latin1 = ECHT_OK.replace('encoding="UTF-8"', 'encoding="iso-8859-1"');
+  const p = parseU30Protokoll(Buffer.from(latin1, 'latin1'));
+  assert.equal(p.ergebnis, 'vollstaendig');
+  assert.equal(p.uebermittlung, 'T');
+});
+
+test('FEHLTEXT ohne Satz wird als Paketfehler behalten', () => {
+  const p = parseU30Protokoll(
+    KOPF('1', '10.00.00', '1') + '<TEXT>… nicht übernommen.</TEXT><FEHLTEXT>Paket unlesbar</FEHLTEXT></XML>',
+  );
+  assert.deepEqual(p.paketFehler, ['Paket unlesbar']);
+  assert.deepEqual(p.unbekannteElemente, []);
 });

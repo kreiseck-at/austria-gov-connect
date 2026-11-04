@@ -11,6 +11,7 @@ export type U30FehlerCode =
   | 'SATZNR_UNGUELTIG'
   | 'SATZNR_DOPPELT'
   | 'ERKLAERUNG_DOPPELT'
+  | 'FELD_UNBEKANNT'
   // Erklärung — Form
   | 'STEUERNUMMER_UNGUELTIG'
   | 'STEUERNUMMER_PRUEFZIFFER'
@@ -25,6 +26,7 @@ export type U30FehlerCode =
   | 'VST_UNGUELTIG'
   | 'KUNDENINFO_ZU_LANG'
   | 'KUNDENINFO_ZEICHEN'
+  | 'SCHALTER_UNGUELTIG'
   // Erklärung — BMF-Prüfregeln (Prüfungen UVA ab 7/2026)
   | 'KZ000_FEHLT'
   | 'STEUERFREI_UEBER_STEUERBAR'

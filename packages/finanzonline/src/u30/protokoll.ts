@@ -29,10 +29,21 @@ export interface U30Protokoll {
   uhrzeit?: string;
   text?: string;
   saetze: U30ProtokollSatz[];
+  /** FEHLTEXT, der keinem Satz zugeordnet ist (Fehler auf Paketebene). */
+  paketFehler: string[];
   /** Satznummern mit FEHLTEXT. Eine Erklärung gilt als übernommen, wenn das Paket nicht abgelehnt ist und ihre Satznummer hier fehlt. */
   abgelehnteSaetze: number[];
   /** Namen von Elementen, die der Parser nicht kennt (Format des Produktionsprotokolls ist noch nicht an echten Daten bestätigt). */
   unbekannteElemente: string[];
+}
+
+/** Dekodiert Bytes nach der XML-Deklaration (ISO-8859-1 oder sonst UTF-8). */
+function dekodiere(bytes: Buffer): string {
+  const kopf = bytes.subarray(0, 200).toString('latin1');
+  const kodierung = /encoding\s*=\s*["']([^"']+)["']/i.exec(kopf)?.[1]?.toLowerCase();
+  return kodierung === 'iso-8859-1' || kodierung === 'latin1'
+    ? bytes.toString('latin1')
+    : bytes.toString('utf8');
 }
 
 const ganzzahl = (s: string): number | undefined => (/^\d{1,15}$/.test(s) ? Number(s) : undefined);
@@ -78,7 +89,7 @@ function uebermittlungAusText(text: string | undefined): 'T' | 'P' | undefined {
  * echten Daten gesehen.
  */
 export function parseU30Protokoll(xml: string | Buffer): U30Protokoll {
-  const text = (typeof xml === 'string' ? xml : xml.toString('utf8')).replace(/^﻿/, '');
+  const text = (typeof xml === 'string' ? xml : dekodiere(xml)).replace(/^\uFEFF/, '');
   let wurzel: XmlNode;
   try {
     wurzel = parseXml(text);
@@ -98,6 +109,7 @@ export function parseU30Protokoll(xml: string | Buffer): U30Protokoll {
     ergebnis: 'unbekannt',
     paketAbgelehnt: false,
     saetze: [],
+    paketFehler: [],
     abgelehnteSaetze: [],
     unbekannteElemente: [],
   };
@@ -147,7 +159,8 @@ export function parseU30Protokoll(xml: string | Buffer): U30Protokoll {
       case 'DRUCKTEXT':
       case 'DRUCKBETRAG':
         if (!satz) {
-          p.unbekannteElemente.push(kind.name);
+          if (kind.name === 'FEHLTEXT') p.paketFehler.push(wert);
+          else p.unbekannteElemente.push(kind.name);
         } else if (kind.name === 'FEHLTEXT') {
           satz.fehler.push(wert);
         } else if (kind.name === 'FASTNR') {
@@ -186,6 +199,18 @@ export function parseU30Protokoll(xml: string | Buffer): U30Protokoll {
   );
   p.paketAbgelehnt = ergebnis === 'nicht' || p.saetze.some((s) => s.satzNr === 'INFO_DATEN');
   return p;
+}
+
+/**
+ * Ob eine Erklärung (Satz) laut Protokoll übernommen wurde — nur bei positivem
+ * Beleg `true`. `false` bei abgelehntem Paket oder FEHLTEXT zum Satz.
+ * `undefined`, wenn das Protokoll das nicht sicher sagt (`ergebnis` unbekannt):
+ * dann **nicht** als eingebracht werten und das Roh-XML ansehen.
+ */
+export function istUebernommen(protokoll: U30Protokoll, satzNr: number): boolean | undefined {
+  if (protokoll.paketAbgelehnt || protokoll.abgelehnteSaetze.includes(satzNr)) return false;
+  if (protokoll.ergebnis === 'vollstaendig' || protokoll.ergebnis === 'teilweise') return true;
+  return undefined;
 }
 
 /** Paketnummer aus dem DataBox-Dateinamen `Webservice_U30_<Zeitstempel>_<PAKET_NR>`. */

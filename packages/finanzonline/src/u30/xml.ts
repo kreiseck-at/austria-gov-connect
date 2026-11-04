@@ -2,6 +2,7 @@ import { wienerOrtszeit } from '../wien';
 import { U30PruefError } from './fehler';
 import { KENNZAHLEN, type KennzahlInfo } from './kennzahlen';
 import { effektiveSatzNr, effektiverUebermittler, pruefeU30 } from './pruefe';
+import { schnappschuss } from './schnappschuss';
 import type { U30Erklaerung, U30Paket } from './typen';
 import { zrVonBis } from './zeitraum';
 
@@ -23,7 +24,7 @@ function kennzahlElemente(e: U30Erklaerung, block: KennzahlInfo['block']): strin
   let xml = '';
   for (const info of KENNZAHLEN) {
     if (info.block !== block) continue;
-    const wert = e.kennzahlen[info.kz];
+    const wert = Object.hasOwn(e.kennzahlen, info.kz) ? e.kennzahlen[info.kz] : undefined;
     if (block === 'STEUERFREI' && info.kz === 'kz020' && e.vst !== undefined) {
       xml += `<VST>${escape(e.vst)}</VST>`; // XSD: …, KZ016, VST, KZ020
     }
@@ -76,7 +77,9 @@ function erklaerungXml(paket: U30Paket, index: number): string {
  * Element als 0), KZ 000 wird immer geschrieben. Erstellungsdatum und -uhrzeit
  * in Wiener Zeit aus `paket.erstellt` (Standard: `jetzt` bzw. aktuelle Zeit).
  */
-export function baueU30Xml(paket: U30Paket, optionen?: { jetzt?: Date }): string {
+export function baueU30Xml(eingabe: U30Paket, optionen?: { jetzt?: Date }): string {
+  // Prüfung und Bau lesen dieselbe Momentaufnahme — nichts kommt an der Prüfung vorbei.
+  const paket = schnappschuss(eingabe);
   const fehler = pruefeU30(paket, optionen);
   if (fehler.length > 0) throw new U30PruefError(fehler);
 

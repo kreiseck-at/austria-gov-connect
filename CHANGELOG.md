@@ -290,6 +290,12 @@ nach SemVer keine Fehlerbehebung, auch wenn der Anlass eine war.
   `parseU30Protokoll` (Übermittlungsprotokoll aus der DataBox, Zuordnung über
   die Paketnummer im Dateinamen). Grundlage: BMF-Schemas und -Prüflisten sowie
   ein Testlauf gegen FinanzOnline am 03.11.2026.
+- U30-Eingaben werden als Momentaufnahme gelesen (nur eigene, aufzählbare
+  Eigenschaften, je einmal): Prüfung und XML sehen garantiert dieselben Werte.
+  Unbekannte Felder, falsch typisierte Schalter und überlappende Zeiträume
+  derselben Steuernummer im Paket werden gemeldet. `istUebernommen` wertet das
+  Protokoll nur bei positivem Beleg als „übernommen"; ein unlesbares Protokoll
+  bricht `protokolle()` nicht ab.
 - **Geändert:** `createFileUpload(session, config?)` — `uebermittlung` ist
   optional, Standard ist Test (`T`); ungültige Werte werfen sofort.
 - Intern: Wiener Zeit als eigenes Modul (`wien.ts`), von DataBox und U30 genutzt.

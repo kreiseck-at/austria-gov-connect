@@ -1,4 +1,4 @@
-import { FonError, type Session, type TransportOptions } from '@kreiseck/finanzonline-core';
+import { FonError, FonProtocolError, type Session, type TransportOptions } from '@kreiseck/finanzonline-core';
 import { createDatabox } from '../databox';
 import { createFileUpload } from '../fileupload';
 import { paketNrAusFilebez, parseU30Protokoll, type U30Protokoll } from './protokoll';
@@ -30,7 +30,10 @@ export interface U30ProtokollEintrag {
   paketNr?: number;
   /** Roh-XML zum Aufbewahren (Testprotokolle löscht FinanzOnline 31 Tage nach Zustellung). */
   xml: string;
-  protokoll: U30Protokoll;
+  /** Ausgewertetes Protokoll; fehlt, wenn es nicht lesbar war (dann steht der Grund in `fehler`). */
+  protokoll?: U30Protokoll;
+  /** Warum das Protokoll nicht ausgewertet werden konnte; das Roh-XML steht in `xml`. */
+  fehler?: string;
 }
 
 export interface U30Client {
@@ -41,6 +44,12 @@ export interface U30Client {
    * Es gibt nie eine automatische Wiederholung (sonst drohte eine verdeckte
    * Doppelübermittlung). rc −1 wirft `FonSessionExpiredError`, SOAP-Faults
    * `FonSoapFaultError`, Netzfehler `FonTransportError`.
+   *
+   * **Unklarer Ausgang** (Zeitüberschreitung, `FonTransportError`,
+   * `FonProtocolError`): Ob FinanzOnline das Paket bekommen hat, ist unbekannt.
+   * Dann nicht neu senden, sondern zuerst {@link U30Client.protokolle} mit der
+   * `paketNr` abfragen — eine zweite echte Übermittlung desselben Zeitraums
+   * gilt als Berichtigung.
    */
   sende(paket: U30Paket, optionen?: { echt?: boolean; jetzt?: Date }): Promise<U30Sendeergebnis>;
   /**
@@ -95,13 +104,14 @@ export function createU30(session: Session, optionen?: { transport?: TransportOp
     for (const e of eintraege) {
       const { inhalt } = await box.eintrag(e.applkey, 'XML');
       const xml = inhalt.toString('utf8');
-      const eintrag: U30ProtokollEintrag = {
-        applkey: e.applkey,
-        tsZust: e.tsZust,
-        filebez: e.filebez,
-        xml,
-        protokoll: parseU30Protokoll(xml),
-      };
+      const eintrag: U30ProtokollEintrag = { applkey: e.applkey, tsZust: e.tsZust, filebez: e.filebez, xml };
+      try {
+        eintrag.protokoll = parseU30Protokoll(xml);
+      } catch (err) {
+        // Ein unlesbares Protokoll darf die übrigen (schon als gelesen markierten) nicht verlieren.
+        if (!(err instanceof FonProtocolError)) throw err;
+        eintrag.fehler = err.message;
+      }
       const nr = paketNrAusFilebez(e.filebez);
       if (nr !== undefined) eintrag.paketNr = nr;
       out.push(eintrag);

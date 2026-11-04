@@ -207,8 +207,8 @@ test('protokolle öffnet nur U30-Protokolle (XML) und wertet sie aus', async () 
   assert.equal(liste[0]?.filebez, 'Webservice_U30_2026-11-03-20.20.46.876000_373364601');
   assert.equal(liste[0]?.tsZust, '2026-11-03T20:20:59.206+01:00');
   assert.equal(liste[0]?.xml, PROTOKOLL_OK);
-  assert.equal(liste[0]?.protokoll.ergebnis, 'vollstaendig');
-  assert.equal(liste[0]?.protokoll.uebermittlung, 'T');
+  assert.equal(liste[0]?.protokoll?.ergebnis, 'vollstaendig');
+  assert.equal(liste[0]?.protokoll?.uebermittlung, 'T');
 });
 
 test('protokolle mit paketNr: andere Nummer → nichts geöffnet', async () => {
@@ -225,4 +225,24 @@ test('protokolle mit passender paketNr → genau dieses', async () => {
   const m = databox();
   const liste = await createU30(s, { transport: m.transport }).protokolle({ ...fenster, paketNr: 373364601 });
   assert.equal(liste.length, 1);
+});
+
+test('protokolle: ein unlesbares Protokoll bricht die Liste nicht ab', async () => {
+  const liste =
+    '<S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/"><S:Body><ns:getDataboxResponse xmlns:ns="https://finanzonline.bmf.gv.at/fon/ws/databox"><rc>0</rc>' +
+    eintrag('', 'xml', 'KEY-A', 'Webservice_U30_2026-11-03-20.20.46.876000_373364601') +
+    eintrag('', 'xml', 'KEY-B', 'Webservice_U30_2026-11-03-20.21.00.000000_373364602') +
+    '</ns:getDataboxResponse></S:Body></S:Envelope>';
+  const m = attrappe((a) => ({
+    text:
+      a.aktion === 'getDatabox'
+        ? liste
+        : ENTRY(a.body.includes('KEY-B') ? '<PROTOKOLL>neu</PROTOKOLL>' : PROTOKOLL_OK),
+  }));
+  const r = await createU30(s, { transport: m.transport }).protokolle(fenster);
+  assert.equal(r.length, 2);
+  assert.equal(r[0]?.protokoll?.ergebnis, 'vollstaendig');
+  assert.equal(r[1]?.protokoll, undefined);
+  assert.equal(r[1]?.xml, '<PROTOKOLL>neu</PROTOKOLL>');
+  assert.match(r[1]?.fehler ?? '', /Wurzel/);
 });

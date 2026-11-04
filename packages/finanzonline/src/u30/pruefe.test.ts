@@ -144,11 +144,6 @@ test('Paket', () => {
     ['SATZNR_DOPPELT'],
   );
   assert.deepEqual(pruefe(paket({}, { erklaerungen: [erklaerung(), erklaerung()] })), ['ERKLAERUNG_DOPPELT']);
-  // gleiches Quartal, aber Monat statt Quartal ist ein anderer Zeitraum
-  assert.deepEqual(
-    pruefe(paket({}, { erklaerungen: [erklaerung(), erklaerung({ zeitraum: { jahr: 2026, monat: 9 } })] })),
-    [],
-  );
 });
 
 test('Kennzahlen: unbekannt, keine Ganzzahl, Vorzeichen, zu groß', () => {
@@ -279,4 +274,62 @@ test('U30PruefError trägt die Fehlerliste', () => {
   assert.equal(e.name, 'U30PruefError');
   assert.deepEqual(e.fehler, fehler);
   assert.match(e.message, /STEUERNUMMER_PRUEFZIFFER/);
+});
+
+// --- Fix-Durchgang nach Review ---
+
+test('Kennzahlen nur aus eigenen Eigenschaften: Getter-Klasse und Prototyp zählen nicht', () => {
+  class K {
+    get kz000(): number {
+      return 100000;
+    }
+    get kz022(): number {
+      return 12.5;
+    }
+  }
+  assert.deepEqual(pruefe(paket({ kennzahlen: new K() as never })), ['KZ000_FEHLT']);
+  const ueberPrototyp = Object.create({ kz000: 100000, kz022: 90000 }) as Record<string, number>;
+  assert.deepEqual(pruefe(paket({ kennzahlen: ueberPrototyp })), ['KZ000_FEHLT']);
+});
+
+test('Schalter müssen boolean sein', () => {
+  assert.deepEqual(pruefe(paket({ ueberschussVerwenden: 'true' as never })), ['SCHALTER_UNGUELTIG']);
+  assert.deepEqual(pruefe(paket({ rechnungskopien: 'J' as never })), ['SCHALTER_UNGUELTIG']);
+  assert.deepEqual(pruefe(paket({ berichtigung: 1 as never, ueberschussVerwenden: true })), [
+    'SCHALTER_UNGUELTIG',
+  ]);
+  assert.deepEqual(
+    pruefe(paket({ berichtigung: false, ueberschussVerwenden: false, rechnungskopien: false })),
+    [],
+  );
+});
+
+test('unbekannte Felder in Erklärung und Paket werden gemeldet', () => {
+  assert.deepEqual(pruefe(paket({ kundenInfo: 'Q3' } as never)), ['FELD_UNBEKANNT']);
+  assert.deepEqual(pruefe(paket({}, { paketnr: 1 } as never)), ['FELD_UNBEKANNT']);
+});
+
+test('überlappende Zeiträume derselben Steuernummer im Paket → ERKLAERUNG_DOPPELT', () => {
+  assert.deepEqual(
+    pruefe(paket({}, { erklaerungen: [erklaerung(), erklaerung({ zeitraum: { jahr: 2026, monat: 9 } })] })),
+    ['ERKLAERUNG_DOPPELT'],
+  );
+  assert.deepEqual(
+    pruefe(
+      paket(
+        {},
+        {
+          erklaerungen: [
+            erklaerung(),
+            erklaerung({ zeitraum: { jahr: 2026, monat: 6 }, kennzahlen: { kz000: 0 } }),
+          ],
+        },
+      ),
+    ),
+    [],
+  );
+});
+
+test('pruefeU30 wirft nicht bei kaputter Eingabe', () => {
+  assert.deepEqual(codes(pruefeU30(null as never, { jetzt })), ['ERKLAERUNGEN_ANZAHL', 'PAKETNR_UNGUELTIG']);
 });

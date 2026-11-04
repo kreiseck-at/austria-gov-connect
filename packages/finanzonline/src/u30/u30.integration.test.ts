@@ -65,8 +65,8 @@ test(
         await warte(15_000);
         const gefunden = await u30.protokolle({ ...fenster, bis: new Date(Date.now() + 5 * 60_000) });
         if (gefunden.length > 0) {
-          assert.equal(gefunden[0]?.protokoll.uebermittlung, 'T');
-          assert.equal(gefunden[0]?.protokoll.paketNr, paketNr);
+          assert.equal(gefunden[0]?.protokoll?.uebermittlung, 'T');
+          assert.equal(gefunden[0]?.protokoll?.paketNr, paketNr);
           return;
         }
       }
