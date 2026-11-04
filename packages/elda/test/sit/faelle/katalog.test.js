@@ -245,7 +245,7 @@ const IM_FENSTER_KW45 = {
   'mi-vm': new Date('2026-11-04T06:30:00Z'),
   'mi-nm': new Date('2026-11-04T11:30:00Z'),
 };
-const istKw45 = (id) => /^(Q[3-5]\d|M8\d|M9[56])$/.test(id);
+const istKw45 = (id) => /^(Q[3-5]\d|M8\d|M9[5-7])$/.test(id);
 /** Lohnzettel (LF) unter den KW45-Fällen – nicht Bestand VR. */
 const L16_KW45 = ['Q50', 'Q51', 'Q52', 'Q54'];
 const zeitpunkt = (id, fenster) => (istKw45(id) ? IM_FENSTER_KW45 : IM_FENSTER)[fenster];
@@ -702,6 +702,16 @@ test('L-Fälle: Bestand LF, TM, Version 28, VSTR 94, Informationssatz und ein Lo
     assert.equal(feld(i1, 51, 9), id === 'L02' ? '911234566' : '911234565', `${id}: STNRA I1`);
     assert.equal(feld(l1, 639, 9), id === 'L02' ? '911234566' : '911234565', `${id}: STNRA L1`);
   }
+});
+
+test('M97: kasseneck deckelt die SV-Grundlage bei 6.930 €, die BV-Grundlage bleibt das volle Entgelt', () => {
+  if (!GEBAUT.has('M97')) return;
+  const s = saetze(GEBAUT.get('M97').ergebnis.inhalt);
+  // BS: Satzart, laufende Nummer, Kennung, OBUS, VSTR (20 Stellen), dann Verrechnungsbasis + Betrag in Cent.
+  const basen = Object.fromEntries(s.filter((x) => x.startsWith('BS')).map((x) => [feld(x, 21, 2), feld(x, 23, 11)]));
+  assert.deepEqual(basen, { AB: '00000693000', BV: '00000900000' });
+  const v1 = s.filter((x) => x.startsWith('V1')).map((x) => x.slice(20));
+  assert.deepEqual(v1, ['T01+039050+00000270617', 'V01+001530+00000013770']);
 });
 
 test('Q50–Q52: L16 2026 über das Paket – LF, VSTR 94, Geschlecht gesetzt, Berichtigung und Storno mit der Referenznummer von Q50', () => {

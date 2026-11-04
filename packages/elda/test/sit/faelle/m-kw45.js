@@ -92,6 +92,9 @@ function monatVor(iso, zurueck) {
   return new Date(Date.UTC(j, m - 1 - zurueck, 1)).toISOString().slice(0, 7);
 }
 
+/** Der Monat nach `monat` (JJJJ-MM). */
+const einMonatNach = (monat) => monatVor(monat, -1);
+
 /** Letzter Tag des Monats vor `iso`. */
 function vormonatsende(iso) {
   const [j, m] = iso.split('-').map(Number);
@@ -403,6 +406,33 @@ module.exports = [
           {
             rolle: 'angestellte',
             mitarbeiter: { ...vollzeit('angestellter', ctx.zrVon('Q34')), grossSalaryCents: 310_000 },
+          },
+        ],
+      }),
+  }),
+  fall({
+    id: 'M97',
+    titel: 'mBGM 03/2026 A/14 – Q34 mit 9.000 € über der Höchstbeitragsgrundlage (6.930 €), mit BV',
+    zweck:
+      'Die Höchstbeitragsgrundlage kam im Katalog nie vor. kasseneck muss die SV-Positionen bei 6.930 € deckeln, ' +
+      'die BV aber vom vollen Entgelt rechnen (§ 6 Abs 1 BMSVG kennt keine Höchstbeitragsgrundlage). Erste echte ' +
+      'mBGM 03/2026 nach der amtswegigen (BW1916/BW2032) – wie M89 ersetzt sie sie still, wenn sie stimmt.',
+    quelle: `${QUELLE}; § 45 Abs 1, § 108 Abs 3 ASVG (6.930 € 2026); § 6 Abs 1 BMSVG; E.32`,
+    erwartung: 'übernommen; Clearing Mi nm: amtswegige mBGM 03/2026 obsolet, kein BW1850/BW1917',
+    fenster: MI_VM,
+    abhaengig: ['Q34', 'M85'],
+    rang: 15,
+    baue: (ctx) =>
+      mbgmPaket(ctx, {
+        fall: 'M97',
+        dg: 'A',
+        traeger: '14',
+        monat: einMonatNach(monatVon(ctx, 'M85')),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          {
+            rolle: 'angestellte',
+            mitarbeiter: { ...vollzeit('angestellter', ctx.zrVon('Q34')), grossSalaryCents: 900_000 },
           },
         ],
       }),
