@@ -30,7 +30,7 @@ function baueKontext({
   softwareId,
   seriennummer,
 }) {
-  const zr = zrDatum(fenster);
+  const zr = zrDatum(fenster, jetzt);
   const woche = wocheVon(jetzt);
   const stempel = stempelVon(jetzt);
   const erstellt = simuliertesErstellt(fenster, jetzt);

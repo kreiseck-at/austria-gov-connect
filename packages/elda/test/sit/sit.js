@@ -45,6 +45,12 @@ const { ladeTestdaten } = require('./lib/testdaten');
 const { ladeKatalog, planFuer, alsMarkdown, fehlendeVorlaeufe } = require('./lib/katalog');
 const { statusJeFall, gelaufenInWoche, enthaeltNummer, URTEILE } = require('./lib/status');
 const { baueKontext } = require('./lib/kontext');
+const {
+  zuordnungAusLaeufen,
+  faelleDerMitteilung,
+  zustellungsHinweis,
+  istOffen,
+} = require('./lib/auswertung');
 const { brueckeFehlt, kasseneckVr, vrVerfuegbar } = require('./lib/kasseneck');
 const { maskiereObus, maskiereText, ohneSeriennummer, formenDerSeriennummer } = require('./lib/maskierung');
 
@@ -344,15 +350,16 @@ function befehlKatalog() {
  * Wertet die gesicherten Rücksendungen aus – Mitteilungen und Clearing –, mit
  * den Lesern des Pakets. Clearingfälle werden über den Referenzwert dem
  * eigenen Fall zugeordnet; vom Träger selbst angelegte (Mahnung, mBGM von Amts
- * wegen) tragen einen internen Referenzwert und stehen als „Träger“.
+ * wegen) tragen einen internen Referenzwert und stehen als „Träger“. Obsolet
+ * gesetzte Dialogfälle (Zustellungsgrund O) sind erledigt: Sie stehen mit dem
+ * Vermerk da und zählen nicht in „Clearing gesamt“.
  */
 function befehlAuswerten() {
   const { ablage } = grundlagen({ fuerNetz: false });
   const ereignisse = ablage.ereignisse();
-  const fallZu = new Map();
-  for (const e of ereignisse) {
-    if (e.art === 'lauf') for (const r of e.referenzwerte ?? []) fallZu.set(r, e.fall);
-  }
+  const zuordnung = zuordnungAusLaeufen(ereignisse);
+  const fallZu = zuordnung.nachReferenz;
+  const obsolet = new Map();
   const ordner = path.join(ablage.basis, 'ruecksendungen');
   const dateien = fs.existsSync(ordner) ? fs.readdirSync(ordner).sort() : [];
   const codes = new Map();
@@ -368,13 +375,11 @@ function befehlAuswerten() {
         );
       } else if (art === 'mitteilung') {
         const m = elda.liesMitteilung(inhalt);
-        const refs = m.meldungen
-          .map((x) => fallZu.get(x.referenznummer) ?? x.referenznummer)
-          .filter((r) => r !== undefined);
+        const refs = faelleDerMitteilung(m, erkannt.protokollnummer, zuordnung);
         const summen = m.bestaende
           .map((b) => `${b.code} ${b.uebernommen ?? '?'}/${b.empfangen ?? '?'}`)
           .join(', ');
-        console.log(`${name}: ${m.status} (${summen}) – ${[...new Set(refs)].join(', ')}`);
+        console.log(`${name}: ${m.status} (${summen}) – ${refs.join(', ')}`);
         for (const c of [...m.codes, ...m.meldungen.flatMap((x) => x.codes)]) {
           console.log(`  ${c.typ ?? ''} ${c.code} (Zeile ${c.zeilennummer ?? '?'}): ${c.text}`);
         }
@@ -387,11 +392,14 @@ function befehlAuswerten() {
           const zusatz = inh?.meldungStatusZusatz ? `/${inh.meldungStatusZusatz}` : '';
           const wer = fallZu.get(fall.referenzwert) ?? 'Träger';
           const zeitraum = fall.fachinformationen.find((f) => f.typ === 'Beitragszeitraum')?.wert ?? '';
+          const hinweis = zustellungsHinweis(fall);
+          const zaehler = istOffen(fall) ? codes : obsolet;
           for (const info of inh?.informationen ?? []) {
-            codes.set(info.code, (codes.get(info.code) ?? 0) + 1);
+            zaehler.set(info.code, (zaehler.get(info.code) ?? 0) + 1);
             if (wer === 'Träger') continue;
             console.log(
-              `${name}: ${wer} ${fall.bestandBez}/${fall.satzart} ${zeitraum} → ${info.code} [${status}${zusatz}, ` +
+              `${name}: ${hinweis ? `(${hinweis}) ` : ''}${wer} ${fall.bestandBez}/${fall.satzart} ${zeitraum} → ` +
+                `${info.code} [${status}${zusatz}, ` +
                 `${elda.DRINGLICHKEIT[info.dringlichkeit] ?? info.dringlichkeit ?? '–'}] ${info.text}`,
             );
           }
@@ -403,6 +411,9 @@ function befehlAuswerten() {
   }
   if (codes.size > 0) {
     console.log(`Clearing gesamt: ${[...codes].map(([c, n]) => `${c} ×${n}`).join(', ')}`);
+  }
+  if (obsolet.size > 0) {
+    console.log(`Obsolet gesetzt (erledigt): ${[...obsolet].map(([c, n]) => `${c} ×${n}`).join(', ')}`);
   }
 }
 
@@ -619,7 +630,7 @@ function befehlPlan(optionen) {
   const jetzt = offlineJetzt();
   const fenster = optionen.fenster ?? aktivesFenster(jetzt);
   if (!fenster) abbruch('Kein Fenster aktiv – mit --fenster angeben, z. B. --fenster mo-vm.');
-  zrDatum(fenster);
+  zrDatum(fenster, jetzt);
   const ereignisse = ablage.ereignisse();
   const plan = planFuer(
     katalog,
@@ -627,7 +638,7 @@ function befehlPlan(optionen) {
     statusJeFall(katalog, ereignisse),
     gelaufenInWoche(ereignisse, wocheVon(jetzt)),
   );
-  console.log(`Plan für ${fenster} (simuliert ${zrDatum(fenster)}), Woche ${wocheVon(jetzt)}:`);
+  console.log(`Plan für ${fenster} (simuliert ${zrDatum(fenster, jetzt)}), Woche ${wocheVon(jetzt)}:`);
   for (const { fall, grund } of plan.reihenfolge) {
     console.log(
       `  ${fall.id}  ${fall.aktion.padEnd(10)} ${grund === 'vorlauf' ? '[Vorlauf] ' : ''}${fall.titel}${fall.gefahr ? `  ⚠ ${fall.gefahr}` : ''}`,
@@ -659,7 +670,7 @@ function befehlZeigen(positionen, optionen) {
     softwareId: SOFTWARE_ID,
     seriennummer: seriennummer({ pflicht: false }),
   });
-  console.log(`Trockenlauf in ${fenster} (simuliert ${zrDatum(fenster)}) – es wird nichts gesendet.`);
+  console.log(`Trockenlauf in ${fenster} (simuliert ${zrDatum(fenster, jetzt)}) – es wird nichts gesendet.`);
   const fehlt = fehlendeVorlaeufe(fall, gelaufenInWoche(ereignisse, wocheVon(jetzt)));
   if (fehlt.length)
     console.log(`  Hinweis: braucht ${fehlt.join(', ')} in dieser Woche – noch nicht gelaufen.`);
@@ -700,6 +711,8 @@ function befehlGeneralprobe() {
 
     const nachId = new Map(katalog.map((f) => [f.id, f]));
     const fertig = new Set();
+    // Ohne Brücke übersprungen – und damit auch jeder Fall, der auf einem davon aufbaut.
+    const uebersprungen = new Set();
     let fehler = 0;
     let nummer = 0;
     const bau = (fall) => {
@@ -709,7 +722,14 @@ function befehlGeneralprobe() {
       if (fall.aktion === 'beobachten') return;
       const fehlt = brueckeFehlt(fall);
       if (fehlt) {
+        uebersprungen.add(fall.id);
         console.log(`übersprungen ${fall.id}: braucht ${fehlt}`);
+        return;
+      }
+      const ohneVorlauf = fall.abhaengig.filter((id) => uebersprungen.has(id));
+      if (ohneVorlauf.length > 0) {
+        uebersprungen.add(fall.id);
+        console.log(`übersprungen ${fall.id}: baut auf ${ohneVorlauf.join(', ')} (ohne Brücke übersprungen)`);
         return;
       }
       const fenster = fall.fenster === 'jedes' ? 'mo-vm' : fall.fenster[0];

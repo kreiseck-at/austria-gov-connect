@@ -40,25 +40,40 @@ function meldung(ctx, { fall, art, rolle, dg, traeger, freieDN = false, felder, 
   };
 }
 
+/** mBGM-Eintrag ohne BV: Basis BV raus, Verrechnungsgrundlage 2 (nur SV, E.32). */
+function ohneBv(eintrag) {
+  return {
+    ...eintrag,
+    verrechnungsgrundlage: '2',
+    tarifbloecke: eintrag.tarifbloecke.map((t) => ({ ...t, basen: t.basen.filter((b) => b.typ !== 'BV') })),
+  };
+}
+
 /**
  * Ein mBGM-Paket für EIN Beitragskonto und EINEN Beitragszeitraum, gerechnet
  * mit der Lohnlogik von kasseneck (Abrechnung → `baueMeldung`), gebaut und
  * geprüft mit diesem Paket. Ein einziger Prüfbefund (`pruefeAbfolge`,
  * `pruefeMbgmPaket`) bricht ab – gesendet wird nur, was kasseneck auch senden
- * würde. Das Paket muss alle im Monat Beschäftigten des Kontos enthalten.
+ * würde. Die erste mBGM eines Monats enthält alle im Monat Beschäftigten des
+ * Kontos; eine Berichtigung nur die Personen, deren mBGM storniert wird.
  *
  * @param a.monat Beitragszeitraum als JJJJ-MM
  * @param a.bundesland für die Abrechnung (Dienstgeberabgaben)
- * @param a.beschaeftigte [{ rolle, mitarbeiter }] – `mitarbeiter` in der
+ * @param a.beschaeftigte [{ rolle, mitarbeiter, nurSv }] – `mitarbeiter` in der
  *   Eingabeform von kasseneck (dienstnehmerGruppe, eintritt, wochenstunden, …);
- *   Name und Versicherungsnummer kommen aus den Testdaten der Rolle.
+ *   Name und Versicherungsnummer kommen aus den Testdaten der Rolle. `nurSv`
+ *   meldet die Person bewusst ohne BV (Verrechnungsgrundlage 2, Basis BV
+ *   entfernt) – wie ein Programm, das die BV-Zeit nicht kennt.
+ * @param a.stornos fertige Storno-Einträge (Stornomeldung), stehen im Paket vor
+ *   den neuen mBGM. Ihre Referenzwerte folgen in `referenzwerte` nach denen der
+ *   neuen mBGM.
  */
-function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, optionen = {} }) {
+function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, stornos = [], optionen = {} }) {
   const k = kasseneck();
   const parameter = k.ladeParameter(Number(monat.slice(0, 4)));
   const konto = ctx.konto(dg, { traeger });
   const referenzwerte = [];
-  const eintraege = beschaeftigte.map(({ rolle, mitarbeiter }, i) => {
+  const eintraege = beschaeftigte.map(({ rolle, mitarbeiter, nurSv = false }, i) => {
     const person = ctx.rolle(rolle);
     const abrechnung = k.erstelleAbrechnung({
       mitarbeiter: { id: rolle, austritt: null, salaryType: 'monthly', ...mitarbeiter },
@@ -74,7 +89,7 @@ function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, o
     }
     const refw = ctx.referenzwert(`${fall}-${i + 1}`);
     referenzwerte.push(refw);
-    return k.mbgm.baueMeldung({
+    const eintrag = k.mbgm.baueMeldung({
       abrechnung,
       mitarbeiter: {
         versicherungsnummer: person.vsnr,
@@ -84,10 +99,11 @@ function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, o
       },
       referenzwert: refw,
     });
+    return nurSv ? ohneBv(eintrag) : eintrag;
   });
   const paketref = ctx.referenzwert(fall);
   const saetze = ctx.elda.erstelleMbgmPaket(
-    eintraege,
+    [...stornos, ...eintraege],
     k.mbgm.bauePaketOptionen({
       elda: { beitragskontonummer: konto.bknr },
       dienstgebername: ctx.dienstgeber(dg).name,
@@ -104,7 +120,32 @@ function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, o
   return {
     inhalt: ctx.elda.erstelleMbgmBestand(saetze, ctx.bestandOptionen({ dg, traeger, ...optionen })),
     dateiName: ctx.dateiName(fall),
-    referenzwerte: [paketref, ...referenzwerte],
+    referenzwerte: [paketref, ...referenzwerte, ...stornos.map((s) => s.referenzwert)],
+  };
+}
+
+/**
+ * Ein Bestand LF (Lohnzettel Finanz, E.13/E.14) aus einer fertigen Übermittlung
+ * des Pakets. Der Vorlauf von LF trägt keinen Versicherungsträger des Kontos
+ * (VSTR 94 setzt das Paket). Die Prüfung des Pakets darf keinen Befund mit
+ * Status N liefern; Hinweise (P) bleiben der SIT überlassen.
+ *
+ * @param a.uebermittlung { version, jahr, arbeitgeber, lohnzettel } wie
+ *   `erstelleLohnzettelBestand`
+ * @param a.erstellt Erstellungszeitpunkt (Vorlauf, DTUE/ZTUE); ohne Angabe der
+ *   simulierte Tag des Fensters
+ */
+function lohnzettel(ctx, { fall, dg, traeger, uebermittlung, erstellt }) {
+  const { versicherungstraeger: _vstr, ...opt } = ctx.bestandOptionen({ dg, traeger, erstellt });
+  const saetze = ctx.elda.lohnzettelSaetze(uebermittlung, opt.erstellt);
+  const befunde = ctx.elda
+    .pruefeLohnzettel(saetze, uebermittlung.version, { heute: opt.erstellt })
+    .filter((b) => b.status.startsWith('N'));
+  if (befunde.length > 0) throw new Error(`L16 ${fall} hat Befunde mit Status N: ${JSON.stringify(befunde)}`);
+  return {
+    inhalt: ctx.elda.erstelleLohnzettelBestand(uebermittlung, opt),
+    dateiName: ctx.dateiName(fall),
+    referenzwerte: uebermittlung.lohnzettel.map((lz) => lz.felder.REFN),
   };
 }
 
@@ -215,4 +256,4 @@ function mitLf(inhalt) {
   return Buffer.from(inhalt.toString('latin1').replace(/\r\n/g, '\n'), 'latin1');
 }
 
-module.exports = { meldung, mbgmPaket, familienhospiz, schwerarbeit, mitLf, setzeFeld };
+module.exports = { meldung, mbgmPaket, lohnzettel, familienhospiz, schwerarbeit, mitLf, setzeFeld };

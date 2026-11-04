@@ -8,21 +8,49 @@
 // Die Anlage wird nach jedem Wochenzyklus zurückgesetzt (ÖGK, „LSWH-Test –
 // Regelbetrieb", 10/2023).
 //
-// Ab 02.11.2026 (KW45) stellt der SIT auf eine neue Zeitreise um. Bis die neue
-// Tabelle hier steht, verweigert das Werkzeug jeden Netzaufruf (GUELTIG_BIS) –
-// ein Lauf mit falschem simuliertem Datum erzeugt nur Fehlbefunde.
+// Jedes Jahr Anfang November verschiebt der SIT den Testzeitraum um ein Jahr
+// („Zeitreiseumstellung“). Deshalb hängt die Tabelle an Kalendertagen: für
+// jeden echten Tag gilt genau eine Zeitreise, außerhalb jeder Tabelle
+// verweigert das Werkzeug jeden Netzaufruf – ein Lauf mit falschem simuliertem
+// Datum erzeugt nur Fehlbefunde.
+//
+// Quelle der Zeitreise 2026/27: SIT-Portal, LOHNSOFTWAREHERSTELLER → Testkalender,
+// Bild „TestkalenderWochenplan_2026_2027“ (Testzeitraum 01.01.2026 bis
+// 01.05.2027, Sammelverarbeitungen Jän–Apr 2026 und Apr 2027), gelesen am
+// 02.11.2026. Nach Mi 12–14 läuft keine Sammelverarbeitung mehr: das letzte
+// Fenster dient nur noch der Kontrolle.
 
-const FENSTER = Object.freeze({
-  'mo-vm': Object.freeze({ wochentag: 1, von: '07:00', bis: '09:00', datum: '2025-01-01' }),
-  'mo-nm': Object.freeze({ wochentag: 1, von: '12:00', bis: '14:00', datum: '2025-02-01' }),
-  'di-vm': Object.freeze({ wochentag: 2, von: '07:00', bis: '09:00', datum: '2025-03-01' }),
-  'di-nm': Object.freeze({ wochentag: 2, von: '12:00', bis: '14:00', datum: '2025-04-01' }),
-  'mi-vm': Object.freeze({ wochentag: 3, von: '07:00', bis: '09:00', datum: '2026-04-01' }),
-  'mi-nm': Object.freeze({ wochentag: 3, von: '12:00', bis: '14:00', datum: '2026-05-01' }),
-});
+const tabelle = (mo1, mo2, di1, di2, mi1, mi2) =>
+  Object.freeze({
+    'mo-vm': Object.freeze({ wochentag: 1, von: '07:00', bis: '09:00', datum: mo1 }),
+    'mo-nm': Object.freeze({ wochentag: 1, von: '12:00', bis: '14:00', datum: mo2 }),
+    'di-vm': Object.freeze({ wochentag: 2, von: '07:00', bis: '09:00', datum: di1 }),
+    'di-nm': Object.freeze({ wochentag: 2, von: '12:00', bis: '14:00', datum: di2 }),
+    'mi-vm': Object.freeze({ wochentag: 3, von: '07:00', bis: '09:00', datum: mi1 }),
+    'mi-nm': Object.freeze({ wochentag: 3, von: '12:00', bis: '14:00', datum: mi2 }),
+  });
 
-/** Letzter Tag, für den diese Tabelle gilt (Sonntag vor KW45). */
-const GUELTIG_BIS = '2026-11-01';
+/** Zeitreisen nach echten Kalendertagen (Wien), jeweils von–bis einschließlich. */
+const ZEITREISEN = Object.freeze([
+  Object.freeze({
+    name: '2025/26',
+    ab: '2025-11-03',
+    bis: '2026-11-01',
+    fenster: tabelle('2025-01-01', '2025-02-01', '2025-03-01', '2025-04-01', '2026-04-01', '2026-05-01'),
+  }),
+  Object.freeze({
+    name: '2026/27',
+    ab: '2026-11-02',
+    bis: '2026-12-23',
+    fenster: tabelle('2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01', '2027-04-01', '2027-05-01'),
+  }),
+]);
+
+/** Namen und Zeiten der Fenster (gleich in jeder Zeitreise); das Datum kommt aus `zrDatum`. */
+const FENSTER = ZEITREISEN.at(-1).fenster;
+
+/** Letzter Tag, für den eine Zeitreise-Tabelle gilt. */
+const GUELTIG_BIS = ZEITREISEN.at(-1).bis;
 
 /** Montag bis Mittwoch ohne Testmöglichkeit laut Testkalender 2026 (Feiertage und gesperrte Tage). */
 const TESTFREIE_TAGE = Object.freeze([
@@ -65,9 +93,14 @@ function wienerZeit(date) {
 }
 
 /** Das Fenster, das zu diesem Zeitpunkt offen ist – oder `null`. */
+/** Die Zeitreise, die an diesem Wiener Kalendertag gilt – oder `null`. */
+function zeitreiseAm(datum) {
+  return ZEITREISEN.find((z) => z.ab <= datum && datum <= z.bis) ?? null;
+}
+
 function aktivesFenster(jetzt) {
   const w = wienerZeit(jetzt);
-  if (w.datum > GUELTIG_BIS) return null;
+  if (!zeitreiseAm(w.datum)) return null;
   if (TESTFREIE_TAGE.includes(w.datum)) return null;
   const hhmm = w.zeit.slice(0, 5);
   for (const [name, f] of Object.entries(FENSTER)) {
@@ -76,11 +109,14 @@ function aktivesFenster(jetzt) {
   return null;
 }
 
-/** Das simulierte Datum eines Fensters als ISO-Datum. */
-function zrDatum(fenster) {
-  const f = FENSTER[fenster];
-  if (!f) throw new Error(`Unbekanntes Fenster '${fenster}' – erlaubt: ${Object.keys(FENSTER).join(', ')}.`);
-  return f.datum;
+/** Das simulierte Datum eines Fensters als ISO-Datum – in der Zeitreise, die am Tag `jetzt` gilt. */
+function zrDatum(fenster, jetzt = new Date()) {
+  if (!FENSTER[fenster])
+    throw new Error(`Unbekanntes Fenster '${fenster}' – erlaubt: ${Object.keys(FENSTER).join(', ')}.`);
+  const tag = wienerZeit(jetzt).datum;
+  const zeitreise = zeitreiseAm(tag);
+  if (!zeitreise) throw new Error(`Für ${tag} gibt es keine Zeitreise-Tabelle (gültig bis ${GUELTIG_BIS}).`);
+  return zeitreise.fenster[fenster].datum;
 }
 
 /**
@@ -104,7 +140,7 @@ function wienerZeitpunkt(datum, zeit) {
  * verlangt: „Einlangedatum der Meldungen (EDAT) nicht nach dem 01. des Monats".
  */
 function simuliertesErstellt(fenster, jetzt) {
-  return wienerZeitpunkt(zrDatum(fenster), wienerZeit(jetzt).zeit);
+  return wienerZeitpunkt(zrDatum(fenster, jetzt), wienerZeit(jetzt).zeit);
 }
 
 /**
@@ -140,7 +176,9 @@ function ttmmjjjj(iso) {
 
 module.exports = {
   FENSTER,
+  ZEITREISEN,
   GUELTIG_BIS,
+  zeitreiseAm,
   TESTFREIE_TAGE,
   wienerZeit,
   aktivesFenster,

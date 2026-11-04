@@ -22,14 +22,17 @@ const { maskierePayloads } = require('./maskierung');
 /**
  * Jedes Geheimnis zusätzlich in der Form, in der seine UTF-8-Bytes nach einer
  * latin1-Dekodierung aussehen – so liest der Mitschnitt die Bytes. Für reines
- * ASCII sind beide Formen gleich.
+ * ASCII sind beide Formen gleich. Ein Hex-Digest (der Hash des Kundenpassworts)
+ * zusätzlich in Großschreibung: Z05 schickt den echten Hash bewusst groß, und die
+ * Schwärzung vergleicht Zeichen für Zeichen.
  */
-function mitBytesicht(geheimnisse) {
+function mitSchreibweisen(geheimnisse) {
   const alle = { ...geheimnisse };
   for (const [name, wert] of Object.entries(geheimnisse)) {
     if (!wert) continue;
     const bytesicht = Buffer.from(String(wert), 'utf8').toString('latin1');
     if (bytesicht !== wert) alle[`${name}_bytes`] = bytesicht;
+    if (/^[0-9a-f]{32,}$/.test(String(wert))) alle[`${name}_gross`] = String(wert).toUpperCase();
   }
   return alle;
 }
@@ -48,7 +51,7 @@ function erstelleSitFetch({
   echterFetch = fetch,
 }) {
   if (!fenster) throw new Error('erstelleSitFetch braucht das Fenster, für das der Lauf gilt.');
-  const schwarz = mitBytesicht(geheimnisse);
+  const schwarz = mitSchreibweisen(geheimnisse);
   let nr = 0;
 
   function schreibeGeschwaerzt(name, kopf, koerper) {
