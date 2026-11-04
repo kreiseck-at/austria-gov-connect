@@ -81,12 +81,20 @@ export interface FileUpload {
 
 /**
  * Baut den FileUpload-Client aus einer bestehenden {@link Session}.
- * `uebermittlung` steuert Produktion (`echt` → `P`) vs. Test (`test` → `T`).
+ * `uebermittlung` steuert Test (`test` → `T`) vs. Produktion (`echt` → `P`).
+ * **Standard ist Test (`T`).** Echtbetrieb nur mit ausdrücklich
+ * `uebermittlung: 'echt'`; jeder andere Wert wirft sofort, ohne Netz.
  */
 export function createFileUpload(
   session: Session,
-  config: { uebermittlung: 'test' | 'echt'; transport?: TransportOptions },
+  config?: { uebermittlung?: 'test' | 'echt'; transport?: TransportOptions },
 ): FileUpload {
+  const uebermittlung: unknown = config?.uebermittlung ?? 'test';
+  if (uebermittlung !== 'test' && uebermittlung !== 'echt') {
+    throw new FonError(`uebermittlung muss 'test' oder 'echt' sein, nicht ${JSON.stringify(uebermittlung)}`);
+  }
+  const kennzeichen = uebermittlung === 'echt' ? 'P' : 'T';
+
   async function upload(args: { art: Anbringen; data: string }): Promise<{ rc: number; msg?: string }> {
     if (!ANBRINGEN.includes(args.art)) {
       throw new FonError(`Unbekannte art: ${args.art}`);
@@ -100,14 +108,14 @@ export function createFileUpload(
         { name: 'benid', value: session.benid },
         { name: 'id', value: session.id },
         { name: 'art', value: args.art },
-        { name: 'uebermittlung', value: config.uebermittlung === 'echt' ? 'P' : 'T' },
+        { name: 'uebermittlung', value: kennzeichen },
         { name: 'data', value: args.data },
       ],
     });
 
     const root = await callSoap(
       { endpoint: FILEUPLOAD_ENDPOINT, soapAction: 'upload', body },
-      config.transport,
+      config?.transport,
     );
 
     const resp = findDescendant(root, 'fileuploadResponse');
