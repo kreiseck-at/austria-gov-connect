@@ -277,6 +277,23 @@ nach SemVer keine Fehlerbehebung, auch wenn der Anlass eine war.
 
 ## @kreiseck/finanzonline
 
+### 0.3.0 — 2026-11-04
+
+- **Neu: Umsatzsteuervoranmeldung (U30).** `pruefeU30` (alle Fehler mit
+  stabilen Codes, inkl. aller BMF-Prüfregeln „Prüfungen UVA ab 7/2026",
+  Steuernummer mit Prüfziffer, Zeitraum in Wiener Zeit, ISO-8859-1-Zeichensatz,
+  optionale Kontrolle der erwarteten Steuer je Satz), `berechneU30` (Steuer je
+  Satz und Zahllast wie FinanzOnline, `BigInt`, halbe Cent auf), `baueU30Xml`
+  (exakt nach amtlichem XSD 07/2026 bzw. 01/2022, KZ 124/125 für 4,9 %),
+  `createU30(session).sende` (Standard Testmodus, Echtbetrieb nur mit
+  `echt: true`, nie automatische Wiederholung) und `.protokolle` mit
+  `parseU30Protokoll` (Übermittlungsprotokoll aus der DataBox, Zuordnung über
+  die Paketnummer im Dateinamen). Grundlage: BMF-Schemas und -Prüflisten sowie
+  ein Testlauf gegen FinanzOnline am 03.11.2026.
+- **Geändert:** `createFileUpload(session, config?)` — `uebermittlung` ist
+  optional, Standard ist Test (`T`); ungültige Werte werfen sofort.
+- Intern: Wiener Zeit als eigenes Modul (`wien.ts`), von DataBox und U30 genutzt.
+
 ### 0.2.1 — 2026-11-04
 
 - **Fix:** `liste({ von, bis })` sendet `ts_zust_von`/`ts_zust_bis` jetzt als

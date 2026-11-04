@@ -1,7 +1,7 @@
 {
   "name": "@kreiseck/finanzonline",
-  "version": "0.2.1",
-  "description": "FinanzOnline DataBox und weitere Verfahren",
+  "version": "0.3.0",
+  "description": "FinanzOnline: Umsatzsteuervoranmeldung (U30), DataBox und FileUpload",
   "license": "Apache-2.0",
   "author": "Kreiseck",
   "type": "commonjs",
