@@ -222,3 +222,11 @@ export {
 } from './pruefung-e14';
 export { L16_PRUEFKATALOG, L16_PRUEFKATALOG_QUELLE, l16Regel, type L16Regel } from './pruefkatalog-l16';
 export { BEST_LOHNZETTEL_FINANZ } from './bestand';
+export {
+  l16Geschlecht,
+  geschlechtCodeElda,
+  GESCHLECHTER,
+  type Geschlecht,
+  type L16Geschlecht,
+  type GeschlechtCodeElda,
+} from './geschlecht';
