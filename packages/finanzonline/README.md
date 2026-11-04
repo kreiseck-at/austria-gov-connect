@@ -53,7 +53,13 @@ Wird `von`/`bis` angegeben, gilt laut BMF-Spezifikation:
 - **Die Spanne zwischen `von` und `bis` maximal 7 Tage.**
 
 Verstöße quittiert der Dienst mit einem fachlichen Fehlercode (`rc != 0`), der
-als `FonProtocolError` geworfen wird.
+als `FonRcError` (Unterklasse von `FonProtocolError`) geworfen wird.
+
+FinanzOnline liest `von`/`bis` als **Wiener Ortszeit** ohne Offset. Die
+Bibliothek rechnet die übergebenen `Date`-Werte deshalb nach `Europe/Vienna` um,
+unabhängig von der Zeitzone des Servers. Das gelieferte `tsZust` trägt den
+Offset (z. B. `2026-11-03T20:20:59.206+01:00`) und lässt sich direkt mit
+`new Date(e.tsZust)` vergleichen. Die beiden Grenzen oben gelten in Wiener Zeit.
 
 ## UID-Bescheid über die DataBox abholen
 

@@ -3,6 +3,7 @@ import {
   callSoap,
   findDescendant,
   childText,
+  FonError,
   FonProtocolError,
   FonRcError,
   sessionErrorFor,
@@ -44,6 +45,9 @@ export interface Databox {
    * `KG` (Kommunalsteuergrundlagen), `SS` (Selbstberechnungserklärungen),
    * `QL` (Quotenlisten), `AE`/`AF`/`AK`/`AZ` (Amtshilfeersuchen, Notare).
    *
+   * `von`/`bis` werden als Wiener Ortszeit gesendet (so liest FinanzOnline das
+   * Fenster); das gelieferte `tsZust` trägt den Offset.
+   *
    * Zeitfenster-Regeln (sonst `FonRcError`): `von` max. 31 Tage zurück (`rc -5`),
    * Spanne `von`–`bis` max. 7 Tage (`rc -6`); ohne beide bei gesetztem Fenster
    * `rc -4`. `rc -1` (Session) wirft `FonSessionExpiredError`.
@@ -82,8 +86,36 @@ function normalizeFileart(value: string | undefined): 'XML' | 'PDF' {
   return value?.trim().toUpperCase() === 'PDF' ? 'PDF' : 'XML';
 }
 
-function toIsoDateTime(d: Date): string {
-  return d.toISOString().slice(0, 19);
+const WIEN = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Europe/Vienna',
+  calendar: 'gregory',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+});
+
+/**
+ * Formatiert einen Zeitpunkt für `ts_zust_von`/`ts_zust_bis`: Wiener Ortszeit
+ * ohne Offset, `YYYY-MM-DDThh:mm:ss` (Form laut BMF-Spec). FinanzOnline liest
+ * die Angabe als Wiener Zeit — live geprüft am 03.11.2026; eine UTC-Uhrzeit
+ * verschiebt das Fenster um eine bzw. zwei Stunden. Hängt nicht von
+ * `process.env.TZ` ab. In der doppelten Stunde am Ende der Sommerzeit ist die
+ * Angabe mehrdeutig; für Fenster von bis zu sieben Tagen ohne Belang.
+ */
+function toWienerOrtszeit(d: Date): string {
+  const teile = WIEN.formatToParts(d);
+  const wert = (typ: Intl.DateTimeFormatPartTypes): string => {
+    const gefunden = teile.find((t) => t.type === typ)?.value;
+    if (gefunden === undefined) {
+      throw new FonError(`Zeitzone Europe/Vienna: Bestandteil '${typ}' konnte nicht ermittelt werden.`);
+    }
+    return gefunden;
+  };
+  return `${wert('year').padStart(4, '0')}-${wert('month')}-${wert('day')}T${wert('hour')}:${wert('minute')}:${wert('second')}`;
 }
 
 /**
@@ -133,8 +165,8 @@ export function createDatabox(session: Session, opts?: { transport?: TransportOp
       { name: 'id', value: session.id },
       { name: 'erltyp', value: args?.erltyp ?? '' },
     ];
-    if (args?.von) fields.push({ name: 'ts_zust_von', value: toIsoDateTime(args.von) });
-    if (args?.bis) fields.push({ name: 'ts_zust_bis', value: toIsoDateTime(args.bis) });
+    if (args?.von) fields.push({ name: 'ts_zust_von', value: toWienerOrtszeit(args.von) });
+    if (args?.bis) fields.push({ name: 'ts_zust_bis', value: toWienerOrtszeit(args.bis) });
 
     const body = buildEnvelope({
       namespace: DATABOX_NAMESPACE,
