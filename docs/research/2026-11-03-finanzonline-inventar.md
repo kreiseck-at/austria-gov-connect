@@ -395,7 +395,7 @@ VSt  = 060 + 061 + 083 + 065 + 066 + 082 + 087 + 089 + 064 − 062 + 063 + 067
 
 Die drei Pilotfälle (Abschnitt 7) sind nachgerechnet und ergeben mit
 „je Zeile kaufmännisch" exakt die bekannten Ergebnisse (Q1: −999,14, Q2:
-−10,94, Q3: +2.185,34). Keiner enthält einen halben Cent, sie entscheiden die
++8,46, Q3: +2.185,34). Keiner enthält einen halben Cent, sie entscheiden die
 Rundungsfrage also nicht.
 
 ### 3.8 Berichtigung desselben Zeitraums — **[teilweise geklärt, siehe Nachrecherche am Ende]**
@@ -699,10 +699,16 @@ Ersatzdaten: Melisse Nails e.U. / Livia Lindmayr, Steuernummer 91-123/4565
 | Fall | 000 = 022 | 057 | 070 = 072 | 060 | 065 | 066 | USt 022 | USt 072 | 095 |
 |---|---|---|---|---|---|---|---|---|---|
 | Q1 2026 (berichtigt) | 984,17 | 214,44 | 1.975,38 | 1.195,97 | 395,08 | 214,44 | 196,83 | 395,08 | **−999,14** Gutschrift |
-| Q2 2026 (berichtigt) | 5.847,50 | 205,10 | 1.382,62 | 1.180,44 | 276,52 | 205,10 | 1.169,50 | 276,52 | **−10,94** Gutschrift |
+| Q2 2026 (berichtigt) | 5.847,50 | 205,10 | 1.382,62 | 1.161,04 | 276,52 | 205,10 | 1.169,50 | 276,52 | **+8,46** Zahllast |
 | Q3 2026 | 14.890,92 | 352,27 | 6.434,90 | 792,84 | 1.286,98 | 352,27 | 2.978,18 | 1.286,98 | **+2.185,34** Zahllast |
 
 Alle drei erfüllen die BMF-Summenregeln (022 = 000; 072 = 070; 066 = 057).
+
+Q2 wurde am 04.11.2026 korrigiert (Privatanteil an einem Arbeitsgerät, KZ 060
+1.180,44 → 1.161,04). Das Ergebnis kippt dadurch von einer Gutschrift auf eine
+kleine Zahllast; die bisher eingebrachte Q2-UVA war eine Gutschrift. Die alte
+Fassung bleibt als eigener Testfall „Gutschrift knapp" (gleiche Werte, KZ 060
+1.180,44 → **−10,94** Gutschrift) in `berechne.test.ts`.
 Q1/Q2 liegen vor 07/2026 und dürfen daher kein 124/125 enthalten.
 
 ## 8. Testlauf mit eigenem Konto — nur `T`

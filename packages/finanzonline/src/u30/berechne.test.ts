@@ -20,7 +20,7 @@ const Q2 = {
   kz057: 20510,
   kz070: 138262,
   kz072: 138262,
-  kz060: 118044,
+  kz060: 116104,
   kz065: 27652,
   kz066: 20510,
 };
@@ -48,8 +48,16 @@ test('Pilot Q1/2026: Gutschrift 999,14', () => {
   assert.equal(b.art, 'gutschrift');
 });
 
-test('Pilot Q2/2026: Gutschrift 10,94', () => {
+test('Pilot Q2/2026: Zahllast 8,46', () => {
   const b = berechneU30(Q2);
+  assert.equal(b.umsatzsteuer, 165112);
+  assert.equal(b.vorsteuer, 164266);
+  assert.equal(b.ergebnis, 846);
+  assert.equal(b.art, 'zahllast');
+});
+
+test('Gutschrift knapp: wie Pilot Q2, nur KZ 060 um 19,40 höher → Gutschrift 10,94', () => {
+  const b = berechneU30({ ...Q2, kz060: 118044 });
   assert.equal(b.ergebnis, -1094);
   assert.equal(b.art, 'gutschrift');
 });
