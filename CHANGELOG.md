@@ -297,6 +297,16 @@ nach SemVer keine Fehlerbehebung, auch wenn der Anlass eine war.
   derselben Steuernummer im Paket werden gemeldet. `istUebernommen` wertet das
   Protokoll nur bei positivem Beleg als „übernommen"; ein unlesbares Protokoll
   bricht `protokolle()` nicht ab.
+- Falsche Typen werden nie als „nicht angegeben" gelesen: `kennzahlen`,
+  `erwarteteSteuer` und `erstellt` mit `null` oder falschem Typ ergeben
+  `FELD_UNGUELTIG` (vorher still übergangen bzw. `RangeError` beim XML-Bau).
+  `berechneU30` wirft `FonError` bei unbekannter Kennzahl oder einem Betrag,
+  der keine sichere ganze Zahl in Cent ist (vorher `RangeError` oder still 0).
+  Ungültiges `jetzt` wirft `FonError`. `KENNZAHLEN` ist samt Einträgen
+  eingefroren.
+- Abhängigkeit `@kreiseck/finanzonline-core` auf `^0.1.6` angehoben: Der
+  Protokoll-Parser gibt die Roh-Antwort über `FonProtocolError.rohantwort`
+  mit, das gibt es erst ab core 0.1.6.
 - **Geändert:** `createFileUpload(session, config?)` — `uebermittlung` ist
   optional, Standard ist Test (`T`); ungültige Werte werfen sofort.
 - Intern: Wiener Zeit als eigenes Modul (`wien.ts`), von DataBox und U30 genutzt.

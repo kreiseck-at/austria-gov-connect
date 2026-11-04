@@ -1,5 +1,5 @@
 import { FonError } from '@kreiseck/finanzonline-core';
-import { KENNZAHLEN, type Kennzahl, type SatzKennzahl } from './kennzahlen';
+import { KENNZAHLEN, istKennzahl, kennzahlInfo, type Kennzahl, type SatzKennzahl } from './kennzahlen';
 
 /** Kennzahlen einer Voranmeldung, Beträge in ganzen Cent. Fehlend = 0. */
 export type U30Kennzahlen = Partial<Record<Kennzahl, number>>;
@@ -61,11 +61,33 @@ export function steuerFuerSatz(bemessungsgrundlage: number, satzPromille: number
 const wert = (kennzahlen: U30Kennzahlen, kz: Kennzahl): bigint => BigInt(kennzahlen[kz] ?? 0);
 
 /**
+ * Wirft `FonError`, statt mit unbrauchbaren Werten still falsch zu rechnen:
+ * unbekannte Kennzahl (Tippfehler wie `kz22` fiele sonst als 0 heraus),
+ * Betrag nicht als sichere ganze Zahl in Cent (auch `null`). Fehlend
+ * (`undefined`) zählt als 0.
+ */
+function pruefeEingabe(kennzahlen: unknown): asserts kennzahlen is U30Kennzahlen {
+  if (typeof kennzahlen !== 'object' || kennzahlen === null || Array.isArray(kennzahlen)) {
+    throw new FonError('Kennzahlen müssen ein Objekt sein, z. B. { kz000: 0 }.');
+  }
+  for (const [schluessel, betrag] of Object.entries(kennzahlen)) {
+    if (!istKennzahl(schluessel)) throw new FonError(`Unbekannte Kennzahl „${schluessel}".`);
+    if (betrag === undefined) continue;
+    if (typeof betrag !== 'number' || !Number.isSafeInteger(betrag)) {
+      throw new FonError(`KZ ${kennzahlInfo(schluessel).nummer}: Betrag muss eine ganze Zahl in Cent sein.`);
+    }
+  }
+}
+
+/**
  * Rechnet Steuer je Satz und Zahllast/Gutschrift (KZ 095) so, wie FinanzOnline
  * sie aus den übermittelten Kennzahlen ermittelt. Die Formel folgt dem Aufbau
- * des Formulars U 30-2026. Erwartet gültige Kennzahlen (siehe `pruefeU30`).
+ * des Formulars U 30-2026. Wirft `FonError` bei unbekannter Kennzahl oder einem
+ * Betrag, der keine sichere ganze Zahl in Cent ist; die fachlichen Regeln prüft
+ * `pruefeU30`.
  */
 export function berechneU30(kennzahlen: U30Kennzahlen): U30Berechnung {
+  pruefeEingabe(kennzahlen);
   const steuerJeSatz: U30Berechnung['steuerJeSatz'] = [];
   let umsatzsteuer = 0n;
   for (const info of KENNZAHLEN) {

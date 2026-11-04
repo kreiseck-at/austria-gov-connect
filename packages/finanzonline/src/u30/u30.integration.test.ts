@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSession } from '@kreiseck/finanzonline-core';
 import { createU30 } from './client';
+import { istUebernommen } from './protokoll';
 import { laufenderMonat } from './zeitraum';
 
 const env = {
@@ -65,8 +66,12 @@ test(
         await warte(15_000);
         const gefunden = await u30.protokolle({ ...fenster, bis: new Date(Date.now() + 5 * 60_000) });
         if (gefunden.length > 0) {
-          assert.equal(gefunden[0]?.protokoll?.uebermittlung, 'T');
-          assert.equal(gefunden[0]?.protokoll?.paketNr, paketNr);
+          const protokoll = gefunden[0]?.protokoll;
+          assert.ok(protokoll, `Protokoll unlesbar: ${gefunden[0]?.fehler ?? ''}`);
+          assert.equal(protokoll.uebermittlung, 'T');
+          assert.equal(protokoll.paketNr, paketNr);
+          assert.equal(protokoll.ergebnis, 'vollstaendig', protokoll.text);
+          assert.equal(istUebernommen(protokoll, 1), true);
           return;
         }
       }

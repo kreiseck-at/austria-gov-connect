@@ -57,7 +57,8 @@ const r = await u30.sende(paket); // Test (T)
 // const r = await u30.sende(paket, { echt: true }); // Echtbetrieb (P) — nur so
 // r.angenommen: rc 0 = zur Prüfung übernommen (noch nicht eingebracht!), r.xml: gesendetes XML
 
-// 4. Protokoll abholen (kommt nach Sekunden bis Minuten; markiert als gelesen)
+// 4. Protokoll abholen (kam im Test nach 13 s bis 1 min, im Echtbetrieb nach rund 1 min;
+//    das Abholen markiert es als gelesen)
 const [eintrag] = await u30.protokolle({ von: vorher, bis: new Date(), paketNr: 1003 });
 // eintrag.xml: Roh-XML (aufbewahren); eintrag.protokoll fehlt, wenn unlesbar (Grund in eintrag.fehler)
 if (eintrag?.protokoll) {
@@ -102,9 +103,19 @@ Wichtig:
   Zeitraums gilt als Berichtigung — und davon nimmt die Schnittstelle laut
   Anbietern nur eine an.
 - Die Eingabe muss reine Daten sein: Es zählen nur eigene, aufzählbare
-  Eigenschaften (je einmal gelesen). Unbekannte Felder (`FELD_UNBEKANNT`) und
-  Schalter, die nicht `true`/`false` sind (`SCHALTER_UNGUELTIG`), werden
-  gemeldet statt still ignoriert.
+  Eigenschaften (je einmal gelesen). Unbekannte Felder (`FELD_UNBEKANNT`),
+  Schalter, die nicht `true`/`false` sind (`SCHALTER_UNGUELTIG`), und Felder
+  mit falschem Typ (`FELD_UNGUELTIG`, z. B. `kennzahlen: null` oder ein
+  ungültiges `erstellt`) werden gemeldet statt still ignoriert. Nur
+  `undefined` heißt „nicht angegeben", `null` nie.
+- `berechneU30` wirft `FonError` bei einer unbekannten Kennzahl (Tippfehler
+  wie `kz22`) oder einem Betrag, der keine ganze Zahl in Cent ist, statt still
+  mit 0 zu rechnen. `pruefeU30` wirft nur bei ungültigem `optionen.jetzt`.
+- Im Echtbetrieb meldet das Protokoll „… zur Gänze **eingebracht**" (Test:
+  „übernommen") und je Satz `DRUCKTEXT` („Zahllast:"/„Gutschrift:") mit
+  `DRUCKBETRAG` (Punkt als Dezimaltrenner, z. B. `2185.34`); der Parser liefert
+  ihn als `druckbetrag.cent`. Am Steuerkonto erscheint eine UVA erst Tage
+  später, eine Zahllast laut WKO meist nach dem 25. des Fälligkeitsmonats.
 
 Hintergrund, Quellen und Testlauf: `docs/research/2026-11-03-finanzonline-inventar.md`,
 Design: `docs/superpowers/specs/2026-11-04-u30-design.md` (im Repository).

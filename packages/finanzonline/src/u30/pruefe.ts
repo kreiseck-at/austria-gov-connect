@@ -1,3 +1,4 @@
+import { FonError } from '@kreiseck/finanzonline-core';
 import { steuerFuerSatz } from './berechne';
 import type { U30Fehler, U30FehlerCode } from './fehler';
 import { istKennzahl, istSatzKennzahl, kennzahlInfo, type Kennzahl } from './kennzahlen';
@@ -34,6 +35,13 @@ export function euro(cent: number): string {
     .replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   return `${neg ? '-' : ''}${ganz},${String(betrag % 100).padStart(2, '0')}`;
 }
+
+function istGueltigesDatum(v: unknown): v is Date {
+  return v instanceof Date && !Number.isNaN(v.getTime());
+}
+
+const istObjekt = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
 
 function istNr(v: unknown): v is number {
   return typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= MAX_NR;
@@ -83,7 +91,8 @@ const kzText = (kz: Kennzahl): string => `KZ ${kennzahlInfo(kz).nummer}`;
 
 /**
  * Prüft ein U30-Paket vollständig, ohne Netz. Liefert **alle** Befunde (leer =
- * gültig) und wirft nie. Geprüft werden Form (Nummern, Steuernummer mit
+ * gültig) und wirft nur, wenn `optionen.jetzt` kein gültiges Datum ist. Nur
+ * `undefined` heißt „nicht angegeben"; `null` oder ein falscher Typ ist ein Befund. Geprüft werden Form (Nummern, Steuernummer mit
  * Prüfziffer, Zeitraum, Wertebereiche, Vorzeichen, Zeichensatz), die
  * BMF-Prüfregeln „Prüfungen UVA ab 7/2026" und optional die erwartete Steuer
  * je Satz. Nicht prüfbar (das weiß nur FinanzOnline): bereits eingebracht,
@@ -96,7 +105,9 @@ export function pruefeU30(eingabe: U30Paket, optionen?: { jetzt?: Date }): U30Fe
   const paket = schnappschuss(eingabe);
   const fehler: U30Fehler[] = [];
   const melde: Melde = (code, nachricht, extra = {}) => fehler.push({ code, nachricht, ...extra });
-  const lauf = laufenderMonat(optionen?.jetzt ?? new Date());
+  const jetzt = optionen?.jetzt ?? new Date();
+  if (!istGueltigesDatum(jetzt)) throw new FonError('optionen.jetzt ist kein gültiges Datum.');
+  const lauf = laufenderMonat(jetzt);
 
   for (const feld of Object.keys(paket)) {
     if (!PAKET_FELDER.has(feld)) melde('FELD_UNBEKANNT', `Unbekanntes Feld „${feld}" im Paket.`, { feld });
@@ -105,6 +116,9 @@ export function pruefeU30(eingabe: U30Paket, optionen?: { jetzt?: Date }): U30Fe
     melde('PAKETNR_UNGUELTIG', `Paketnummer muss eine ganze Zahl von 1 bis ${MAX_NR} sein.`, {
       feld: 'paketNr',
     });
+  }
+  if (paket.erstellt !== undefined && !istGueltigesDatum(paket.erstellt)) {
+    melde('FELD_UNGUELTIG', 'erstellt muss ein gültiges Datum (Date) sein.', { feld: 'erstellt' });
   }
   const erklaerungen: unknown = paket.erklaerungen;
   if (!Array.isArray(erklaerungen) || erklaerungen.length < 1 || erklaerungen.length > MAX_ERKLAERUNGEN) {
@@ -220,10 +234,11 @@ function pruefeErklaerung(e: U30Erklaerung, lauf: string, melde: Melde): void {
   }
 
   // Kennzahlen: Form
-  const roh: Record<string, unknown> =
-    typeof e.kennzahlen === 'object' && e.kennzahlen !== null
-      ? (e.kennzahlen as Record<string, unknown>)
-      : {};
+  const kennzahlenRoh: unknown = e.kennzahlen;
+  if (kennzahlenRoh !== undefined && !istObjekt(kennzahlenRoh)) {
+    melde('FELD_UNGUELTIG', 'kennzahlen muss ein Objekt sein, z. B. { kz000: 0 }.', { feld: 'kennzahlen' });
+  }
+  const roh: Record<string, unknown> = istObjekt(kennzahlenRoh) ? kennzahlenRoh : {};
   const werte: Partial<Record<Kennzahl, number>> = {};
   let betragFehler = false;
   for (const [schluessel, wert] of Object.entries(roh)) {
@@ -367,8 +382,14 @@ function pruefeErklaerung(e: U30Erklaerung, lauf: string, melde: Melde): void {
     }
   }
 
-  if (typeof e.erwarteteSteuer === 'object' && e.erwarteteSteuer !== null) {
-    for (const [schluessel, erwartet] of Object.entries(e.erwarteteSteuer as Record<string, unknown>)) {
+  const erwarteteSteuer: unknown = e.erwarteteSteuer;
+  if (erwarteteSteuer !== undefined && !istObjekt(erwarteteSteuer)) {
+    melde('FELD_UNGUELTIG', 'erwarteteSteuer muss ein Objekt sein, z. B. { kz022: 297818 }.', {
+      feld: 'erwarteteSteuer',
+    });
+  }
+  if (istObjekt(erwarteteSteuer)) {
+    for (const [schluessel, erwartet] of Object.entries(erwarteteSteuer)) {
       if (erwartet === undefined) continue;
       if (!istSatzKennzahl(schluessel)) {
         melde('ERWARTETE_STEUER_KEIN_SATZ', `„${schluessel}" ist keine Kennzahl mit Steuersatz.`, {

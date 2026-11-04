@@ -333,3 +333,29 @@ test('überlappende Zeiträume derselben Steuernummer im Paket → ERKLAERUNG_DO
 test('pruefeU30 wirft nicht bei kaputter Eingabe', () => {
   assert.deepEqual(codes(pruefeU30(null as never, { jetzt })), ['ERKLAERUNGEN_ANZAHL', 'PAKETNR_UNGUELTIG']);
 });
+
+test('null und falsche Typen gelten nie als „fehlt": kennzahlen, erwarteteSteuer, erstellt', () => {
+  const feldFehler = (p: U30Paket): Array<string | undefined> =>
+    pruefeU30(p, { jetzt })
+      .filter((f) => f.code === 'FELD_UNGUELTIG')
+      .map((f) => f.feld);
+  const ohne = (x: unknown): U30Erklaerung['kennzahlen'] => x as U30Erklaerung['kennzahlen'];
+  assert.deepEqual(feldFehler(paket({ kennzahlen: ohne(null) })), ['kennzahlen']);
+  assert.deepEqual(feldFehler(paket({ kennzahlen: ohne([]) })), ['kennzahlen']);
+  assert.deepEqual(feldFehler(paket({ kennzahlen: ohne('kz000') })), ['kennzahlen']);
+  const erwartet = (x: unknown): U30Erklaerung['erwarteteSteuer'] => x as U30Erklaerung['erwarteteSteuer'];
+  assert.deepEqual(feldFehler(paket({ erwarteteSteuer: erwartet(null) })), ['erwarteteSteuer']);
+  assert.deepEqual(feldFehler(paket({ erwarteteSteuer: erwartet(297818) })), ['erwarteteSteuer']);
+  const erstellt = (x: unknown): Date => x as Date;
+  assert.deepEqual(feldFehler(paket({}, { erstellt: erstellt(new Date('kein Datum')) })), ['erstellt']);
+  assert.deepEqual(feldFehler(paket({}, { erstellt: erstellt('2026-11-04') })), ['erstellt']);
+  assert.deepEqual(feldFehler(paket({}, { erstellt: erstellt(null) })), ['erstellt']);
+  assert.deepEqual(pruefe(paket({}, { erstellt: new Date('2026-11-04T12:00:00Z') })), []);
+});
+
+test('ungültiges jetzt wirft FonError statt RangeError', () => {
+  assert.throws(
+    () => pruefeU30(paket(), { jetzt: new Date('kein Datum') }),
+    (e: unknown) => e instanceof FonError && /jetzt/.test(e.message),
+  );
+});

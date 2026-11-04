@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { FonError } from '@kreiseck/finanzonline-core';
 import { berechneU30, steuerFuerSatz } from './berechne';
 
 // Pilotfälle (Beträge echt, Namen/Kennungen ersetzt: Melisse Nails e.U.), in Cent.
@@ -140,4 +141,16 @@ test('alle Satz-Kennzahlen in Katalog-Reihenfolge', () => {
       ['kz088', 19, 190],
     ],
   );
+});
+
+test('berechneU30 wirft FonError bei ungültiger Eingabe statt still falsch zu rechnen', () => {
+  const ist = (re: RegExp) => (e: unknown) => e instanceof FonError && re.test(e.message);
+  const roh = (x: unknown): Parameters<typeof berechneU30>[0] => x as Parameters<typeof berechneU30>[0];
+  assert.throws(() => berechneU30(roh({ kz000: 150, kz022: 1.5 })), ist(/KZ 022.*ganze Zahl in Cent/));
+  assert.throws(() => berechneU30(roh({ kz000: 0, kz060: null })), ist(/KZ 060.*ganze Zahl in Cent/));
+  assert.throws(() => berechneU30(roh({ kz000: 100, kz060: '100' })), ist(/KZ 060.*ganze Zahl in Cent/));
+  assert.throws(() => berechneU30(roh({ kz000: 0, kz060: 2 ** 60 })), ist(/KZ 060.*ganze Zahl in Cent/));
+  assert.throws(() => berechneU30(roh({ kz000: 100, kz22: 100 })), ist(/Unbekannte Kennzahl „kz22"/));
+  assert.throws(() => berechneU30(roh(null)), ist(/Kennzahlen/));
+  assert.deepEqual(berechneU30({ kz000: 0, kz022: undefined }).ergebnis, 0);
 });

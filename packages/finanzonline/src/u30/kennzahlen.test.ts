@@ -89,3 +89,9 @@ test('istKennzahl / istSatzKennzahl', () => {
   assert.equal(istSatzKennzahl('kz022'), true);
   assert.equal(istSatzKennzahl('kz057'), false);
 });
+
+test('KENNZAHLEN ist tief eingefroren: kein Aufrufer kann Sätze global verändern', () => {
+  assert.ok(Object.isFrozen(KENNZAHLEN));
+  for (const k of KENNZAHLEN) assert.ok(Object.isFrozen(k), `${k.kz} ist nicht eingefroren`);
+  assert.equal(kennzahlInfo('kz022').satzPromille, 200);
+});

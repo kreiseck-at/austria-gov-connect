@@ -92,10 +92,17 @@ function k(
   bedeutung: string,
   extra: Partial<Pick<KennzahlInfo, 'typ' | 'satzPromille' | 'abZeitraum'>> = {},
 ): KennzahlInfo {
-  return { kz: `kz${nummer}` as Kennzahl, nummer, block, typ: extra.typ ?? 'kz', bedeutung, ...extra };
+  return Object.freeze({
+    kz: `kz${nummer}` as Kennzahl,
+    nummer,
+    block,
+    typ: extra.typ ?? 'kz',
+    bedeutung,
+    ...extra,
+  });
 }
 
-/** Alle Kennzahlen in der Reihenfolge des XSD. */
+/** Alle Kennzahlen in der Reihenfolge des XSD; Liste und Einträge sind eingefroren. */
 export const KENNZAHLEN: readonly KennzahlInfo[] = Object.freeze([
   k('000', 'L', 'Gesamtbetrag der Bemessungsgrundlage für Lieferungen und sonstige Leistungen', {
     typ: 'kznull',

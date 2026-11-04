@@ -84,9 +84,9 @@ function uebermittlungAusText(text: string | undefined): 'T' | 'P' | undefined {
  * FASTNR, KUNDENINFO, DRUCKTEXT und DRUCKBETRAG gehören zum laufenden Satz.
  * Unbekanntes wird gesammelt, nicht verworfen und nicht als Fehler behandelt.
  *
- * Bestätigt an echten Testprotokollen vom 03.11.2026; das Produktionsformat
- * (DRUCKTEXT/DRUCKBETRAG) folgt der BMF-Beschreibung und ist noch nicht an
- * echten Daten gesehen.
+ * Bestätigt an echten Testprotokollen vom 03.11.2026 und am ersten echten
+ * Produktionsprotokoll vom 04.11.2026 (DRUCKBETRAG dort mit Punkt, z. B.
+ * `2185.34`).
  */
 export function parseU30Protokoll(xml: string | Buffer): U30Protokoll {
   const text = (typeof xml === 'string' ? xml : dekodiere(xml)).replace(/^\uFEFF/, '');
