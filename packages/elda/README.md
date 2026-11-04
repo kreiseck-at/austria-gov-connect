@@ -1582,6 +1582,22 @@ const befunde = pruefeLohnzettel(lohnzettelSaetze(uebermittlung, new Date()), '2
 const datei = erstelleLohnzettelBestand(uebermittlung, bestandOptionen); // ohne versicherungstraeger
 ```
 
+**Geschlecht.** `l16Geschlecht(code)` liefert aus den Werten des Personenstands
+(`m`, `f`, `d`, `i`, `o` – wie `Gender` in `@kreiseck/validator`) genau eines der
+Felder `GESW`/`GESM`/`GESD` mit `J`. Das BMF-Formular L 16 hat die Kästchen
+„weiblich“, „männlich“ und „inter/divers/offen“, deshalb gehen inter und offen in
+`GESD`. Ein fehlender oder unbekannter Wert wirft – sonst ginge der Lohnzettel
+still mit W 2801 hinaus. Für die SV-Meldungen mit `GESL` (E.30, E.18, E.12, E.27)
+liefert `geschlechtCodeElda(code)` den Code (1 männlich, 2 weiblich, 3 divers,
+4 offen, 6 inter). „Keine Angabe“ (7) ist bewusst kein Wert: für den L16 gibt es
+keine amtliche Zuordnung.
+
+```ts
+import { l16Geschlecht } from '@kreiseck/elda';
+
+felder: { ...felder, ...l16Geschlecht('i') } // { GESD: 'J' }
+```
+
 Was der Bau selbst setzt:
 
 - **Zuständiger Versicherungsträger `94`** (Bundesrechenzentrum) im
