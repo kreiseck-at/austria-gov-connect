@@ -63,6 +63,20 @@ function kasseneckL16() {
   return require(path.join(wurzel, 'functions-lohn', 'l16-elda-core'));
 }
 
+/**
+ * Die Lohnlogik desselben L16-Checkouts: Monatsabrechnungen, aus denen kasseneck
+ * im Produkt den Lohnzettel baut (Q55) – statt synthetischer Belege wie in L12.
+ */
+function kasseneckL16Lohn() {
+  const wurzel = process.env.KASSENECK_L16_PFAD;
+  if (!wurzel) throw new Error('KASSENECK_L16_PFAD fehlt – Q55 rechnet die Monate mit kasseneck.');
+  const lohn = path.join(wurzel, 'functions-lohn');
+  return {
+    ladeParameter: require(path.join(lohn, 'lohnparameter-core')).ladeParameter,
+    erstelleAbrechnung: require(path.join(lohn, 'lohnabrechnung-core')).erstelleAbrechnung,
+  };
+}
+
 /** Grund, warum ein Fall ohne Brücke nicht bauen kann – oder null. */
 function brueckeFehlt(fall) {
   if (fall.braucht === 'kasseneck' && !verfuegbar()) return 'KASSENECK_PFAD (kasseneck-Checkout mit functions-lohn)';
@@ -75,4 +89,13 @@ function brueckeFehlt(fall) {
   return null;
 }
 
-module.exports = { kasseneck, verfuegbar, kasseneckVr, vrVerfuegbar, kasseneckL16, l16Verfuegbar, brueckeFehlt };
+module.exports = {
+  kasseneck,
+  verfuegbar,
+  kasseneckVr,
+  vrVerfuegbar,
+  kasseneckL16,
+  kasseneckL16Lohn,
+  l16Verfuegbar,
+  brueckeFehlt,
+};

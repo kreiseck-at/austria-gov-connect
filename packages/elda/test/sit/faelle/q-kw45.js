@@ -44,7 +44,7 @@
 const { meldung, lohnzettel, setzeFeld } = require('../lib/bausteine');
 const { FELDER_E29 } = require('../../../dist/felder-e29.js');
 const { plusTage } = require('../lib/fenster');
-const { kasseneckVr } = require('../lib/kasseneck');
+const { kasseneckVr, kasseneckL16, kasseneckL16Lohn } = require('../lib/kasseneck');
 
 const d = (ctx, iso) => ctx.ttmmjjjj(iso);
 const fall = (mehr) => ({ gefahr: null, abhaengig: [], aktion: 'senden', ...mehr });
@@ -325,6 +325,92 @@ function l16Q37(ctx, fall, { korr, refn, monatlich = 3000, erstellt } = {}) {
       ],
     },
   });
+}
+
+/**
+ * L16 2026 so, wie kasseneck ihn im Produkt baut: Die Monate Jänner bis Juni rechnet
+ * die Lohnlogik von kasseneck selbst (Angestellte, 3.000 €, Austritt 30.06.), im Juni
+ * mit Urlaubszuschuss und Weihnachtsremuneration aliquot (181/365 je Monatsbezug, als
+ * Posten wie aus der Endabrechnung) und der Jahreshistorie für das Sechstel. Daraus baut
+ * l16-elda-core die Übermittlung; Prüfung und Bestand wie in L12, aber mit dem echten
+ * Erstellungstag (Q54: das simulierte DTUE bringt 0800).
+ */
+function kasseneckL16Halbjahr(ctx, id) {
+  const lohn = kasseneckL16Lohn();
+  const k = kasseneckL16();
+  const jahr = 2026;
+  const parameter = lohn.ladeParameter(jahr);
+  const monatsbezug = 300_000;
+  const mitarbeiter = {
+    id,
+    salaryType: 'monthly',
+    dienstnehmerGruppe: 'angestellter',
+    beschaeftigungsart: 'fulltime',
+    eintritt: `${jahr}-01-01`,
+    austritt: `${jahr}-06-30`,
+    wochenstunden: 40,
+    kvBasisStunden: 40,
+    grossSalaryCents: monatsbezug,
+  };
+  const aliquot = Math.round((monatsbezug * 181) / 365);
+  const monate = ['01', '02', '03', '04', '05', '06'].map((m) => `${jahr}-${m}`);
+  const payslips = monate.map((monat, i) => {
+    const kontext =
+      i === 5
+        ? {
+            posten: [
+              { typ: 'UZ', betragCent: aliquot },
+              { typ: 'WR', betragCent: aliquot },
+            ],
+            bisherigeSzJahrCent: 0,
+            bisherigeSzSvGrundlageJahrCent: 0,
+            bisherigeSzBemessungJahrCent: 0,
+            laufendeBezuegeJahrCent: monatsbezug * 6,
+            kalenderMonateImJahr: 6,
+          }
+        : null;
+    const a = lohn.erstelleAbrechnung({ mitarbeiter, monat, parameter, bundesland: 'salzburg', sonderzahlungKontext: kontext });
+    if (a.meta?.fehler) throw new Error(`${id}: kasseneck rechnet ${monat} nicht: ${JSON.stringify(a.meta.fehler)}`);
+    return { id: monat, monat, ...a };
+  });
+  const p = ctx.rolle('angestellte');
+  const dg = ctx.dienstgeber('B');
+  const iso = (ttmmjjjj) => `${ttmmjjjj.slice(4, 8)}-${ttmmjjjj.slice(2, 4)}-${ttmmjjjj.slice(0, 2)}`;
+  const { uebermittlung, hinweise } = k.baueL16Uebermittlung({
+    payslips,
+    jahr,
+    employeeId: `SIT-${id}`,
+    mitarbeiter: {
+      svnr: p.vsnr,
+      vorname: p.vorname,
+      nachname: p.familienname,
+      strasse: 'Teststraße',
+      hausnummer: '1',
+      plz: '5020',
+      ort: 'Salzburg',
+      land: 'A',
+      birthDate: iso(p.geburtsdatum),
+    },
+    betrieb: {
+      name: dg.name,
+      street: dg.anschrift.strasse,
+      zip: dg.anschrift.plz,
+      city: dg.anschrift.ort,
+      steuernummer: '91-123/4565',
+      land: 'A',
+    },
+    jahrAbgeschlossen: false,
+  });
+  const { versicherungstraeger: _vstr, ...lfOpt } = ctx.bestandOptionen({ dg: 'B', traeger: '15', erstellt: ctx.jetzt });
+  const { befunde } = k.pruefeL16Uebermittlung(uebermittlung, { erstellt: lfOpt.erstellt, heute: lfOpt.erstellt });
+  const n = befunde.filter((b) => b.status.startsWith('N'));
+  if (n.length > 0) throw new Error(`${id}: kasseneck-L16 hat Befunde mit Status N: ${JSON.stringify(n)}`);
+  return {
+    inhalt: k.erstelleLohnzettelBestand(uebermittlung, lfOpt),
+    dateiName: ctx.dateiName(id),
+    referenzwerte: uebermittlung.lohnzettel.map((lz) => lz.felder.REFN),
+    hinweise,
+  };
 }
 
 module.exports = [
@@ -750,5 +836,21 @@ module.exports = [
     abhaengig: ['Q37', 'Q46', 'Q52'],
     rang: 24,
     baue: (ctx) => l16Q37(ctx, 'Q54', { erstellt: ctx.jetzt }),
+  }),
+  fall({
+    id: 'Q55',
+    titel: 'L16 2026 aus Monatsabrechnungen von kasseneck: Austritt 30.06., UZ + WR aliquot im Juni (LF, kasseneck)',
+    zweck:
+      'L12 fütterte kasseneck mit erfundenen Monatsbelegen. Hier rechnet kasseneck die Monate selbst und baut ' +
+      'daraus den L16 – das Stück, das im Februar 2027 echt hinausgeht, samt Sonderzahlungen (KZ 220, 225) und ' +
+      'unterjährigem Austritt. Erwartet ist nur W 2801, weil kasseneck kein Geschlecht führt.',
+    quelle:
+      'kasseneck feature/l16-elda: lohnabrechnung-core.js, l16-elda-core.js; E.14 (Version 28); Prüfkatalog L16 ' +
+      'F2801; § 67 Abs 1 und 2 EStG',
+    erwartung: 'übernommen LF 1/1, nur W 2801 (ohne 0800 und 1706)',
+    fenster: MI_NM,
+    braucht: 'kasseneck-l16',
+    rang: 25,
+    baue: (ctx) => kasseneckL16Halbjahr(ctx, 'Q55'),
   }),
 ];

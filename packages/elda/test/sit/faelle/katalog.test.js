@@ -248,6 +248,8 @@ const IM_FENSTER_KW45 = {
 const istKw45 = (id) => /^(Q[3-5]\d|M8\d|M9[5-7])$/.test(id);
 /** Lohnzettel (LF) unter den KW45-Fällen – nicht Bestand VR. */
 const L16_KW45 = ['Q50', 'Q51', 'Q52', 'Q54'];
+/** Lohnzettel, die kasseneck selbst baut (ohne Geschlecht). */
+const L16_KASSENECK_KW45 = ['Q55'];
 const zeitpunkt = (id, fenster) => (istKw45(id) ? IM_FENSTER_KW45 : IM_FENSTER)[fenster];
 
 /**
@@ -372,7 +374,9 @@ test('bekannt nicht baubar: nur mit kasseneck, nur aus dem erwarteten Grund, und
 
 test('jeder Sendefall: drei Sätze, VR, TM, simuliertes Erstellungsdatum, Seriennummer, Träger, Satzart', () => {
   for (const [id, { ergebnis, ctx }] of GEBAUT) {
-    if (!Buffer.isBuffer(ergebnis.inhalt) || /^[MSL]/.test(id) || L16_KW45.includes(id)) continue;
+    if (!Buffer.isBuffer(ergebnis.inhalt) || /^[MSL]/.test(id) || [...L16_KW45, ...L16_KASSENECK_KW45].includes(id)) {
+      continue;
+    }
     const s = saetze(ergebnis.inhalt, id === 'B03' ? '\n' : '\r\n');
     assert.equal(s.length, 3, `${id}: Vorlauf, Meldung, Schluss`);
     const [vorlauf, meldungssatz] = s;
@@ -731,6 +735,24 @@ test('Q50–Q52: L16 2026 über das Paket – LF, VSTR 94, Geschlecht gesetzt, B
   assert.equal(feld(l1('Q52'), 656, 1), 'S', 'Q52: KORR S');
   assert.equal(feld(l1('Q51'), 66, 30), feld(l1('Q50'), 66, 30), 'Q51: REFN wie Q50');
   assert.equal(feld(l1('Q52'), 66, 30), feld(l1('Q50'), 66, 30), 'Q52: REFN wie Q50');
+});
+
+test('Q55: L16 aus Monatsabrechnungen von kasseneck – Halbjahr, Sonderzahlungen in KZ 220/225, echtes DTUE, ohne Geschlecht', () => {
+  if (!GEBAUT.has('Q55')) return;
+  const { ergebnis, ctx } = GEBAUT.get('Q55');
+  const s = saetze(ergebnis.inhalt);
+  assert.equal(s.length, 4, 'Vorlauf, I1, L1, Schluss');
+  assert.equal(feld(s[0], 23, 2), 'LF', 'BEST');
+  const l1 = s[2];
+  assert.equal(feld(l1, 52, 8), wienerZeit(ctx.jetzt).datum.replaceAll('-', ''), 'DTUE = echter Tag');
+  assert.equal(feld(l1, 280, 3), '   ', 'kasseneck führt kein Geschlecht (W 2801 erwartet)');
+  // Sechs Monate 3.000 € + UZ und WR je 181/365 eines Monatsbezugs (1.487,67 €), in Cent.
+  assert.equal(feld(l1, 298, 10), '0002097534', 'KZ 210 Bruttobezüge');
+  assert.equal(feld(l1, 320, 10), '0000297534', 'KZ 220 Sonderzahlungen innerhalb des Sechstels');
+  assert.equal(feld(l1, 342, 10), '0000050789', 'KZ 225 SV auf Sonderzahlungen');
+  assert.equal(feld(l1, 364, 10), '0000325260', 'KZ 230 SV laufend (6 × 542,10 €)');
+  assert.ok(ergebnis.hinweise.some((h) => /F2801/.test(h)), 'Hinweis auf F2801');
+  assert.match(l1, /SIT-Q55-20260101/, 'REFN aus employeeId und Beginn');
 });
 
 test('Q54: L16 nach dem Storno neu – echtes DTUE statt des simulierten, eigene Referenznummer, ohne KORR', () => {
