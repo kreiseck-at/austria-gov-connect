@@ -3,7 +3,6 @@ import {
   callSoap,
   findDescendant,
   childText,
-  FonError,
   FonProtocolError,
   FonRcError,
   sessionErrorFor,
@@ -11,6 +10,7 @@ import {
   type Session,
   type TransportOptions,
 } from '@kreiseck/finanzonline-core';
+import { wienerOrtszeit } from './wien';
 
 const DATABOX_ENDPOINT = 'https://finanzonline.bmf.gv.at/fon/ws/databox';
 const DATABOX_NAMESPACE = 'https://finanzonline.bmf.gv.at/fon/ws/databox';
@@ -86,36 +86,17 @@ function normalizeFileart(value: string | undefined): 'XML' | 'PDF' {
   return value?.trim().toUpperCase() === 'PDF' ? 'PDF' : 'XML';
 }
 
-const WIEN = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'Europe/Vienna',
-  calendar: 'gregory',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hourCycle: 'h23',
-});
-
 /**
  * Formatiert einen Zeitpunkt für `ts_zust_von`/`ts_zust_bis`: Wiener Ortszeit
  * ohne Offset, `YYYY-MM-DDThh:mm:ss` (Form laut BMF-Spec). FinanzOnline liest
  * die Angabe als Wiener Zeit — live geprüft am 03.11.2026; eine UTC-Uhrzeit
- * verschiebt das Fenster um eine bzw. zwei Stunden. Hängt nicht von
- * `process.env.TZ` ab. In der doppelten Stunde am Ende der Sommerzeit ist die
- * Angabe mehrdeutig; für Fenster von bis zu sieben Tagen ohne Belang.
+ * verschiebt das Fenster um eine bzw. zwei Stunden. In der doppelten Stunde am
+ * Ende der Sommerzeit ist die Angabe mehrdeutig; für Fenster von bis zu sieben
+ * Tagen ohne Belang.
  */
 function toWienerOrtszeit(d: Date): string {
-  const teile = WIEN.formatToParts(d);
-  const wert = (typ: Intl.DateTimeFormatPartTypes): string => {
-    const gefunden = teile.find((t) => t.type === typ)?.value;
-    if (gefunden === undefined) {
-      throw new FonError(`Zeitzone Europe/Vienna: Bestandteil '${typ}' konnte nicht ermittelt werden.`);
-    }
-    return gefunden;
-  };
-  return `${wert('year').padStart(4, '0')}-${wert('month')}-${wert('day')}T${wert('hour')}:${wert('minute')}:${wert('second')}`;
+  const w = wienerOrtszeit(d);
+  return `${w.jahr}-${w.monat}-${w.tag}T${w.stunde}:${w.minute}:${w.sekunde}`;
 }
 
 /**

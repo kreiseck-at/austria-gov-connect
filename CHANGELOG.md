@@ -277,6 +277,40 @@ nach SemVer keine Fehlerbehebung, auch wenn der Anlass eine war.
 
 ## @kreiseck/finanzonline
 
+### 0.3.0 — 2026-11-04
+
+- **Neu: Umsatzsteuervoranmeldung (U30).** `pruefeU30` (alle Fehler mit
+  stabilen Codes, inkl. aller BMF-Prüfregeln „Prüfungen UVA ab 7/2026",
+  Steuernummer mit Prüfziffer, Zeitraum in Wiener Zeit, ISO-8859-1-Zeichensatz,
+  optionale Kontrolle der erwarteten Steuer je Satz), `berechneU30` (Steuer je
+  Satz und Zahllast wie FinanzOnline, `BigInt`, halbe Cent auf), `baueU30Xml`
+  (exakt nach amtlichem XSD 07/2026 bzw. 01/2022, KZ 124/125 für 4,9 %),
+  `createU30(session).sende` (Standard Testmodus, Echtbetrieb nur mit
+  `echt: true`, nie automatische Wiederholung) und `.protokolle` mit
+  `parseU30Protokoll` (Übermittlungsprotokoll aus der DataBox, Zuordnung über
+  die Paketnummer im Dateinamen). Grundlage: BMF-Schemas und -Prüflisten, ein
+  Testlauf gegen FinanzOnline am 03.11.2026 und eine erste echte Übermittlung
+  am 04.11.2026, deren Produktionsprotokoll der Parser vollständig liest.
+- U30-Eingaben werden als Momentaufnahme gelesen (nur eigene, aufzählbare
+  Eigenschaften, je einmal): Prüfung und XML sehen garantiert dieselben Werte.
+  Unbekannte Felder, falsch typisierte Schalter und überlappende Zeiträume
+  derselben Steuernummer im Paket werden gemeldet. `istUebernommen` wertet das
+  Protokoll nur bei positivem Beleg als „übernommen"; ein unlesbares Protokoll
+  bricht `protokolle()` nicht ab.
+- Falsche Typen werden nie als „nicht angegeben" gelesen: `kennzahlen`,
+  `erwarteteSteuer` und `erstellt` mit `null` oder falschem Typ ergeben
+  `FELD_UNGUELTIG` (vorher still übergangen bzw. `RangeError` beim XML-Bau).
+  `berechneU30` wirft `FonError` bei unbekannter Kennzahl oder einem Betrag,
+  der keine sichere ganze Zahl in Cent ist (vorher `RangeError` oder still 0).
+  Ungültiges `jetzt` wirft `FonError`. `KENNZAHLEN` ist samt Einträgen
+  eingefroren.
+- Abhängigkeit `@kreiseck/finanzonline-core` auf `^0.1.6` angehoben: Der
+  Protokoll-Parser gibt die Roh-Antwort über `FonProtocolError.rohantwort`
+  mit, das gibt es erst ab core 0.1.6.
+- **Geändert:** `createFileUpload(session, config?)` — `uebermittlung` ist
+  optional, Standard ist Test (`T`); ungültige Werte werfen sofort.
+- Intern: Wiener Zeit als eigenes Modul (`wien.ts`), von DataBox und U30 genutzt.
+
 ### 0.2.1 — 2026-11-04
 
 - **Fix:** `liste({ von, bis })` sendet `ts_zust_von`/`ts_zust_bis` jetzt als

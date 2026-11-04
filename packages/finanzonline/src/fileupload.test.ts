@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFileUpload, ANBRINGEN, type Anbringen } from './fileupload';
-import { FonSessionExpiredError, type Session } from '@kreiseck/finanzonline-core';
+import { FonError, FonSessionExpiredError, type Session } from '@kreiseck/finanzonline-core';
 
 const s: Session = { id: 'ABCDEFGHIJ1234567890', tid: 'ABCD1234', benid: 'benutzer1', async logout() {} };
 
@@ -58,4 +58,47 @@ test('rc -1 -> FonSessionExpiredError', async () => {
 test('unbekannte art -> wirft (client-seitige Validierung)', async () => {
   const fu = createFileUpload(s, { uebermittlung: 'test', transport: tp(resp('0')) });
   await assert.rejects(() => fu.upload({ art: 'XXX' as unknown as Anbringen, data: '<x/>' }));
+});
+
+// --- Sicherheit: Standard ist der Testmodus (T) ---
+
+test('createFileUpload ohne config sendet T (globales fetch durch Attrappe ersetzt, kein Netz)', async () => {
+  const echtesFetch = globalThis.fetch;
+  let body = '';
+  globalThis.fetch = (async (_u: unknown, init?: RequestInit) => {
+    body = String(init?.body ?? '');
+    return new Response(resp('0'), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const fu = (createFileUpload as unknown as (session: Session) => ReturnType<typeof createFileUpload>)(s);
+    await fu.upload({ art: 'U30', data: '<x/>' });
+  } finally {
+    globalThis.fetch = echtesFetch;
+  }
+  assert.match(body, /<uebermittlung>T<\/uebermittlung>/);
+});
+
+test('config ohne uebermittlung → T', async () => {
+  let body = '';
+  const fu = createFileUpload(s, { transport: tp(resp('0'), (b) => (body = b)) } as never);
+  await fu.upload({ art: 'U30', data: '<x/>' });
+  assert.match(body, /<uebermittlung>T<\/uebermittlung>/);
+});
+
+test('ungültige uebermittlung wirft beim Erzeugen, ohne Netz', () => {
+  let aufrufe = 0;
+  const transport = {
+    fetchImpl: (async () => {
+      aufrufe += 1;
+      return new Response(resp('0'), { status: 200 });
+    }) as unknown as typeof fetch,
+  };
+  for (const uebermittlung of ['P', 'T', 'produktion', true, 1]) {
+    assert.throws(
+      () => createFileUpload(s, { uebermittlung, transport } as never),
+      FonError,
+      String(uebermittlung),
+    );
+  }
+  assert.equal(aufrufe, 0);
 });
