@@ -37,6 +37,9 @@
 //   Mi 07–09 (01.04.2027): Clearing der Apr-2026-Verarbeitung lesen; Q21: L16 2026 für Q37 über das
 //                      Paket mit Geschlecht, Berichtigung und Storno (Q50–Q52); Q19 zweite mBGM
 //                      ohne Storno (M96). F5 (A25–A27) wartet auf die Einkommensgrenzen 2027 (WP7).
+//                      Q49 kam wieder mit VW1942 → dieselbe Abmeldung einen Lauf später (Q53).
+//   Mi 12–14 (01.05.2027): keine Sammelverarbeitung mehr, nur Mitteilungen: L16 mit echtem DTUE (Q54,
+//                      Gegenprobe zu 0800); Sperrtests Z04/Z05 einzeln nach dem letzten Abholen.
 
 const { meldung, lohnzettel, setzeFeld } = require('../lib/bausteine');
 const { FELDER_E29 } = require('../../../dist/felder-e29.js');
@@ -250,6 +253,7 @@ function q31Abmeldung(ctx) {
 // --- Mi 07–09 (01.04.2027): L16 2026 (Q21) -------------------------------------------
 
 const MI_VM = ['mi-vm'];
+const MI_NM = ['mi-nm'];
 const STEUERNUMMER_ERSATZ = '911234565'; // prüfziffernrichtig erfunden, wie die L-Fälle
 
 /**
@@ -267,9 +271,9 @@ const L16_BETRAEGE = {
  * L16 2026 für Q37 (arbeiter, B/15, Eintritt 01.01.2026, Ende 28.02.2026 laut Q46)
  * über das Paket, Version 28 (fachlich gültig für Zeiträume ab 2024; Version 29 erst
  * für Zeiträume ab 2027). Geschlecht aus den Testdaten – genau das fehlt dem
- * kasseneck-Weg (L12, W2801).
+ * kasseneck-Weg (L12, W2801). `erstellt`: echter statt simulierter Erstellungszeitpunkt.
  */
-function l16Q37(ctx, fall, { korr, refn, monatlich = 3000 } = {}) {
+function l16Q37(ctx, fall, { korr, refn, monatlich = 3000, erstellt } = {}) {
   const p = ctx.rolle('arbeiter');
   const dg = ctx.dienstgeber('B');
   const beginn = ctx.zrVon('Q37');
@@ -281,6 +285,7 @@ function l16Q37(ctx, fall, { korr, refn, monatlich = 3000 } = {}) {
     fall,
     dg: 'B',
     traeger: '15',
+    erstellt,
     uebermittlung: {
       version: '28',
       jahr,
@@ -705,5 +710,45 @@ module.exports = [
     abhaengig: ['Q37', 'Q46', 'Q50', 'Q51'],
     rang: 22,
     baue: (ctx) => l16Q37(ctx, 'Q52', { korr: 'S', refn: ctx.referenzwertVon('Q50'), monatlich: 3100 }),
+  }),
+  fall({
+    id: 'Q53',
+    titel: 'Q14-Kette: Abmeldung reserve_3 von A/15 zum 28.02.2026 MIT BVEN, eine Sammelverarbeitung nach Q48 (M4)',
+    zweck:
+      'Q49 kam trotz Q48 mit VW1942 zurück, obwohl die BV-Zeit aus Q48 in derselben Verarbeitung schon wirkte ' +
+      '(M88: BV-Grundlage 02/2026 für Q32 ohne BW1871, BW2032 auf der amtswegigen mBGM 03/2026). Dieselbe Abmeldung ' +
+      'jetzt einen Lauf später: Liegt es an der Reihenfolge in einem Lauf (M4 vor M8), oder sieht die Abmeldung die ' +
+      'BV-Zeit einer M8 nie?',
+    quelle: `${QUELLE_ZR}; § 6 Abs 1 BMSVG; E.29.2 (M4, BVEN, M8, BVAB)`,
+    erwartung: 'übernommen; Clearing Mi nm ohne VW1942 (dann Reihenfolge) – oder wieder VW1942',
+    fenster: MI_VM,
+    abhaengig: ['Q42', 'Q48', 'Q49'],
+    rang: 23,
+    baue: (ctx) => {
+      const ende = d(ctx, endeVon(ctx, 'Q42'));
+      return meldung(ctx, {
+        fall: 'Q53',
+        art: 'abmeldung',
+        rolle: 'reserve_3',
+        dg: 'A',
+        traeger: '15',
+        felder: { GERF: 'N', ADAT: ende, EBSV: ende, AGRD: '03', BVEN: ende },
+      });
+    },
+  }),
+  fall({
+    id: 'Q54',
+    titel: 'Q21: L16 2026 für Q37 nach dem Storno Q52 neu, mit ECHTEM Übermittlungsdatum (LF, Version 28)',
+    zweck:
+      'Q50–Q52 kamen mit Warnung 0800 („Unzulässiges Übermittlungsdatum“): DTUE war das simulierte 01.04.2027, ' +
+      'also für ELDA ein Tag in der Zukunft (in KW42 lag das simulierte Datum vor dem echten – kein 0800). Gegenprobe ' +
+      'mit dem echten Tag, wie kasseneck ihn sendet. Nebenbei: Nimmt ELDA nach einem Storno einen neuen L16 mit ' +
+      'neuer Referenznummer für dieselbe Person und dasselbe Jahr an?',
+    quelle: 'E.14 Feld 9 DTUE; Prüfkatalog L16 F0800 („ungültiger Kalendertag oder zukünftig“); SIT KW42 L01',
+    erwartung: 'übernommen LF 1/1 ohne 0800, 1706 und 2801',
+    fenster: MI_NM,
+    abhaengig: ['Q37', 'Q46', 'Q52'],
+    rang: 24,
+    baue: (ctx) => l16Q37(ctx, 'Q54', { erstellt: ctx.jetzt }),
   }),
 ];

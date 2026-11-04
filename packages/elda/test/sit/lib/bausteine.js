@@ -132,9 +132,11 @@ function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, s
  *
  * @param a.uebermittlung { version, jahr, arbeitgeber, lohnzettel } wie
  *   `erstelleLohnzettelBestand`
+ * @param a.erstellt Erstellungszeitpunkt (Vorlauf, DTUE/ZTUE); ohne Angabe der
+ *   simulierte Tag des Fensters
  */
-function lohnzettel(ctx, { fall, dg, traeger, uebermittlung }) {
-  const { versicherungstraeger: _vstr, ...opt } = ctx.bestandOptionen({ dg, traeger });
+function lohnzettel(ctx, { fall, dg, traeger, uebermittlung, erstellt }) {
+  const { versicherungstraeger: _vstr, ...opt } = ctx.bestandOptionen({ dg, traeger, erstellt });
   const saetze = ctx.elda.lohnzettelSaetze(uebermittlung, opt.erstellt);
   const befunde = ctx.elda
     .pruefeLohnzettel(saetze, uebermittlung.version, { heute: opt.erstellt })
