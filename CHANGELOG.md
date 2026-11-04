@@ -288,8 +288,9 @@ nach SemVer keine Fehlerbehebung, auch wenn der Anlass eine war.
   `createU30(session).sende` (Standard Testmodus, Echtbetrieb nur mit
   `echt: true`, nie automatische Wiederholung) und `.protokolle` mit
   `parseU30Protokoll` (Übermittlungsprotokoll aus der DataBox, Zuordnung über
-  die Paketnummer im Dateinamen). Grundlage: BMF-Schemas und -Prüflisten sowie
-  ein Testlauf gegen FinanzOnline am 03.11.2026.
+  die Paketnummer im Dateinamen). Grundlage: BMF-Schemas und -Prüflisten, ein
+  Testlauf gegen FinanzOnline am 03.11.2026 und eine erste echte Übermittlung
+  am 04.11.2026, deren Produktionsprotokoll der Parser vollständig liest.
 - U30-Eingaben werden als Momentaufnahme gelesen (nur eigene, aufzählbare
   Eigenschaften, je einmal): Prüfung und XML sehen garantiert dieselben Werte.
   Unbekannte Felder, falsch typisierte Schalter und überlappende Zeiträume

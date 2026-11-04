@@ -864,3 +864,50 @@ baut die Bibliothek nach den amtlichen Regeln (§ 204 BAO, Prüfliste) und
 behandelt Berichtigung als vollständige Neuübermittlung mit Zähler je
 Zeitraum.
 
+### 8.3 Erste echte Übermittlung (P), 04.11.2026
+
+Fällige UVA Q3/2026 eines Kundenunternehmens, mit dessen Freigabe, über
+`@kreiseck/finanzonline` 0.3.0 (vorher derselbe Inhalt als T „zur Gänze
+übernommen"). Eine Erklärung, Zahllast 2.185,34 €.
+
+Zeitlinie (Sekunden ab Start): Login 0,1 – Upload 0,1 – Sofortantwort rc 0
+nach 0,3 („XML-File wurde gesendet, es wurde 1 Erklärung übermittelt …") –
+Protokoll in der DataBox zugestellt nach **≈ 60 s** (`ts_zust` 13:55:47,
+Upload 13:54:48), gefunden beim sechsten Abruf. Wie im Testmodus: `erltyp P`,
+`filebez` `Webservice_U30_<ts>_<PAKET_NR>`.
+
+Produktionsprotokoll (UTF-8, flaches `<XML>`, Kennungen ersetzt):
+
+```xml
+<XML>
+  <ART_IDENTIFIKATIONSBEGRIFF>FASTNR</ART_IDENTIFIKATIONSBEGRIFF>
+  <IDENTIFIKATIONSBEGRIFF>911234565</IDENTIFIKATIONSBEGRIFF>
+  <PAKET_NR>400000001</PAKET_NR>
+  <DATUM_ERSTELLUNG>2026-11-04</DATUM_ERSTELLUNG>
+  <UHRZEIT_ERSTELLUNG>13.54.48</UHRZEIT_ERSTELLUNG>
+  <ANZAHL_ERKLAERUNGEN>1</ANZAHL_ERKLAERUNGEN>
+  <TEXT>Die oben angeführte PRODUKTIONS-Übermittlung wurde am 04.11.2026 um 13:54:48 zur Gänze eingebracht.</TEXT>
+  <SATZNR>1</SATZNR>
+  <FASTNR>911234565</FASTNR>
+  <KUNDENINFO>KE-Q3-2026</KUNDENINFO>
+  <DRUCKTEXT>Zahllast:</DRUCKTEXT>
+  <DRUCKBETRAG>2185.34</DRUCKBETRAG>
+</XML>
+```
+
+Damit geklärt (Punkt 2 aus 8.2, soweit möglich):
+
+- Im Echtbetrieb heißt es „eingebracht" statt „übernommen"; je Satz kommen
+  `SATZNR`, `FASTNR`, `KUNDENINFO`, `DRUCKTEXT`, `DRUCKBETRAG` — genau die
+  Feldliste aus [Q15]. `DRUCKBETRAG` hat **Punkt als Dezimaltrenner, ohne
+  Tausenderpunkt**. Der Parser liest alles, `unbekannteElemente` bleibt leer.
+- `DRUCKBETRAG` = von der Bibliothek berechnete Zahllast (2.185,34). Halbe
+  Cent kamen in diesem Fall nicht vor (20 % von 14.890,92 = 2.978,184) — die
+  Rundung bei genau halbem Cent bleibt offen.
+- Steuerkonto: UVAs erscheinen dort erst mit einigen Tagen Verzug (bei den
+  früheren Quartalen 2–6 Tage); im Steuerakt stehen UVAs nicht. Der schnelle
+  Beleg ist das DataBox-Protokoll.
+
+Weiter offen: Punkte 1 und 3 aus 8.2 (Berichtigung, Prüfung des
+Voranmeldungszeitraums).
+

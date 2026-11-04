@@ -62,8 +62,42 @@ test('Buffer und Byte-Order-Mark', () => {
   assert.match(p.saetze[0]?.fehler[0] ?? '', /Zeiträume/);
 });
 
-// Konstruiert (Produktionsformat noch nicht an echten Daten gesehen; Felder laut
-// BMF „Allgemeines – Protokolle", Stand 20.02.2020).
+// Echtes Produktionsprotokoll aus der DataBox vom 04.11.2026 (Übermittlung P),
+// Aufbau und Beträge unverändert, Steuernummer und Paketnummer ersetzt.
+const ECHT_PRODUKTION =
+  '<?xml version="1.0" encoding="UTF-8"?><XML><ART_IDENTIFIKATIONSBEGRIFF>FASTNR</ART_IDENTIFIKATIONSBEGRIFF><IDENTIFIKATIONSBEGRIFF>911234565</IDENTIFIKATIONSBEGRIFF><PAKET_NR>400000001</PAKET_NR><DATUM_ERSTELLUNG>2026-11-04</DATUM_ERSTELLUNG><UHRZEIT_ERSTELLUNG>13.54.48</UHRZEIT_ERSTELLUNG><ANZAHL_ERKLAERUNGEN>1</ANZAHL_ERKLAERUNGEN>' +
+  '<TEXT>Die oben angeführte PRODUKTIONS-Übermittlung wurde am 04.11.2026 um 13:54:48 zur Gänze eingebracht.</TEXT>' +
+  '<SATZNR>1</SATZNR><FASTNR>911234565</FASTNR><KUNDENINFO>KE-Q3-2026</KUNDENINFO><DRUCKTEXT>Zahllast:</DRUCKTEXT><DRUCKBETRAG>2185.34</DRUCKBETRAG></XML>';
+
+test('echt, Produktion, zur Gänze eingebracht mit Zahllast', () => {
+  const p = parseU30Protokoll(ECHT_PRODUKTION);
+  assert.equal(p.uebermittlung, 'P');
+  assert.equal(p.ergebnis, 'vollstaendig');
+  assert.equal(p.paketAbgelehnt, false);
+  assert.equal(p.paketNr, 400000001);
+  assert.equal(p.uebermittler, '911234565');
+  assert.equal(p.datum, '2026-11-04');
+  assert.equal(p.uhrzeit, '13.54.48');
+  assert.match(p.text ?? '', /zur Gänze eingebracht/);
+  assert.deepEqual(p.saetze, [
+    {
+      satzNr: 1,
+      fastnr: '911234565',
+      kundeninfo: 'KE-Q3-2026',
+      fehler: [],
+      drucktext: 'Zahllast:',
+      druckbetrag: { roh: '2185.34', cent: 218534 },
+    },
+  ]);
+  assert.deepEqual(p.abgelehnteSaetze, []);
+  assert.deepEqual(p.paketFehler, []);
+  assert.deepEqual(p.unbekannteElemente, []);
+  assert.equal(istUebernommen(p, 1), true);
+});
+
+// Konstruiert (Felder laut BMF „Allgemeines – Protokolle", Stand 20.02.2020). Das echte
+// Produktionsprotokoll liefert den Betrag mit Punkt („2185.34"); das deutsche Format
+// bleibt als Absicherung, falls FinanzOnline die Darstellung ändert.
 test('konstruiert: Produktion mit DRUCKTEXT/DRUCKBETRAG, deutsches Zahlformat', () => {
   const p = parseU30Protokoll(
     KOPF('1003', '10.00.00', '1') +
