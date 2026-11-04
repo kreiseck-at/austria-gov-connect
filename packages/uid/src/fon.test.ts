@@ -30,7 +30,7 @@ test('rc 1 -> ungueltig', async () => {
   const erg = await fonUidAbfrage({
     session: s,
     antragsteller: 'ATU12345678',
-    uid: 'ATU00000000',
+    uid: 'ATU12345675',
     stufe: 1,
     transport: tp(resp('<rc>1</rc>')),
   });
