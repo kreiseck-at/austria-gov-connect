@@ -17,12 +17,15 @@
 //   L24  angestellte  Berichtigung von L20 (KORR K, gleiche REFN, 3.100 € statt 3.000 €)
 //   L25  angestellte  zweites Dienstverhältnis im selben Jahr (Wiedereintritt 01.08.)  → eigene REFN
 //   L26  geringfuegig geringfügig beschäftigt, Halbjahr ohne Sonderzahlungen
+//   L27  arbeiter     Austritt im Jahr mit Urlaubsersatzleistung (07.07.–30.09., Teilzeit)
+//   L28  reserve_3    Alleinverdiener mit zwei Kindern (AVAB J, ANZK 02) ohne VSNR des Partners
+//   L29  reserve_3    Negativtest über das Paket: zwei Geschlechter angekreuzt (GESW + GESM)
 //
 // Höchstbeitragsgrundlage (M97 aus KW45, dessen Vorlauf Q34 nur Mo 07–09 lief): Q60 meldet
 // die Angestellte auf A/14 zum 01.02.2026 an, BV ab 01.03.2026. Die mBGM 02 und 03 mit
 // 9.000 € folgen am Dienstag als eigene Fälle, sobald die Mitteilung zu Q60 gelesen ist.
 
-const { meldung } = require('../lib/bausteine');
+const { meldung, lohnzettel } = require('../lib/bausteine');
 const { kasseneckL16, kasseneckL16Lohn } = require('../lib/kasseneck');
 
 const fall = (mehr) => ({ gefahr: null, abhaengig: [], aktion: 'senden', ...mehr });
@@ -75,6 +78,8 @@ function kasseneckL16Reihe(
     geschlecht,
     korrektur,
     employeeId = `SIT-${id}`,
+    posten,
+    mehr = {},
   },
 ) {
   const lohn = kasseneckL16Lohn();
@@ -91,6 +96,7 @@ function kasseneckL16Reihe(
     wochenstunden: stunden,
     kvBasisStunden: 40,
     grossSalaryCents: monatsbezug,
+    ...mehr,
   };
   const monate = monateZwischen(eintritt, austritt);
   const aliquot = Math.round((monatsbezug * tageInklusive(eintritt, austritt)) / 365);
@@ -98,7 +104,7 @@ function kasseneckL16Reihe(
     const kontext =
       sonderzahlungen && i === monate.length - 1
         ? {
-            posten: [
+            posten: posten ?? [
               { typ: 'UZ', betragCent: aliquot },
               { typ: 'WR', betragCent: aliquot },
             ],
@@ -155,6 +161,58 @@ function kasseneckL16Reihe(
     referenzwerte: uebermittlung.lohnzettel.map((lz) => lz.felder.REFN),
     hinweise,
   };
+}
+
+/**
+ * L16 2026 über das Paket für reserve_3 (Arbeiter, 01.01.–28.02.2026, 3.000 € im Monat, Beträge wie Q50),
+ * aber mit GESW und GESM zugleich – der Paketbau lässt das zu, F2801 prüft erst die SIT.
+ */
+function l16ZweiGeschlechter(ctx, fall) {
+  const p = ctx.rolle('reserve_3');
+  const dg = ctx.dienstgeber('B');
+  return lohnzettel(ctx, {
+    fall,
+    dg: 'B',
+    traeger: '15',
+    erstellt: ctx.jetzt,
+    uebermittlung: {
+      version: '28',
+      jahr: 2026,
+      arbeitgeber: {
+        STNRA: '911234565',
+        ANAM: dg.name,
+        AADR: dg.anschrift.strasse,
+        ALKZ: 'A',
+        APLZ: dg.anschrift.plz,
+        AORT: dg.anschrift.ort,
+        GESA: 1,
+      },
+      lohnzettel: [
+        {
+          felder: {
+            REFN: ctx.referenzwert(fall).slice(0, 30),
+            ARTL: '01',
+            BELZ: '0101',
+            ENLZ: '2802',
+            SOZS: '2',
+            AVLN: p.vsnr.slice(0, 4),
+            AGBD: p.vsnr.slice(4),
+            ANAM: `${p.familienname} ${p.vorname}`,
+            AADR: 'Teststraße 1',
+            ALKZ: 'A',
+            APLZ: '5020',
+            AORT: 'Salzburg',
+            GESW: 'J',
+            GESM: 'J',
+            VOLL: 'J',
+            GEBD: p.geburtsdatum,
+          },
+          // Zwei Monate zu 3.000 €, gerechnet mit kasseneck (wie L16_BETRAEGE[3000] in q-kw45.js).
+          betraege: { B210: 600_000, BIEB: 108_420, B230: 108_420, B245: 491_580, BIEL: 56_764, B260: 56_764 },
+        },
+      ],
+    },
+  });
 }
 
 const l16 = (mehr) => fall({ fenster: AB_MO_NM, braucht: 'kasseneck-l16', ...mehr });
@@ -262,6 +320,62 @@ module.exports = [
         monatsbezug: 50_000,
         sonderzahlungen: false,
       }),
+  }),
+  l16({
+    id: 'L27',
+    titel: 'L16 2026 von kasseneck: Austritt im Jahr mit Urlaubsersatzleistung, 07.07.–30.09., Teilzeit 30 Stunden',
+    zweck:
+      'So sieht der Lohnzettel aus, der im Februar 2027 für einen unterjährigen Austritt echt hinausgeht: ' +
+      'Eintritt mitten im Monat, Austritt zum Quartalsende, UZ und WR aliquot (86/365) und der ' +
+      'Sonderzahlungsanteil der Urlaubsersatzleistung in KZ 220. Werte erfunden.',
+    quelle: `${QUELLE_L16}; § 67 Abs 8 lit d EStG, LStR Rz 1108 (UEL); WKO „Der steuerliche Lohnzettel“ (KZ 220)`,
+    erwartung: 'übernommen LF 1/1 ohne Warnung',
+    rang: 25,
+    baue: (ctx) => {
+      const monatsbezug = 180_000;
+      const aliquot = Math.round((monatsbezug * tageInklusive('2026-07-07', '2026-09-30')) / 365);
+      return kasseneckL16Reihe(ctx, 'L27', {
+        rolle: 'arbeiter',
+        gruppe: 'arbeiter',
+        stunden: 30,
+        monatsbezug,
+        eintritt: '2026-07-07',
+        austritt: '2026-09-30',
+        posten: [
+          { typ: 'UZ', betragCent: aliquot },
+          { typ: 'WR', betragCent: aliquot },
+          { typ: 'UEL', betragCent: 12_000 },
+        ],
+      });
+    },
+  }),
+  l16({
+    id: 'L28',
+    titel: 'L16 2026 von kasseneck: Alleinverdiener mit zwei Kindern (AVAB J, ANZK 02), Halbjahr mit UZ + WR',
+    zweck:
+      'kasseneck rechnet den AVAB nach Kinderstaffel und meldet AVAB J mit der Kinderzahl, kennt aber die VSNR ' +
+      'der Partnerin bzw. des Partners nicht (F3101, Status P). Nimmt der BMF-Katalog den Lohnzettel so an?',
+    quelle: `${QUELLE_L16}; § 33 Abs 4 Z 1 EStG; E.14 (AVAB, ANZK); Prüfkatalog L16 F3101`,
+    erwartung: 'offen: übernommen, evtl. mit Warnung 3101',
+    rang: 26,
+    baue: (ctx) =>
+      kasseneckL16Reihe(ctx, 'L28', {
+        rolle: 'reserve_3',
+        monatsbezug: 350_000,
+        mehr: { soleEarner: true, children: 2 },
+      }),
+  }),
+  fall({
+    id: 'L29',
+    titel: 'Negativtest L16 über das Paket: GESW und GESM zugleich angekreuzt (F2801)',
+    zweck:
+      'F2801 verlangt genau ein Geschlecht. Ohne Geschlecht kam in KW45 Warnung 2801 – meldet die SIT zwei ' +
+      'Geschlechter ebenfalls nur als Warnung, oder weist sie den Lohnzettel ab?',
+    quelle: 'E.14 Felder 28–30; Prüfkatalog L16 Version 09 (F2801)',
+    erwartung: 'Warnung 2801 oder nicht_uebernommen',
+    fenster: AB_MO_NM,
+    rang: 40,
+    baue: (ctx) => l16ZweiGeschlechter(ctx, 'L29'),
   }),
   fall({
     id: 'Q60',

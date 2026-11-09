@@ -262,7 +262,7 @@ const IM_FENSTER_KW46 = {
 };
 const istKw46 = (id) => /^(L2\d|Q6\d)$/.test(id);
 /** Lohnzettel von kasseneck mit Geschlecht (KW46). */
-const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26'];
+const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28'];
 const zeitpunkt = (id, fenster) =>
   (istKw46(id) ? IM_FENSTER_KW46 : istKw45(id) ? IM_FENSTER_KW45 : IM_FENSTER)[fenster];
 
@@ -560,7 +560,7 @@ test('FH- und SM-Fälle: Bestand, Version, Satzlänge, Satzart, Abwandlung nur i
 });
 
 test('S-Fälle: Bestand VS bzw. AV (S11 ist eine Anmeldung, VR), TM, Seriennummer, Träger', () => {
-  const BEST = { S10: 'VS', S11: 'VR', S12: 'VS', S13: 'VS', S20: 'AV', S21: 'AV' };
+  const BEST = { S10: 'VS', S11: 'VR', S12: 'VS', S13: 'VS', S15: 'VS', S16: 'VS', S20: 'AV', S21: 'AV' };
   for (const [id, best] of Object.entries(BEST)) {
     const { ergebnis, ctx } = GEBAUT.get(id);
     const s = saetze(ergebnis.inhalt);
@@ -858,4 +858,23 @@ test('L20–L26: L16 von kasseneck mit Geschlecht – LF, echtes DTUE, GESW/GESM
   assert.notEqual(feld(l1('L24'), 298, 10), feld(l1('L20'), 298, 10), 'L24: andere Beträge');
   assert.equal(feld(l1('L25'), 66, 30).trim(), 'SIT-L20-20260801', 'L25: eigene REFN je Dienstverhältnis');
   assert.equal(feld(l1('L25'), 120, 8), '01083110', 'L25: 01.08.–31.10.');
+});
+
+test('L27–L29: UEL in KZ 220, AVAB mit Kinderzahl, zwei Geschlechter; S15/S16: GESL 4 und 6 aus dem Personenstand', () => {
+  const l1 = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[2];
+  if (GEBAUT.has('L27')) {
+    assert.equal(feld(l1('L27'), 120, 8), '07073009', 'L27: 07.07.–30.09.');
+    assert.equal(feld(l1('L27'), 283, 2), 'NJ', 'L27: Teilzeit');
+    // UZ und WR je 1.800 € × 86/365 = 424,11 €, dazu 120,00 € UEL-Anteil.
+    assert.equal(feld(l1('L27'), 320, 10), '0000096822', 'L27: KZ 220 mit dem Sonderzahlungsanteil der UEL');
+  }
+  if (GEBAUT.has('L28')) {
+    assert.equal(feld(l1('L28'), 285, 1), 'J', 'L28: AVAB');
+    assert.equal(feld(l1('L28'), 706, 2), '02', 'L28: zwei Kinder');
+    assert.ok(GEBAUT.get('L28').ergebnis.hinweise.some((h) => /F3101/.test(h)), 'L28: Hinweis auf F3101');
+  }
+  assert.equal(feld(l1('L29'), 280, 3), 'JJ ', 'L29: GESW und GESM');
+  const vs = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
+  assert.equal(feld(vs('S15'), 553, 1), '4', 'S15: offen');
+  assert.equal(feld(vs('S16'), 553, 1), '6', 'S16: inter');
 });
