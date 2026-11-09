@@ -142,6 +142,7 @@ const SART = {
   Q37: 'M3',
   Q38: 'M4',
   Q39: 'M3',
+  Q60: 'M3',
   Q40: 'M8',
   Q41: 'M4',
   Q42: 'M4',
@@ -250,7 +251,20 @@ const istKw45 = (id) => /^(Q[3-5]\d|M8\d|M9[5-7])$/.test(id);
 const L16_KW45 = ['Q50', 'Q51', 'Q52', 'Q54'];
 /** Lohnzettel, die kasseneck selbst baut (ohne Geschlecht). */
 const L16_KASSENECK_KW45 = ['Q55'];
-const zeitpunkt = (id, fenster) => (istKw45(id) ? IM_FENSTER_KW45 : IM_FENSTER)[fenster];
+/** KW46: dieselbe Zeitreise wie KW45. */
+const IM_FENSTER_KW46 = {
+  'mo-vm': new Date('2026-11-09T06:30:00Z'),
+  'mo-nm': new Date('2026-11-09T11:30:00Z'),
+  'di-vm': new Date('2026-11-10T06:30:00Z'),
+  'di-nm': new Date('2026-11-10T11:30:00Z'),
+  'mi-vm': new Date('2026-11-11T06:30:00Z'),
+  'mi-nm': new Date('2026-11-11T11:30:00Z'),
+};
+const istKw46 = (id) => /^(L2\d|Q6\d)$/.test(id);
+/** Lohnzettel von kasseneck mit Geschlecht (KW46). */
+const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28'];
+const zeitpunkt = (id, fenster) =>
+  (istKw46(id) ? IM_FENSTER_KW46 : istKw45(id) ? IM_FENSTER_KW45 : IM_FENSTER)[fenster];
 
 /**
  * Ohne Checkout baut ein Fall nicht – und auch keiner, der auf ihm aufbaut (Q50 hängt an der
@@ -270,6 +284,10 @@ const ersterFenster = (fall) => (fall.fenster === 'jedes' ? 'mo-vm' : fall.fenst
  * gebaut werden; ihnen fehlt erst am simulierten 2027 das Parameterwerk.)
  */
 const BEKANNT_NICHT_BAUBAR = {
+  // kasseneck baut seit #881 keinen L16 ohne Geschlecht mehr; L12 (KW42) und Q55 (KW45) liefen noch ohne –
+  // L20 ist ihr Nachfolger.
+  L12: /Geschlecht fehlt/,
+  Q55: /Geschlecht fehlt/,
   M03: /DM-D\.62/,
   M34: /DM-D\.62/,
   M13: /DM-D\.62/,
@@ -542,7 +560,7 @@ test('FH- und SM-Fälle: Bestand, Version, Satzlänge, Satzart, Abwandlung nur i
 });
 
 test('S-Fälle: Bestand VS bzw. AV (S11 ist eine Anmeldung, VR), TM, Seriennummer, Träger', () => {
-  const BEST = { S10: 'VS', S11: 'VR', S12: 'VS', S13: 'VS', S20: 'AV', S21: 'AV' };
+  const BEST = { S10: 'VS', S11: 'VR', S12: 'VS', S13: 'VS', S15: 'VS', S16: 'VS', S20: 'AV', S21: 'AV' };
   for (const [id, best] of Object.entries(BEST)) {
     const { ergebnis, ctx } = GEBAUT.get(id);
     const s = saetze(ergebnis.inhalt);
@@ -808,4 +826,58 @@ test('ES-Satzarten E3, E4, EA: Satzart und Träger (EA an den Dachverband, VSTR 
     assert.equal(feld(s[1], 1, 2), sart, `${id}: Satzart`);
     for (const satz of s) assert.equal(feld(satz, 19, 2), vstr, `${id}: VSTR`);
   }
+});
+
+test('L20–L26: L16 von kasseneck mit Geschlecht – LF, echtes DTUE, GESW/GESM/GESD, Teilzeit, soziale Stellung', () => {
+  const l1 = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[2];
+  const gebaut = L16_KASSENECK_KW46.filter((id) => GEBAUT.has(id));
+  if (gebaut.length === 0) return;
+  assert.deepEqual(gebaut, L16_KASSENECK_KW46, 'mit Checkout bauen alle');
+  for (const id of gebaut) {
+    const { ergebnis, ctx } = GEBAUT.get(id);
+    const s = saetze(ergebnis.inhalt);
+    assert.equal(s.length, 4, `${id}: Vorlauf, I1, L1, Schluss`);
+    assert.equal(feld(s[0], 23, 2), 'LF', `${id}: BEST`);
+    assert.equal(feld(s[2], 52, 8), wienerZeit(ctx.jetzt).datum.replaceAll('-', ''), `${id}: DTUE = echter Tag`);
+    assert.ok(!ergebnis.hinweise.some((h) => /F2801/.test(h)), `${id}: kein Hinweis auf F2801`);
+  }
+  // E.14: GESW 280, GESM 281, GESD 282, VOLL 283, TEIL 284, SOZS 132, KORR 656, REFN 66 (30), BELZ/ENLZ 120.
+  assert.equal(feld(l1('L20'), 280, 5), 'J  JN', 'L20: weiblich, Vollzeit');
+  assert.equal(feld(l1('L21'), 280, 5), ' J NJ', 'L21: männlich, Teilzeit');
+  assert.equal(feld(l1('L22'), 280, 3), ' J ', 'L22: männlich');
+  assert.equal(feld(l1('L23'), 280, 3), '  J', 'L23: offen geht wie divers in GESD');
+  assert.equal(feld(l1('L20'), 132, 1), '3', 'L20: Angestellte');
+  assert.equal(feld(l1('L21'), 132, 1), '2', 'L21: Arbeiter');
+  assert.equal(feld(l1('L22'), 132, 1), '1', 'L22: Lehrling');
+  // L20 ist Q55 mit Geschlecht: dieselben Beträge.
+  assert.equal(feld(l1('L20'), 298, 10), '0002097534', 'L20: KZ 210 wie Q55');
+  assert.equal(feld(l1('L20'), 66, 30).trim(), 'SIT-L20-20260101', 'L20: REFN');
+  assert.equal(feld(l1('L24'), 66, 30), feld(l1('L20'), 66, 30), 'L24: REFN wie L20');
+  assert.equal(feld(l1('L24'), 656, 1), 'K', 'L24: Berichtigung');
+  assert.equal(feld(l1('L20'), 656, 1), ' ', 'L20: ohne KORR');
+  assert.notEqual(feld(l1('L24'), 298, 10), feld(l1('L20'), 298, 10), 'L24: andere Beträge');
+  assert.equal(feld(l1('L25'), 66, 30).trim(), 'SIT-L20-20260801', 'L25: eigene REFN je Dienstverhältnis');
+  assert.equal(feld(l1('L25'), 120, 8), '01083110', 'L25: 01.08.–31.10.');
+});
+
+test('L27–L29: UEL in KZ 220, AVAB mit Kinderzahl, zwei Geschlechter; S15/S16: GESL 4 und 6 aus dem Personenstand', () => {
+  const l1 = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[2];
+  if (GEBAUT.has('L27')) {
+    assert.equal(feld(l1('L27'), 120, 8), '07073009', 'L27: 07.07.–30.09.');
+    assert.equal(feld(l1('L27'), 283, 2), 'NJ', 'L27: Teilzeit');
+    // UZ und WR je 1.800 € × 86/365 = 424,11 €, dazu 120,00 € UEL-Anteil.
+    assert.equal(feld(l1('L27'), 320, 10), '0000096822', 'L27: KZ 220 mit dem Sonderzahlungsanteil der UEL');
+  }
+  if (GEBAUT.has('L28')) {
+    assert.equal(feld(l1('L28'), 285, 1), 'J', 'L28: AVAB');
+    assert.equal(feld(l1('L28'), 706, 2), '02', 'L28: zwei Kinder');
+    assert.ok(GEBAUT.get('L28').ergebnis.hinweise.some((h) => /F3101/.test(h)), 'L28: Hinweis auf F3101');
+  }
+  assert.equal(feld(l1('L29'), 280, 3), 'JJ ', 'L29: GESW und GESM');
+  assert.equal(feld(l1('L30'), 280, 3), ' J ', 'L30: nur GESM');
+  assert.equal(feld(l1('L30'), 285, 11), `J${GEBAUT.get('L30').ctx.rolle('reserve_1').vsnr}`, 'L30: AVAB mit VSNR der Partnerin');
+  assert.equal(feld(l1('L30'), 706, 2), '02', 'L30: zwei Kinder');
+  const vs = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
+  assert.equal(feld(vs('S15'), 553, 1), '4', 'S15: offen');
+  assert.equal(feld(vs('S16'), 553, 1), '6', 'S16: inter');
 });

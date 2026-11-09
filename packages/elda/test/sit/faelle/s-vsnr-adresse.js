@@ -34,9 +34,12 @@ const PERSON = Object.freeze({
   S10: { FANA: 'Weinzierl', VONA: 'Mirela', GEBD: '14031998', GESL: '2' },
   S12: { FANA: 'Lindmayr', VONA: 'Livia', GEBD: '22071995', GESL: '3' },
   S13: { FANA: 'Grabner', VONA: 'Rosa', GEBD: '05111989', GESL: '1' },
+  // GESL setzt hier das Paket (geschlechtCodeElda) aus den Werten des Personenstands.
+  S15: { FANA: 'Kornblum', VONA: 'Robin', GEBD: '19041992' },
+  S16: { FANA: 'Nadler', VONA: 'Kim', GEBD: '02121996' },
 });
 
-function anforderung(ctx, id, { dg = 'A', traeger = '14' } = {}) {
+function anforderung(ctx, id, { dg = 'A', traeger = '14', mehr = {} } = {}) {
   const konto = ctx.konto(dg, { traeger });
   const betrieb = ctx.dienstgeber(dg);
   const refw = ctx.referenzwert(id);
@@ -45,6 +48,7 @@ function anforderung(ctx, id, { dg = 'A', traeger = '14' } = {}) {
     BKNR: konto.bknr,
     DGNA: betrieb.name,
     ...PERSON[id],
+    ...mehr,
     STSL: 'AUT',
     WKFZ: betrieb.anschrift.kfz,
     PLZL: betrieb.anschrift.plz,
@@ -140,6 +144,27 @@ module.exports = [
     erwartung: 'übernommen, oder F6561',
     fenster: ANFORDERUNG,
     baue: (ctx) => anforderung(ctx, 'S12'),
+  }),
+  fall({
+    id: 'S15',
+    titel: 'VSNR-Anforderung mit Geschlecht „offen“ – GESL 4 aus geschlechtCodeElda',
+    zweck:
+      'Seit 0.17.0 setzt das Paket GESL aus den Werten des Personenstands (o → 4). KW42 bestätigte nur 3 ' +
+      '(S12) und die Abweisung von 5 (S13). Nimmt ELDA 4 an? Die Prüfung ist formal und kommt sofort mit der ' +
+      'Mitteilung, deshalb auch im Nachmittagsfenster.',
+    quelle: 'E.30 Feld 15; Prüfkatalog Blatt VS (F6562: 1,2,3,4,6,7); @kreiseck/elda geschlechtCodeElda',
+    erwartung: 'übernommen ohne F6562',
+    fenster: ['mo-nm', 'mi-vm'],
+    baue: (ctx) => anforderung(ctx, 'S15', { mehr: { GESL: ctx.elda.geschlechtCodeElda('o') } }),
+  }),
+  fall({
+    id: 'S16',
+    titel: 'VSNR-Anforderung mit Geschlecht „inter“ – GESL 6 aus geschlechtCodeElda',
+    zweck: 'Wie S15 für inter (i → 6), den zweiten Wert, den das Paket neu erzeugt.',
+    quelle: 'E.30 Feld 15; Prüfkatalog Blatt VS (F6562: 1,2,3,4,6,7); @kreiseck/elda geschlechtCodeElda',
+    erwartung: 'übernommen ohne F6562',
+    fenster: ['mo-nm', 'mi-vm'],
+    baue: (ctx) => anforderung(ctx, 'S16', { mehr: { GESL: ctx.elda.geschlechtCodeElda('i') } }),
   }),
   fall({
     id: 'S13',

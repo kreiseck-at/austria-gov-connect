@@ -44,6 +44,18 @@ function erstelleAblage(basis) {
     return ziel;
   }
 
+  /**
+   * Ein Name, unter dem in `ordner` noch nichts liegt: der gewünschte, sonst mit `__nochmal-2`, `-3` …
+   * Seit KW46 liefert ELDA eine schon abgeholte Rücksendung erneut aus (T15) – die zweite Kopie
+   * landet daneben, statt den Lauf mit EEXIST abzubrechen. `schreibe` überschreibt weiterhin nie.
+   */
+  function freierName(ordner, name) {
+    const grund = sichererName(name);
+    let kandidat = grund;
+    for (let n = 2; fs.existsSync(path.join(ordner, kandidat)); n += 1) kandidat = `${grund}__nochmal-${n}`;
+    return kandidat;
+  }
+
   function protokolliere(ereignis) {
     const zeile = JSON.stringify({ zeit: new Date().toISOString(), ...ereignis });
     fs.appendFileSync(protokollDatei, `${zeile}\n`, { mode: 0o600 });
@@ -69,6 +81,7 @@ function erstelleAblage(basis) {
     basis,
     neuerLauf,
     schreibe,
+    freierName,
     protokolliere,
     ereignisse,
     ruecksendungsOrdner: () => neuerOrdner('ruecksendungen'),
