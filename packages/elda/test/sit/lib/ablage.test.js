@@ -35,6 +35,17 @@ test('schreibe legt Dateien mit 0600 an und überschreibt nie', () => {
   assert.throws(() => ablage.schreibe(lauf.ordner, 'bestand.dat', Buffer.from('x')), /EEXIST/);
 });
 
+test('freierName: vorhandene Rücksendung bekommt eine zweite Kopie daneben (T15, KW46)', () => {
+  const ablage = tempAblage();
+  const ordner = ablage.ruecksendungsOrdner();
+  assert.equal(ablage.freierName(ordner, '155000001__mb_1'), '155000001__mb_1');
+  ablage.schreibe(ordner, '155000001__mb_1', 'a');
+  assert.equal(ablage.freierName(ordner, '155000001__mb_1'), '155000001__mb_1__nochmal-2');
+  ablage.schreibe(ordner, ablage.freierName(ordner, '155000001__mb_1'), 'b');
+  assert.equal(ablage.freierName(ordner, '155000001__mb_1'), '155000001__mb_1__nochmal-3');
+  assert.equal(fs.readFileSync(path.join(ordner, '155000001__mb_1'), 'utf8'), 'a', 'das Original bleibt');
+});
+
 test('Laufprotokoll: anhängen und in Reihenfolge lesen', () => {
   const ablage = tempAblage();
   assert.deepEqual(ablage.ereignisse(), []);

@@ -49,7 +49,7 @@ module.exports = [
       'Ob eine Rücksendung nach dem Abholen weiter abrufbar ist – entscheidet, ob ein ' +
       'abgebrochenes Abholen (Absturz nach dem Empfang, vor dem Speichern) die Datei kostet.',
     quelle: 'Schnittstellenbeschreibung V4 (empfangen, Status 406)',
-    erwartung: '? (000 mit derselben Datei oder 406)',
+    erwartung: 'KW41: 408 „wurde bereits abgeholt“; seit KW46: 000, die Rücksendung kommt erneut (Kopie daneben)',
     fenster: 'jedes',
     gefahr: null,
     abhaengig: [],

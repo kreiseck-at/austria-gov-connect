@@ -232,11 +232,10 @@ function sichereRuecksendung(ablage, protokollnummer, name, roh, mehr = {}) {
   // den ELDA vergibt; alles andere bleibt byte-gleich.
   const { bytes, anzahl } = maskiereText(roh, sn);
   const dateiName = name == null ? name : ohneSeriennummer(name, sn);
-  const ziel = ablage.schreibe(
-    ordner,
-    `${protokollnummer}__${sichererName(dateiName ?? 'ohne-namen')}`,
-    bytes,
-  );
+  const wunsch = `${protokollnummer}__${sichererName(dateiName ?? 'ohne-namen')}`;
+  const name2 = ablage.freierName(ordner, wunsch);
+  const ziel = ablage.schreibe(ordner, name2, bytes);
+  if (name2 !== sichererName(wunsch)) mehr = { ...mehr, erneutEmpfangen: true };
   ablage.protokolliere({
     art: 'ruecksendung',
     protokollnummer: String(protokollnummer),
