@@ -10,26 +10,46 @@ const { ZUSTELLUNGSGRUND } = require('../../../dist/index.js');
 function zuordnungAusLaeufen(ereignisse) {
   const nachReferenz = new Map();
   const nachProtokoll = new Map();
+  const referenzenJeProtokoll = new Map();
   for (const e of ereignisse) {
     if (e.art !== 'lauf') continue;
     for (const r of e.referenzwerte ?? []) nachReferenz.set(r, e.fall);
-    if (e.protokollnummer) nachProtokoll.set(String(e.protokollnummer), e.fall);
+    if (e.protokollnummer) {
+      nachProtokoll.set(String(e.protokollnummer), e.fall);
+      referenzenJeProtokoll.set(String(e.protokollnummer), new Set(e.referenzwerte ?? []));
+    }
   }
-  return { nachReferenz, nachProtokoll };
+  return { nachReferenz, nachProtokoll, referenzenJeProtokoll };
 }
 
 /**
  * Die Fälle einer Mitteilung: über die Referenznummern der Meldungen, sonst über
  * die Protokollnummer der Sendung. Die Mitteilung zum Lohnzettel (LF) trägt eine
  * leere `referenznummer` – ohne den zweiten Weg stünde dort kein Fall.
+ *
+ * Gehört eine Referenznummer zur Sendung mit dieser Protokollnummer, zählt der Fall
+ * dieser Sendung: Eine Berichtigung trägt dieselbe REFN wie das Original (L24 zu
+ * L20), über die Referenz allein landete die Mitteilung des Originals beim
+ * letzten Fall mit dieser REFN.
  */
-function faelleDerMitteilung(mitteilung, protokollnummer, { nachReferenz, nachProtokoll }) {
+function faelleDerMitteilung(
+  mitteilung,
+  protokollnummer,
+  { nachReferenz, nachProtokoll, referenzenJeProtokoll },
+) {
+  const fallDerSendung =
+    protokollnummer === undefined ? undefined : nachProtokoll.get(String(protokollnummer));
+  const eigene =
+    protokollnummer === undefined ? undefined : referenzenJeProtokoll?.get(String(protokollnummer));
   const refs = mitteilung.meldungen
-    .map((x) => (x.referenznummer ? (nachReferenz.get(x.referenznummer) ?? x.referenznummer) : undefined))
+    .map((x) => {
+      if (!x.referenznummer) return undefined;
+      if (fallDerSendung && eigene?.has(x.referenznummer)) return fallDerSendung;
+      return nachReferenz.get(x.referenznummer) ?? x.referenznummer;
+    })
     .filter((r) => r !== undefined);
   if (refs.length > 0) return [...new Set(refs)];
-  const fall = protokollnummer === undefined ? undefined : nachProtokoll.get(String(protokollnummer));
-  return fall ? [fall] : [];
+  return fallDerSendung ? [fallDerSendung] : [];
 }
 
 /**
