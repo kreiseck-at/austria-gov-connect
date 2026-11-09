@@ -874,6 +874,9 @@ test('L27–L29: UEL in KZ 220, AVAB mit Kinderzahl, zwei Geschlechter; S15/S16:
     assert.ok(GEBAUT.get('L28').ergebnis.hinweise.some((h) => /F3101/.test(h)), 'L28: Hinweis auf F3101');
   }
   assert.equal(feld(l1('L29'), 280, 3), 'JJ ', 'L29: GESW und GESM');
+  assert.equal(feld(l1('L30'), 280, 3), ' J ', 'L30: nur GESM');
+  assert.equal(feld(l1('L30'), 285, 11), `J${GEBAUT.get('L30').ctx.rolle('reserve_1').vsnr}`, 'L30: AVAB mit VSNR der Partnerin');
+  assert.equal(feld(l1('L30'), 706, 2), '02', 'L30: zwei Kinder');
   const vs = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
   assert.equal(feld(vs('S15'), 553, 1), '4', 'S15: offen');
   assert.equal(feld(vs('S16'), 553, 1), '6', 'S16: inter');

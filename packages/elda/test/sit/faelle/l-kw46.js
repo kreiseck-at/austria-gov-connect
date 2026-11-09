@@ -164,10 +164,11 @@ function kasseneckL16Reihe(
 }
 
 /**
- * L16 2026 über das Paket für reserve_3 (Arbeiter, 01.01.–28.02.2026, 3.000 € im Monat, Beträge wie Q50),
- * aber mit GESW und GESM zugleich – der Paketbau lässt das zu, F2801 prüft erst die SIT.
+ * L16 2026 über das Paket für reserve_3 (Arbeiter, männlich, 01.01.–28.02.2026, 3.000 € im Monat, Beträge
+ * wie Q50). `mehr` ergänzt oder überschreibt Felder des L1-Satzes (L29: GESW zusätzlich, L30: AVAB mit
+ * Versicherungsnummer der Partnerin).
  */
-function l16ZweiGeschlechter(ctx, fall) {
+function l16Paket(ctx, fall, mehr = {}) {
   const p = ctx.rolle('reserve_3');
   const dg = ctx.dienstgeber('B');
   return lohnzettel(ctx, {
@@ -202,10 +203,10 @@ function l16ZweiGeschlechter(ctx, fall) {
             ALKZ: 'A',
             APLZ: '5020',
             AORT: 'Salzburg',
-            GESW: 'J',
             GESM: 'J',
             VOLL: 'J',
             GEBD: p.geburtsdatum,
+            ...mehr,
           },
           // Zwei Monate zu 3.000 €, gerechnet mit kasseneck (wie L16_BETRAEGE[3000] in q-kw45.js).
           betraege: { B210: 600_000, BIEB: 108_420, B230: 108_420, B245: 491_580, BIEL: 56_764, B260: 56_764 },
@@ -375,7 +376,23 @@ module.exports = [
     erwartung: 'Warnung 2801 oder nicht_uebernommen',
     fenster: AB_MO_NM,
     rang: 40,
-    baue: (ctx) => l16ZweiGeschlechter(ctx, 'L29'),
+    baue: (ctx) => l16Paket(ctx, 'L29', { GESW: 'J' }),
+  }),
+  fall({
+    id: 'L30',
+    titel: 'Gegenprobe zu L28 über das Paket: AVAB J, zwei Kinder, MIT Versicherungsnummer der Partnerin (PVLN/PGBD)',
+    zweck:
+      'L28 kam mit W 3101/3200/3300, weil kasseneck die VSNR der Partnerin nicht führt. Verschwinden die drei ' +
+      'Warnungen, wenn PVLN und PGBD gesetzt sind? Dann braucht kasseneck das Feld für jeden AVAB-Fall. ' +
+      'Partnerin: Testperson reserve_1.',
+    quelle: 'E.14 Felder 33–35 (AVAB, PVLN, PGBD), 110 (ANZK); Prüfkatalog L16 F3101, F3200, F3300; SIT KW46 L28',
+    erwartung: 'übernommen ohne 3101/3200/3300',
+    fenster: AB_MO_NM,
+    rang: 41,
+    baue: (ctx) => {
+      const partnerin = ctx.rolle('reserve_1').vsnr;
+      return l16Paket(ctx, 'L30', { AVAB: 'J', ANZK: '02', PVLN: partnerin.slice(0, 4), PGBD: partnerin.slice(4) });
+    },
   }),
   fall({
     id: 'Q60',
