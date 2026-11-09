@@ -260,7 +260,7 @@ const IM_FENSTER_KW46 = {
   'mi-vm': new Date('2026-11-11T06:30:00Z'),
   'mi-nm': new Date('2026-11-11T11:30:00Z'),
 };
-const istKw46 = (id) => /^(L2\d|Q6\d)$/.test(id);
+const istKw46 = (id) => /^(L2\d|L30|Q6\d|M9[89])$/.test(id);
 /** Lohnzettel von kasseneck mit Geschlecht (KW46). */
 const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28'];
 const zeitpunkt = (id, fenster) =>
@@ -277,10 +277,9 @@ function fehltKette(fall, nachId = new Map(KATALOG.map((f) => [f.id, f]))) {
 const ersterFenster = (fall) => (fall.fenster === 'jedes' ? 'mo-vm' : fall.fenster[0]);
 
 /**
- * Mit kasseneck-Checkout bekannt nicht baubar, je mit dem erwarteten Grund:
- * kasseneck rundet T01 per Gleitkomma (DM-D.62: 950,00 € × 28,45 % → 270,27 statt
- * 270,28; M03/M34/M13). Jeder andere Fehler, und jeder dieser Fälle, der wieder
- * baut, macht den Test rot. (M70/M71 bauen hier, weil sie nicht im KW45-Zeitpunkt
+ * Mit kasseneck-Checkout bekannt nicht baubar, je mit dem erwarteten Grund. Jeder andere
+ * Fehler, und jeder dieser Fälle, der wieder baut, macht den Test rot. (M03/M34/M13 standen
+ * hier wegen der T01-Rundung per Gleitkomma, DM-D.62; kasseneck main rundet richtig.) (M70/M71 bauen hier, weil sie nicht im KW45-Zeitpunkt
  * gebaut werden; ihnen fehlt erst am simulierten 2027 das Parameterwerk.)
  */
 const BEKANNT_NICHT_BAUBAR = {
@@ -288,9 +287,6 @@ const BEKANNT_NICHT_BAUBAR = {
   // L20 ist ihr Nachfolger.
   L12: /Geschlecht fehlt/,
   Q55: /Geschlecht fehlt/,
-  M03: /DM-D\.62/,
-  M34: /DM-D\.62/,
-  M13: /DM-D\.62/,
 };
 const NICHT_GEBAUT = new Map();
 
@@ -381,7 +377,7 @@ test('bekannt nicht baubar: nur mit kasseneck, nur aus dem erwarteten Grund, und
     if (fehltKette(nachId.get(id))) continue;
     assert.ok(!GEBAUT.has(id), `${id} baut wieder – aus BEKANNT_NICHT_BAUBAR streichen`);
     const ist = NICHT_GEBAUT.get(id);
-    assert.ok(grund.test(ist) || /^baut auf (M03|M34|M13)$/.test(ist), `${id}: ${ist}`);
+    assert.ok(grund.test(ist), `${id}: ${ist}`);
   }
   for (const [id, grund] of NICHT_GEBAUT) {
     if (BEKANNT_NICHT_BAUBAR[id]) continue;
@@ -880,4 +876,22 @@ test('L27–L29: UEL in KZ 220, AVAB mit Kinderzahl, zwei Geschlechter; S15/S16:
   const vs = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
   assert.equal(feld(vs('S15'), 553, 1), '4', 'S15: offen');
   assert.equal(feld(vs('S16'), 553, 1), '6', 'S16: inter');
+});
+
+test('M98/M99: Höchstbeitragsgrundlage – SV bei 6.930 € gedeckelt, BV erst ab März vom vollen Entgelt', () => {
+  if (!GEBAUT.has('M98')) return;
+  const basen = (id) =>
+    Object.fromEntries(
+      saetze(GEBAUT.get(id).ergebnis.inhalt)
+        .filter((x) => x.startsWith('BS'))
+        .map((x) => [feld(x, 21, 2), feld(x, 23, 11)]),
+    );
+  const v1 = (id) =>
+    saetze(GEBAUT.get(id).ergebnis.inhalt)
+      .filter((x) => x.startsWith('V1'))
+      .map((x) => x.slice(20));
+  assert.deepEqual(basen('M98'), { AB: '00000693000' }, 'M98: erster Monat ohne BV');
+  assert.deepEqual(v1('M98'), ['T01+039050+00000270617']);
+  assert.deepEqual(basen('M99'), { AB: '00000693000', BV: '00000900000' }, 'M99: BV vom vollen Entgelt');
+  assert.deepEqual(v1('M99'), ['T01+039050+00000270617', 'V01+001530+00000013770']);
 });

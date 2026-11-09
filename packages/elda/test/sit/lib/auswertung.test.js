@@ -24,6 +24,17 @@ test('Mitteilung zum Lohnzettel ohne Referenznummer: Fall über die Protokollnum
   assert.deepEqual(faelleDerMitteilung(m, undefined, z), []);
 });
 
+test('Berichtigung mit derselben Referenznummer: Fall über die Protokollnummer der Sendung (L20/L24)', () => {
+  const z = zuordnungAusLaeufen([
+    { art: 'lauf', fall: 'L20', referenzwerte: ['SIT-L20-20260101'], protokollnummer: '180003' },
+    { art: 'lauf', fall: 'L24', referenzwerte: ['SIT-L20-20260101'], protokollnummer: '180004' },
+  ]);
+  const m = { meldungen: [{ referenznummer: 'SIT-L20-20260101' }] };
+  assert.deepEqual(faelleDerMitteilung(m, '180003', z), ['L20']);
+  assert.deepEqual(faelleDerMitteilung(m, '180004', z), ['L24']);
+  assert.deepEqual(faelleDerMitteilung(m, undefined, z), ['L24'], 'ohne Protokollnummer bleibt die Referenz');
+});
+
 test('fremde Referenznummer bleibt stehen', () => {
   const z = zuordnungAusLaeufen(LAEUFE);
   assert.deepEqual(faelleDerMitteilung({ meldungen: [{ referenznummer: 'X-1' }] }, '180002', z), ['X-1']);
