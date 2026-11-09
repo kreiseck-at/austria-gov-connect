@@ -142,6 +142,7 @@ const SART = {
   Q37: 'M3',
   Q38: 'M4',
   Q39: 'M3',
+  Q60: 'M3',
   Q40: 'M8',
   Q41: 'M4',
   Q42: 'M4',
@@ -250,7 +251,20 @@ const istKw45 = (id) => /^(Q[3-5]\d|M8\d|M9[5-7])$/.test(id);
 const L16_KW45 = ['Q50', 'Q51', 'Q52', 'Q54'];
 /** Lohnzettel, die kasseneck selbst baut (ohne Geschlecht). */
 const L16_KASSENECK_KW45 = ['Q55'];
-const zeitpunkt = (id, fenster) => (istKw45(id) ? IM_FENSTER_KW45 : IM_FENSTER)[fenster];
+/** KW46: dieselbe Zeitreise wie KW45. */
+const IM_FENSTER_KW46 = {
+  'mo-vm': new Date('2026-11-09T06:30:00Z'),
+  'mo-nm': new Date('2026-11-09T11:30:00Z'),
+  'di-vm': new Date('2026-11-10T06:30:00Z'),
+  'di-nm': new Date('2026-11-10T11:30:00Z'),
+  'mi-vm': new Date('2026-11-11T06:30:00Z'),
+  'mi-nm': new Date('2026-11-11T11:30:00Z'),
+};
+const istKw46 = (id) => /^(L2\d|Q6\d)$/.test(id);
+/** Lohnzettel von kasseneck mit Geschlecht (KW46). */
+const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26'];
+const zeitpunkt = (id, fenster) =>
+  (istKw46(id) ? IM_FENSTER_KW46 : istKw45(id) ? IM_FENSTER_KW45 : IM_FENSTER)[fenster];
 
 /**
  * Ohne Checkout baut ein Fall nicht – und auch keiner, der auf ihm aufbaut (Q50 hängt an der
@@ -270,6 +284,10 @@ const ersterFenster = (fall) => (fall.fenster === 'jedes' ? 'mo-vm' : fall.fenst
  * gebaut werden; ihnen fehlt erst am simulierten 2027 das Parameterwerk.)
  */
 const BEKANNT_NICHT_BAUBAR = {
+  // kasseneck baut seit #881 keinen L16 ohne Geschlecht mehr; L12 (KW42) und Q55 (KW45) liefen noch ohne –
+  // L20 ist ihr Nachfolger.
+  L12: /Geschlecht fehlt/,
+  Q55: /Geschlecht fehlt/,
   M03: /DM-D\.62/,
   M34: /DM-D\.62/,
   M13: /DM-D\.62/,
@@ -808,4 +826,36 @@ test('ES-Satzarten E3, E4, EA: Satzart und Träger (EA an den Dachverband, VSTR 
     assert.equal(feld(s[1], 1, 2), sart, `${id}: Satzart`);
     for (const satz of s) assert.equal(feld(satz, 19, 2), vstr, `${id}: VSTR`);
   }
+});
+
+test('L20–L26: L16 von kasseneck mit Geschlecht – LF, echtes DTUE, GESW/GESM/GESD, Teilzeit, soziale Stellung', () => {
+  const l1 = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[2];
+  const gebaut = L16_KASSENECK_KW46.filter((id) => GEBAUT.has(id));
+  if (gebaut.length === 0) return;
+  assert.deepEqual(gebaut, L16_KASSENECK_KW46, 'mit Checkout bauen alle');
+  for (const id of gebaut) {
+    const { ergebnis, ctx } = GEBAUT.get(id);
+    const s = saetze(ergebnis.inhalt);
+    assert.equal(s.length, 4, `${id}: Vorlauf, I1, L1, Schluss`);
+    assert.equal(feld(s[0], 23, 2), 'LF', `${id}: BEST`);
+    assert.equal(feld(s[2], 52, 8), wienerZeit(ctx.jetzt).datum.replaceAll('-', ''), `${id}: DTUE = echter Tag`);
+    assert.ok(!ergebnis.hinweise.some((h) => /F2801/.test(h)), `${id}: kein Hinweis auf F2801`);
+  }
+  // E.14: GESW 280, GESM 281, GESD 282, VOLL 283, TEIL 284, SOZS 132, KORR 656, REFN 66 (30), BELZ/ENLZ 120.
+  assert.equal(feld(l1('L20'), 280, 5), 'J  JN', 'L20: weiblich, Vollzeit');
+  assert.equal(feld(l1('L21'), 280, 5), ' J NJ', 'L21: männlich, Teilzeit');
+  assert.equal(feld(l1('L22'), 280, 3), ' J ', 'L22: männlich');
+  assert.equal(feld(l1('L23'), 280, 3), '  J', 'L23: offen geht wie divers in GESD');
+  assert.equal(feld(l1('L20'), 132, 1), '3', 'L20: Angestellte');
+  assert.equal(feld(l1('L21'), 132, 1), '2', 'L21: Arbeiter');
+  assert.equal(feld(l1('L22'), 132, 1), '1', 'L22: Lehrling');
+  // L20 ist Q55 mit Geschlecht: dieselben Beträge.
+  assert.equal(feld(l1('L20'), 298, 10), '0002097534', 'L20: KZ 210 wie Q55');
+  assert.equal(feld(l1('L20'), 66, 30).trim(), 'SIT-L20-20260101', 'L20: REFN');
+  assert.equal(feld(l1('L24'), 66, 30), feld(l1('L20'), 66, 30), 'L24: REFN wie L20');
+  assert.equal(feld(l1('L24'), 656, 1), 'K', 'L24: Berichtigung');
+  assert.equal(feld(l1('L20'), 656, 1), ' ', 'L20: ohne KORR');
+  assert.notEqual(feld(l1('L24'), 298, 10), feld(l1('L20'), 298, 10), 'L24: andere Beträge');
+  assert.equal(feld(l1('L25'), 66, 30).trim(), 'SIT-L20-20260801', 'L25: eigene REFN je Dienstverhältnis');
+  assert.equal(feld(l1('L25'), 120, 8), '01083110', 'L25: 01.08.–31.10.');
 });
