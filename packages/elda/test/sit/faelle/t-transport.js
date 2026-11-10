@@ -97,6 +97,21 @@ module.exports = [
     baue: (ctx) => ({ protokollnummer: ctx.ruecksendungVor(35) }),
   },
   {
+    id: 'T19',
+    titel: 'dieselbe alte Rücksendung dreimal hintereinander empfangen',
+    zweck:
+      'T15–T18: abgeholte Rücksendungen kommen erneut, auch nach Wochen. Gibt es eine Grenze für die Anzahl ' +
+      '(etwa der Status 206 „Limit an Rücksendungen erreicht“ der Schnittstellenbeschreibung 09/2026)?',
+    quelle: 'Schnittstellenbeschreibung V4 Stand 09/2026 (empfangen, Status 206); SIT KW46 T15–T18',
+    erwartung: 'offen: dreimal 000, oder 206/408 ab einem Aufruf',
+    fenster: 'jedes',
+    gefahr: null,
+    abhaengig: [],
+    aktion: 'empfangen',
+    aufrufe: 3,
+    baue: (ctx) => ({ protokollnummer: ctx.ruecksendungVor(35) }),
+  },
+  {
     id: 'T14',
     titel: 'empfangen mit einer Protokollnummer, die es nicht gibt',
     zweck: 'Zeigt die Antwort auf eine unbekannte Protokollnummer (Beispiel der Schnittstellenbeschreibung).',
