@@ -40,6 +40,7 @@ const IM_FENSTER = {
 };
 
 const SART = {
+  Q64: 'M3',
   Q62: 'M3',
   Q63: 'M3',
   Q61: 'M3',
@@ -162,6 +163,7 @@ const VSTR = {
   Q62: '15',
   Q63: '15',
   Q61: '15',
+  Q64: '15',
   Q30: '15',
   Q31: '15',
   Q32: '15',
@@ -268,7 +270,7 @@ const IM_FENSTER_KW46 = {
 };
 // V72–V83 mit: M100/M101 rechnen mit kasseneck, das nur das Parameterwerk 2026 kennt – die
 // Anmeldungen und Abmeldungen, auf denen sie aufbauen, müssen in derselben (KW46-)Woche liegen.
-const istKw46 = (id) => /^(L2\d|L3[01]|Q6\d|M9[89]|M10[0-5]|V7[2-9]|V8[0-3])$/.test(id);
+const istKw46 = (id) => /^(L2\d|L3[01]|Q6\d|M9[89]|M10[0-6]|V7[2-9]|V8[0-3])$/.test(id);
 /** Lohnzettel von kasseneck mit Geschlecht (KW46). */
 const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28', 'L31'];
 const zeitpunkt = (id, fenster) =>
@@ -963,6 +965,20 @@ test('M104/M105: Geringfügige über kasseneck – Dienstgeberabgabe erst ab der
     'BS AB00000040000',
     'V1 T01+001100+00000000440',
     'V1 Z01+019400+00000007760',
+  ]);
+});
+
+test('M106: Angestelltenlehrling über kasseneck – B044, A05 im Band 2.225–2.427 €', () => {
+  if (!GEBAUT.has('M106')) return;
+  const kern = saetze(GEBAUT.get('M106').ergebnis.inhalt)
+    .map((x) => x.trimEnd())
+    .filter((x) => /^(T1|BS|V1)/.test(x))
+    .map((x) => `${x.slice(0, 2)} ${x.slice(20)}`);
+  assert.deepEqual(kern, [
+    'T1 B044               01',
+    'BS AB00000230000',
+    'V1 T01+028450+00000065435',
+    'V1 A05-000150-00000000345',
   ]);
 });
 

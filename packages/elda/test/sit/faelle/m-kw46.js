@@ -17,6 +17,11 @@
 //   M102 B/15  02/2026  9.000 €, erster Monat – SV bei 6.930 € gedeckelt, BV beitragsfrei
 //   M103 B/15  03/2026  9.000 €, BV ab 01.03. vom vollen Entgelt
 //
+// Lehrling über kasseneck (#673: AV-Minderung A04/A05 nach der AlV-Staffel) – seit dem Fix nie auf der SIT
+// (M52/M90 waren handgebaut, M90 bekam nie ein Clearing):
+//   Q64  A/15  Anmeldung angestellte als Angestelltenlehrling (BBER 04) zum 01.03.2026, BVAB 01.04.2026
+//   M106 A/15  03/2026  2.300 € Lehrlingsentschädigung: B044, T01 28,45 %, A05 (Band 2.225–2.427 €), BV-frei
+//
 // Geringfügige über kasseneck – seit #869 trägt der Dienstgeber-Block Verrechnungspositionen je Basis und die
 // Dienstgeberabgabe (Z01) ab dem 1,5-Fachen der Grenze; auf der SIT war das nie. Zwei bei DG B freie Personen:
 //   Q62  B/15  Anmeldung reserve_2 geringfügig zum 01.02.2026 (10 h), BVAB 01.03.2026
@@ -348,5 +353,70 @@ module.exports = [
         ],
       });
     },
+  }),
+  fall({
+    id: 'Q64',
+    titel:
+      'Lehrling über kasseneck: Anmeldung angestellte als Angestelltenlehrling auf A/15 zum 01.03.2026 (M3)',
+    zweck: 'Vorlauf für M106 – auf A/15 ist die Person in KW46 frei.',
+    quelle: 'E.29.2 (M3, BBER 04, BVAB)',
+    erwartung: 'übernommen',
+    fenster: ['di-nm'],
+    abhaengig: [],
+    rang: 11,
+    baue: (ctx) =>
+      meldung(ctx, {
+        fall: 'Q64',
+        art: 'anmeldung',
+        rolle: 'angestellte',
+        dg: 'A',
+        traeger: '15',
+        felder: {
+          ADAT: ctx.ttmmjjjj(`${monatVor(ctx.zr, 1)}-01`),
+          BBER: '04',
+          GERF: 'N',
+          FRDV: 'N',
+          VWAZ: ctx.elda.wochenarbeitszeit(40, 0),
+          BVAB: ctx.ttmmjjjj(`${ctx.zr.slice(0, 7)}-01`),
+        },
+      }),
+  }),
+  fall({
+    id: 'M106',
+    titel:
+      'mBGM 03/2026 A/15 über kasseneck: Angestelltenlehrling mit 2.300 € – B044, A05, erster Monat ohne BV',
+    zweck:
+      'kasseneck rechnet Lehrlinge seit #673 mit A04/A05 nach der AlV-Staffel; die SIT sah bisher nur ' +
+      'handgebaute Pakete (M52 A04 ohne Clearing-Befund, M90 A05 ohne Clearing). Nimmt die ÖGK den Abschlag ' +
+      'A05 im Band 2.225–2.427 € aus kasseneck an (kein BW1838/BW1850)?',
+    quelle:
+      'E.32, D.60 (A04/A05 „Mind. AV (Lg.)“); kasseneck #673 mbgm-core.js; AlV-Staffel § 2a AMPFG 2026; SIT M52, M90',
+    erwartung: 'übernommen; Clearing Mi vm ohne BW1838/BW1850/BW1917',
+    fenster: ['di-nm'],
+    abhaengig: ['Q64'],
+    rang: 14,
+    baue: (ctx) =>
+      mbgmPaket(ctx, {
+        fall: 'M106',
+        dg: 'A',
+        traeger: '15',
+        monat: monatVor(ctx.zrVon('Q64'), 1),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          {
+            rolle: 'angestellte',
+            mitarbeiter: {
+              dienstnehmerGruppe: 'lehrling',
+              lehrlingsArt: 'angestellter',
+              beschaeftigungsart: 'fulltime',
+              eintritt: `${monatVor(ctx.zrVon('Q64'), 1)}-01`,
+              austritt: null,
+              wochenstunden: 40,
+              kvBasisStunden: 40,
+              grossSalaryCents: 230_000,
+            },
+          },
+        ],
+      }),
   }),
 ];
