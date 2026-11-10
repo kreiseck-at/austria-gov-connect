@@ -260,9 +260,11 @@ const IM_FENSTER_KW46 = {
   'mi-vm': new Date('2026-11-11T06:30:00Z'),
   'mi-nm': new Date('2026-11-11T11:30:00Z'),
 };
-const istKw46 = (id) => /^(L2\d|L30|Q6\d|M9[89])$/.test(id);
+// V72–V83 mit: M100/M101 rechnen mit kasseneck, das nur das Parameterwerk 2026 kennt – die
+// Anmeldungen und Abmeldungen, auf denen sie aufbauen, müssen in derselben (KW46-)Woche liegen.
+const istKw46 = (id) => /^(L2\d|L3[01]|Q6\d|M9[89]|M10[01]|V7[2-9]|V8[0-3])$/.test(id);
 /** Lohnzettel von kasseneck mit Geschlecht (KW46). */
-const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28'];
+const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28', 'L31'];
 const zeitpunkt = (id, fenster) =>
   (istKw46(id) ? IM_FENSTER_KW46 : istKw45(id) ? IM_FENSTER_KW45 : IM_FENSTER)[fenster];
 
@@ -292,6 +294,7 @@ const NICHT_GEBAUT = new Map();
 
 const ABLAGE = erstelleAblage(fs.mkdtempSync(path.join(WURZEL, 'sit-faelle-')));
 // Eine erfundene, schon abgeholte Rücksendung für T15.
+ABLAGE.protokolliere({ art: 'ruecksendung', protokollnummer: '154000001', dateiName: 'alt.xml', zeit: '2026-08-01T00:00:00.000Z' });
 ABLAGE.protokolliere({ art: 'ruecksendung', protokollnummer: '155000001', dateiName: 'probe.xml' });
 
 /**
@@ -668,8 +671,8 @@ test('N2: V70 meldet 38 h 30 min als 3850, N1-Abmeldungen tragen ihre Codes, N3/
   }
   assert.equal(wert('V71', 'BVEN'), '31032025');
   assert.match(wert('V81', 'BVEN'), /^0*$/, 'Grundstellung');
-  assert.equal(wert('V83', 'BVEN'), '20032025');
-  assert.equal(wert('V81', 'EBSV'), '20032025');
+  assert.equal(wert('V83', 'BVEN'), '20032026'); // V72–V83 bauen in der KW46-Zeitreise
+  assert.equal(wert('V81', 'EBSV'), '20032026');
 });
 
 test('Di-Zusatzfälle: jede Verfälschung sitzt genau dort, wo der Fall sie behauptet', () => {
@@ -894,4 +897,22 @@ test('M98/M99: Höchstbeitragsgrundlage – SV bei 6.930 € gedeckelt, BV erst 
   assert.deepEqual(v1('M98'), ['T01+039050+00000270617']);
   assert.deepEqual(basen('M99'), { AB: '00000693000', BV: '00000900000' }, 'M99: BV vom vollen Entgelt');
   assert.deepEqual(v1('M99'), ['T01+039050+00000270617', 'V01+001530+00000013770']);
+});
+
+test('T16/T17: die jüngste abgeholte Rücksendung, die alt genug ist; L31: KZ 220 nur bis zum Jahressechstel', () => {
+  assert.equal(GEBAUT.get('T16').ergebnis.protokollnummer, '154000001');
+  assert.equal(GEBAUT.get('T17').ergebnis.protokollnummer, '154000001');
+  assert.equal(GEBAUT.get('T18').ergebnis.protokollnummer, '154000001');
+  assert.equal(GEBAUT.get('T15').ergebnis.protokollnummer, '155000001');
+  if (GEBAUT.has('L31')) {
+    const l1 = saetze(GEBAUT.get('L31').ergebnis.inhalt)[2];
+    assert.equal(feld(l1, 298, 10), '0001400000', 'L31: KZ 210 = 2 × 3.000 € + 8.000 € Sonderzahlungen');
+    assert.equal(feld(l1, 320, 10), '0000600000', 'L31: KZ 220 = Jahressechstel 6.000 €');
+  }
+  if (GEBAUT.has('M100')) {
+    const g = saetze(GEBAUT.get('M100').ergebnis.inhalt).filter((x) => /^G\d/.test(x));
+    assert.equal(g.length, 3, 'M100: drei Versicherte');
+    const bs = saetze(GEBAUT.get('M100').ergebnis.inhalt).filter((x) => x.startsWith('BS'));
+    assert.ok(bs.every((x) => feld(x, 21, 2) !== 'BV'), 'M100: keine BV im ersten Monat');
+  }
 });

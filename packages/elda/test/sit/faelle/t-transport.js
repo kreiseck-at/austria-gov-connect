@@ -57,6 +57,61 @@ module.exports = [
     baue: (ctx) => ({ protokollnummer: ctx.letzteRuecksendung() }),
   },
   {
+    id: 'T16',
+    titel: 'eine vor mindestens sieben Tagen abgeholte Rücksendung (Vorwoche) erneut empfangen',
+    zweck:
+      'T15 zeigt seit KW46: eine abgeholte Rücksendung kommt erneut. Gilt das auch über den Wochen-Neustart ' +
+      'der SIT hinweg? Entscheidet, wie lange kasseneck ein verlorenes Abholen nachholen kann.',
+    quelle: 'Schnittstellenbeschreibung V4 (empfangen); SIT KW46 T15',
+    erwartung: 'offen: 000 mit derselben Datei, oder 406/408',
+    fenster: 'jedes',
+    gefahr: null,
+    abhaengig: [],
+    aktion: 'empfangen',
+    baue: (ctx) => ({ protokollnummer: ctx.ruecksendungVor(7) }),
+  },
+  {
+    id: 'T17',
+    titel: 'eine vor mindestens 25 Tagen abgeholte Rücksendung (KW42) erneut empfangen',
+    zweck: 'Wie T16 mit einer Rücksendung aus einer früheren Zeitreise – gibt es eine Aufbewahrungsgrenze?',
+    quelle: 'Schnittstellenbeschreibung V4 (empfangen); SIT KW46 T15',
+    erwartung: 'offen: 000 mit derselben Datei, oder 406/408',
+    fenster: 'jedes',
+    gefahr: null,
+    abhaengig: [],
+    aktion: 'empfangen',
+    baue: (ctx) => ({ protokollnummer: ctx.ruecksendungVor(25) }),
+  },
+  {
+    id: 'T18',
+    titel: 'die älteste abgeholte Rücksendung (KW41, mindestens 35 Tage) erneut empfangen',
+    zweck:
+      'T16/T17 kamen nach 7 und 25 Tagen byte-gleich wieder. Gibt es überhaupt eine Grenze? Die älteste ' +
+      'Rücksendung der Ablage stammt aus der ersten Testwoche.',
+    quelle: 'Schnittstellenbeschreibung V4 (empfangen); SIT KW46 T15–T17',
+    erwartung: 'offen: 000 mit derselben Datei, oder 406/408',
+    fenster: 'jedes',
+    gefahr: null,
+    abhaengig: [],
+    aktion: 'empfangen',
+    baue: (ctx) => ({ protokollnummer: ctx.ruecksendungVor(35) }),
+  },
+  {
+    id: 'T19',
+    titel: 'dieselbe alte Rücksendung dreimal hintereinander empfangen',
+    zweck:
+      'T15–T18: abgeholte Rücksendungen kommen erneut, auch nach Wochen. Gibt es eine Grenze für die Anzahl ' +
+      '(etwa der Status 206 „Limit an Rücksendungen erreicht“ der Schnittstellenbeschreibung 09/2026)?',
+    quelle: 'Schnittstellenbeschreibung V4 Stand 09/2026 (empfangen, Status 206); SIT KW46 T15–T18',
+    erwartung: 'offen: dreimal 000, oder 206/408 ab einem Aufruf',
+    fenster: 'jedes',
+    gefahr: null,
+    abhaengig: [],
+    aktion: 'empfangen',
+    aufrufe: 3,
+    baue: (ctx) => ({ protokollnummer: ctx.ruecksendungVor(35) }),
+  },
+  {
     id: 'T14',
     titel: 'empfangen mit einer Protokollnummer, die es nicht gibt',
     zweck: 'Zeigt die Antwort auf eine unbekannte Protokollnummer (Beispiel der Schnittstellenbeschreibung).',

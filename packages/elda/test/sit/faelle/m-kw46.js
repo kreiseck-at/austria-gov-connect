@@ -6,6 +6,8 @@
 //
 //   M98  A/14  02/2026  Di 07–09 (01.03.): 9.000 €, erster Monat – SV bei 6.930 € gedeckelt, BV beitragsfrei
 //   M99  A/14  03/2026  Di 12–14 (01.04.): 9.000 €, BV ab 01.03. vom vollen Entgelt (§ 6 Abs 1 BMSVG)
+//   M100 A/15  03/2026  Di 12–14: Austritte im ersten Monat (V72/V74 31.03., V80 20.03.) über kasseneck
+//   M101 A/14  03/2026  Di 12–14: Austritte im ersten Monat (V76 31.03., V82 20.03.) über kasseneck
 
 const { mbgmPaket } = require('../lib/bausteine');
 
@@ -41,6 +43,31 @@ const paket = (id) => (ctx) =>
     beschaeftigte: [{ rolle: 'angestellte', mitarbeiter: q60Mitarbeiter(ctx) }],
   });
 
+/** Letzter Tag des Monats vor `iso` (JJJJ-MM-TT). */
+function vormonatsende(iso) {
+  const [j, m] = iso.split('-').map(Number);
+  return new Date(Date.UTC(j, m - 1, 0)).toISOString().slice(0, 10);
+}
+
+/**
+ * Arbeiter wie in den Anmeldungen V72–V82 (BBER 01, vollversichert, 38,5 Stunden, ohne BVAB), Eintritt am
+ * Anmeldetag, Austritt laut der Abmeldung derselben Woche: Monatsende (V73/V75/V77) oder der 20. (V81/V83).
+ */
+const arbeiterMaerz = (ctx, anmeldung, { am20 = false, monatsbezug = 260_000 } = {}) => {
+  const ende = vormonatsende(ctx.zr);
+  return {
+    dienstnehmerGruppe: 'arbeiter',
+    beschaeftigungsart: 'fulltime',
+    eintritt: ctx.zrVon(anmeldung),
+    austritt: am20 ? `${ende.slice(0, 8)}20` : ende,
+    wochenstunden: 38.5,
+    kvBasisStunden: 38.5,
+    grossSalaryCents: monatsbezug,
+  };
+};
+
+const QUELLE_N = 'E.32; kasseneck main mbgm-core.js, lohnabrechnung-core.js (Ein-/Austritt im Monat, BV-freier erster Monat); SIT KW42 N1/N3';
+
 module.exports = [
   fall({
     id: 'M98',
@@ -68,5 +95,55 @@ module.exports = [
     abhaengig: ['Q60', 'M98'],
     rang: 14,
     baue: paket('M99'),
+  }),
+  fall({
+    id: 'M100',
+    titel: 'mBGM 03/2026 A/15 über kasseneck: Eintritt 01.03., Austritt 31.03. (V72, V74) bzw. 20.03. (V80)',
+    zweck:
+      'Endabrechnung im ersten Monat, wie kasseneck sie rechnet: voller Monat mit Austritt zum Monatsende und ' +
+      'ein Teilmonat bis zum 20. (SV-Tage aliquot), BV beitragsfrei, weil das Dienstverhältnis im ersten Monat ' +
+      'endet. Passen die SV-Tage und Beiträge zur Rechnung der ÖGK (kein BW1850/BW1917/BW1871)?',
+    quelle: QUELLE_N,
+    erwartung: 'übernommen; Clearing Mi vm ohne BW1850/BW1917/BW1871',
+    fenster: ['di-nm'],
+    abhaengig: ['V72', 'V74', 'V80', 'V73', 'V75', 'V81'],
+    rang: 25,
+    baue: (ctx) =>
+      mbgmPaket(ctx, {
+        fall: 'M100',
+        dg: 'A',
+        traeger: '15',
+        monat: monatVor(ctx.zr, 1),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          { rolle: 'arbeiterlehrling', mitarbeiter: arbeiterMaerz(ctx, 'V72') },
+          { rolle: 'angestelltenlehrling', mitarbeiter: arbeiterMaerz(ctx, 'V74') },
+          { rolle: 'geringfuegig', mitarbeiter: arbeiterMaerz(ctx, 'V80', { am20: true }) },
+        ],
+      }),
+  }),
+  fall({
+    id: 'M101',
+    titel: 'mBGM 03/2026 A/14 über kasseneck: Austritt 31.03. nach fristloser Entlassung (V76) und 20.03. (V82)',
+    zweck:
+      'Wie M100 auf dem zweiten Konto. V83 meldete das BV-Ende, obwohl nie BV-Zeit bestand (VW1942 erwartet) – ' +
+      'kommt zur mBGM ohne BV dennoch kein BW1871?',
+    quelle: QUELLE_N,
+    erwartung: 'übernommen; Clearing Mi vm ohne BW1850/BW1917/BW1871',
+    fenster: ['di-nm'],
+    abhaengig: ['V76', 'V82', 'V77', 'V83'],
+    rang: 25,
+    baue: (ctx) =>
+      mbgmPaket(ctx, {
+        fall: 'M101',
+        dg: 'A',
+        traeger: '14',
+        monat: monatVor(ctx.zr, 1),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          { rolle: 'reserve_3', mitarbeiter: arbeiterMaerz(ctx, 'V76') },
+          { rolle: 'reserve_2', mitarbeiter: arbeiterMaerz(ctx, 'V82', { am20: true }) },
+        ],
+      }),
   }),
 ];
