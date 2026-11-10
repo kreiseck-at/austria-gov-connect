@@ -76,16 +76,22 @@ function mbgmPaket(
   const parameter = k.ladeParameter(Number(monat.slice(0, 4)));
   const konto = ctx.konto(dg, { traeger });
   const referenzwerte = [];
-  const eintraege = beschaeftigte.map(({ rolle, mitarbeiter, nurSv = false, monatskontext }, i) => {
+  const eintraege = beschaeftigte.map((b, i) => {
+    const { rolle, mitarbeiter, nurSv = false, monatskontext, zeiten, endabrechnung, verlaengerungVon } = b;
     const person = ctx.rolle(rolle);
+    // Für einen Monat, den nur noch eine Urlaubsersatzleistung verlängert (§ 11 Abs 2 ASVG), baut kasseneck die
+    // Meldung aus der Abrechnung des Austrittsmonats (`verlaengerungVon`).
     const abrechnung = k.erstelleAbrechnung({
       mitarbeiter: { id: rolle, austritt: null, salaryType: 'monthly', ...mitarbeiter },
-      monat,
+      monat: verlaengerungVon ?? monat,
       parameter,
       bundesland,
       sonderzahlungKontext: null,
       // Die anderen Beschäftigten desselben Monats (z. B. `andereGeringfuegige` für die Dienstgeberabgabe).
       monatskontext,
+      // Endabrechnung wie im Lohnlauf (payslip-endpoints): UEL als Zeitkonto-Zeile `uel_laufend` und als Eingabe.
+      zeiten,
+      endabrechnung,
     });
     if (abrechnung.meta?.fehler) {
       throw new Error(
@@ -94,16 +100,20 @@ function mbgmPaket(
     }
     const refw = ctx.referenzwert(`${fall}-${i + 1}`);
     referenzwerte.push(refw);
-    const eintrag = k.mbgm.baueMeldung({
-      abrechnung,
-      mitarbeiter: {
-        versicherungsnummer: person.vsnr,
-        familienname: person.familienname,
-        vorname: person.vorname,
-        lehrlingsArt: mitarbeiter.lehrlingsArt,
-      },
-      referenzwert: refw,
-    });
+    const daten = {
+      versicherungsnummer: person.vsnr,
+      familienname: person.familienname,
+      vorname: person.vorname,
+      lehrlingsArt: mitarbeiter.lehrlingsArt,
+    };
+    const eintrag = verlaengerungVon
+      ? k.mbgm.baueMeldungVerlaengerung({
+          austrittsAbrechnung: abrechnung,
+          monat,
+          mitarbeiter: daten,
+          referenzwert: refw,
+        })
+      : k.mbgm.baueMeldung({ abrechnung, mitarbeiter: daten, referenzwert: refw });
     return nurSv ? ohneBv(eintrag) : eintrag;
   });
   const paketref = ctx.referenzwert(fall);

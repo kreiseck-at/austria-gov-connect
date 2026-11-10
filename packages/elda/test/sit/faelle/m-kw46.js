@@ -22,6 +22,17 @@
 //   Q64  A/15  Anmeldung angestellte als Angestelltenlehrling (BBER 04) zum 01.03.2026, BVAB 01.04.2026
 //   M106 A/15  03/2026  2.300 € Lehrlingsentschädigung: B044, T01 28,45 %, A05 (Band 2.225–2.427 €), BV-frei
 //
+// Urlaubsersatzleistung über kasseneck (#869: KEUE J und VVON 1 im Verlängerungsblock, D.63/D.64) – nie auf der
+// SIT. kasseneck kann sie nur bilden, wenn die UEL ganz in den Folgemonaten liegt (Austritt am Monatsletzten);
+// mit einem Anteil im Austrittsmonat wirft baueMeldung („noch nicht bilden“). Person arbeiter auf A/14 (in KW46 dort
+// frei; ihr V70 liegt auf A/15):
+//   Q65  A/14  Anmeldung zum 01.01.2026, BVAB 01.02.2026
+//   Q66  A/14  Abmeldung: EBSV 28.02., UEL 01.–05.03., ADAT und BVEN 05.03. (wie E.29.2 Seite 316)
+//   M107 A/14  01/2026  2.400 €, erster Monat ohne BV
+//   M108 A/14  02/2026  2.400 €, Austrittsmonat (UEL nicht darin → ohne KEUE), BV
+//   M109 A/14  03/2026  nur die UEL 400 € (5 SV-Tage): KEUE J, VVON 1, BV auf die UEL – AV-Abschlag nach dem
+//                       UEL-Betrag allein (A03)?
+//
 // Geringfügige über kasseneck – seit #869 trägt der Dienstgeber-Block Verrechnungspositionen je Basis und die
 // Dienstgeberabgabe (Z01) ab dem 1,5-Fachen der Grenze; auf der SIT war das nie. Zwei bei DG B freie Personen:
 //   Q62  B/15  Anmeldung reserve_2 geringfügig zum 01.02.2026 (10 h), BVAB 01.03.2026
@@ -135,6 +146,51 @@ const anmeldungGeringfuegig = (id, rolle, zurueck, stunden) => (ctx) =>
 const QUELLE_GF =
   'E.32 (D.31 Verrechnungsbasis, Tarifgruppe geringfügig); kasseneck #869 lohnabrechnung-core.js ' +
   '(dienstgeberBlock, dienstgeberabgabePflichtig), mbgm-endpoints.js (Wächter KECK-DAG); § 1 DAG; § 5 Abs 2 ASVG';
+
+/** Q65/Q66: Arbeiter von 01.01. bis 28.02.2026, UEL 400 € für 5 SV-Tage im März – vom Fenster von Q65 aus. */
+function uel(ctx) {
+  const zrQ = ctx.zrVon('Q65');
+  const maerz = monatVor(zrQ, 1);
+  return {
+    jaenner: monatVor(zrQ, 3),
+    februar: monatVor(zrQ, 2),
+    maerz,
+    mitarbeiter: {
+      dienstnehmerGruppe: 'arbeiter',
+      beschaeftigungsart: 'fulltime',
+      eintritt: `${monatVor(zrQ, 3)}-01`,
+      austritt: vormonatsende(`${maerz}-01`),
+      wochenstunden: 38.5,
+      kvBasisStunden: 38.5,
+      grossSalaryCents: 240_000,
+    },
+    zeiten: { zeitkonto: { zeilen: [{ art: 'uel_laufend', cent: 40_000 }], steuerfrei68Cent: 0 } },
+    endabrechnung: {
+      uelLaufendCent: 40_000,
+      uelVerlaengerung: [{ monat: maerz, tage: 5 }],
+      rueckforderungUrlaubCent: 0,
+    },
+  };
+}
+
+const paketUel = (id, welcher) => (ctx) => {
+  const u = uel(ctx);
+  const b = { rolle: 'arbeiter', mitarbeiter: u.mitarbeiter };
+  if (welcher !== 'jaenner') Object.assign(b, { zeiten: u.zeiten, endabrechnung: u.endabrechnung });
+  if (welcher === 'maerz') b.verlaengerungVon = u.februar;
+  return mbgmPaket(ctx, {
+    fall: id,
+    dg: 'A',
+    traeger: '14',
+    monat: u[welcher],
+    bundesland: 'oberoesterreich',
+    beschaeftigte: [b],
+  });
+};
+
+const QUELLE_UEL =
+  'E.32, D.63 (VVON), D.64 (KEUE); E.29.2 Seite 316 (M4 mit UEAB/UEBI/BVEN); § 11 Abs 2 ASVG; kasseneck #869 ' +
+  'mbgm-core.js baueMeldungVerlaengerung, payslip-endpoints.js (uel_laufend, verlaengerungsMonate)';
 
 const QUELLE_N =
   'E.32; kasseneck main mbgm-core.js, lohnabrechnung-core.js (Ein-/Austritt im Monat, BV-freier erster Monat); SIT KW42 N1/N3';
@@ -418,5 +474,102 @@ module.exports = [
           },
         ],
       }),
+  }),
+  fall({
+    id: 'Q65',
+    titel: 'UEL über kasseneck: Anmeldung arbeiter auf A/14 zum 01.01.2026, BVAB 01.02.2026 (M3)',
+    zweck: 'Vorlauf für Q66 und M107–M109 – drei Monate rückwirkend, auf A/14 in KW46 frei.',
+    quelle: 'E.29.2 (M3, BVAB)',
+    erwartung: 'übernommen',
+    fenster: ['di-nm'],
+    abhaengig: [],
+    rang: 11,
+    baue: (ctx) =>
+      meldung(ctx, {
+        fall: 'Q65',
+        art: 'anmeldung',
+        rolle: 'arbeiter',
+        dg: 'A',
+        traeger: '14',
+        felder: {
+          ADAT: ctx.ttmmjjjj(`${monatVor(ctx.zr, 3)}-01`),
+          BBER: '01',
+          GERF: 'N',
+          FRDV: 'N',
+          VWAZ: ctx.elda.wochenarbeitszeit(38, 30),
+          BVAB: ctx.ttmmjjjj(`${monatVor(ctx.zr, 2)}-01`),
+        },
+      }),
+  }),
+  fall({
+    id: 'Q66',
+    titel: 'UEL über kasseneck: Abmeldung arbeiter A/14, Ende 28.02.2026, UEL 01.–05.03., BVEN 05.03. (M4)',
+    zweck:
+      'Die Abmeldung, die die Pflichtversicherung um die UEL verlängert – aufgebaut wie das Beispiel E.29.2 ' +
+      'Seite 316 (ADAT = Ende der Pflichtversicherung, EBSV = Ende der Beschäftigung, UEAB/UEBI, BVEN). Erst ' +
+      'mit ihr gibt es für M109 im März einen Versicherten.',
+    quelle: QUELLE_UEL,
+    erwartung: 'übernommen; kein VW1942 (BV-Zeit ab 01.02.)',
+    fenster: ['di-nm'],
+    abhaengig: ['Q65'],
+    rang: 12,
+    baue: (ctx) => {
+      const u = uel(ctx);
+      return meldung(ctx, {
+        fall: 'Q66',
+        art: 'abmeldung',
+        rolle: 'arbeiter',
+        dg: 'A',
+        traeger: '14',
+        felder: {
+          GERF: 'N',
+          ADAT: ctx.ttmmjjjj(`${u.maerz}-05`),
+          EBSV: ctx.ttmmjjjj(u.mitarbeiter.austritt),
+          AGRD: '03',
+          UEAB: ctx.ttmmjjjj(`${u.maerz}-01`),
+          UEBI: ctx.ttmmjjjj(`${u.maerz}-05`),
+          BVEN: ctx.ttmmjjjj(`${u.maerz}-05`),
+        },
+      });
+    },
+  }),
+  fall({
+    id: 'M107',
+    titel: 'mBGM 01/2026 A/14 über kasseneck: UEL-Kette, erster Monat 2.400 € ohne BV',
+    zweck: 'Erster Monat der UEL-Kette (Q65), damit 02 und 03 nicht allein stehen.',
+    quelle: QUELLE_UEL,
+    erwartung: 'übernommen; Clearing Mi vm ohne BW1837/BW1850',
+    fenster: ['di-nm'],
+    abhaengig: ['Q65', 'Q66'],
+    rang: 14,
+    baue: paketUel('M107', 'jaenner'),
+  }),
+  fall({
+    id: 'M108',
+    titel:
+      'mBGM 02/2026 A/14 über kasseneck: Austrittsmonat 28.02. – UEL liegt ganz im März, daher ohne KEUE',
+    zweck:
+      'D.64: KEUE J nur im Tarifblock, der einen Anteil der UEL enthält. Die UEL gehört lohnsteuerlich in den ' +
+      'Februar, sozialversicherungsrechtlich in den März – im Februar also nur 2.400 € mit BV.',
+    quelle: QUELLE_UEL,
+    erwartung: 'übernommen; Clearing Mi vm ohne BW1850/BW1917/BW1871',
+    fenster: ['di-nm'],
+    abhaengig: ['Q65', 'Q66', 'M107'],
+    rang: 15,
+    baue: paketUel('M108', 'februar'),
+  }),
+  fall({
+    id: 'M109',
+    titel: 'mBGM 03/2026 A/14 über kasseneck: Verlängerungsmonat nur mit UEL 400 € – KEUE J, VVON 1, BV, A03',
+    zweck:
+      'Der Monat, den nur die UEL verlängert (ÖGK: mBGM jedenfalls zu melden). kasseneck meldet KEUE J, ' +
+      'VVON 1, AB und BV 400 € und den AV-Abschlag nach dem UEL-Betrag allein (A03 −2,95 %). Rechnet die ÖGK ' +
+      'die AlV-Staffel für einen 5-Tage-Zeitraum genauso – oder aliquot (BW1850/BW1917)?',
+    quelle: QUELLE_UEL,
+    erwartung: 'übernommen; Clearing Mi vm ohne BW1837/BW1850/BW1917/BW1871',
+    fenster: ['di-nm'],
+    abhaengig: ['Q65', 'Q66', 'M108'],
+    rang: 16,
+    baue: paketUel('M109', 'maerz'),
   }),
 ];
