@@ -40,6 +40,8 @@ const IM_FENSTER = {
 };
 
 const SART = {
+  Q62: 'M3',
+  Q63: 'M3',
   Q61: 'M3',
   V95: 'M8',
   V96: 'M8',
@@ -157,6 +159,8 @@ const SART = {
   Q53: 'M4',
 };
 const VSTR = {
+  Q62: '15',
+  Q63: '15',
   Q61: '15',
   Q30: '15',
   Q31: '15',
@@ -264,7 +268,7 @@ const IM_FENSTER_KW46 = {
 };
 // V72–V83 mit: M100/M101 rechnen mit kasseneck, das nur das Parameterwerk 2026 kennt – die
 // Anmeldungen und Abmeldungen, auf denen sie aufbauen, müssen in derselben (KW46-)Woche liegen.
-const istKw46 = (id) => /^(L2\d|L3[01]|Q6\d|M9[89]|M10[0-3]|V7[2-9]|V8[0-3])$/.test(id);
+const istKw46 = (id) => /^(L2\d|L3[01]|Q6\d|M9[89]|M10[0-5]|V7[2-9]|V8[0-3])$/.test(id);
 /** Lohnzettel von kasseneck mit Geschlecht (KW46). */
 const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28', 'L31'];
 const zeitpunkt = (id, fenster) =>
@@ -932,6 +936,34 @@ test('M98/M99: Höchstbeitragsgrundlage – SV bei 6.930 € gedeckelt, BV erst 
   assert.deepEqual(v1('M103'), ['T01+039050+00000270617', 'V01+001530+00000013770']);
   const q61 = saetze(GEBAUT.get('Q61').ergebnis.inhalt).find((x) => x.startsWith('M3'));
   assert.ok(q61.includes('01022026') && q61.includes('01032026'), 'Q61: ADAT 01.02., BVAB 01.03.');
+});
+
+test('M104/M105: Geringfügige über kasseneck – Dienstgeberabgabe erst ab der Summe über dem 1,5-Fachen', () => {
+  if (!GEBAUT.has('M104')) return;
+  const zeilen = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt).map((x) => x.trimEnd());
+  const kern = (id) =>
+    zeilen(id)
+      .filter((x) => /^(T1|BS|V1)/.test(x))
+      .map((x) => `${x.slice(0, 2)} ${x.slice(20)}`);
+  // Tarifgruppe B010 (geringfügig), nur UV 1,1 %; erster Monat ohne BV.
+  assert.deepEqual(kern('M104'), [
+    'T1 B010               01',
+    'BS AB00000050000',
+    'V1 T01+001100+00000000550',
+  ]);
+  // Summe 900 € über 826,65 € → Z01 19,4 % auf beide; BV nur für reserve_2 (zweiter Monat).
+  assert.deepEqual(kern('M105'), [
+    'T1 B010               01',
+    'BS AB00000050000',
+    'V1 T01+001100+00000000550',
+    'V1 Z01+019400+00000009700',
+    'BS BV00000050000',
+    'V1 V01+001530+00000000765',
+    'T1 B010               01',
+    'BS AB00000040000',
+    'V1 T01+001100+00000000440',
+    'V1 Z01+019400+00000007760',
+  ]);
 });
 
 test('T16/T17: die jüngste abgeholte Rücksendung, die alt genug ist; L31: KZ 220 nur bis zum Jahressechstel', () => {

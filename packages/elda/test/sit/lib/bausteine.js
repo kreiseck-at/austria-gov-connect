@@ -68,12 +68,15 @@ function ohneBv(eintrag) {
  *   den neuen mBGM. Ihre Referenzwerte folgen in `referenzwerte` nach denen der
  *   neuen mBGM.
  */
-function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, stornos = [], optionen = {} }) {
+function mbgmPaket(
+  ctx,
+  { fall, dg, traeger, monat, bundesland, beschaeftigte, stornos = [], optionen = {} },
+) {
   const k = kasseneck();
   const parameter = k.ladeParameter(Number(monat.slice(0, 4)));
   const konto = ctx.konto(dg, { traeger });
   const referenzwerte = [];
-  const eintraege = beschaeftigte.map(({ rolle, mitarbeiter, nurSv = false }, i) => {
+  const eintraege = beschaeftigte.map(({ rolle, mitarbeiter, nurSv = false, monatskontext }, i) => {
     const person = ctx.rolle(rolle);
     const abrechnung = k.erstelleAbrechnung({
       mitarbeiter: { id: rolle, austritt: null, salaryType: 'monthly', ...mitarbeiter },
@@ -81,6 +84,8 @@ function mbgmPaket(ctx, { fall, dg, traeger, monat, bundesland, beschaeftigte, s
       parameter,
       bundesland,
       sonderzahlungKontext: null,
+      // Die anderen Beschäftigten desselben Monats (z. B. `andereGeringfuegige` für die Dienstgeberabgabe).
+      monatskontext,
     });
     if (abrechnung.meta?.fehler) {
       throw new Error(

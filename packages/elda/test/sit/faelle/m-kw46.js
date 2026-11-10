@@ -16,6 +16,14 @@
 //   Q61  B/15  Anmeldung reserve_1 zum 01.02.2026, BVAB 01.03.2026 – zwei Monate rückwirkend
 //   M102 B/15  02/2026  9.000 €, erster Monat – SV bei 6.930 € gedeckelt, BV beitragsfrei
 //   M103 B/15  03/2026  9.000 €, BV ab 01.03. vom vollen Entgelt
+//
+// Geringfügige über kasseneck – seit #869 trägt der Dienstgeber-Block Verrechnungspositionen je Basis und die
+// Dienstgeberabgabe (Z01) ab dem 1,5-Fachen der Grenze; auf der SIT war das nie. Zwei bei DG B freie Personen:
+//   Q62  B/15  Anmeldung reserve_2 geringfügig zum 01.02.2026 (10 h), BVAB 01.03.2026
+//   Q63  B/15  Anmeldung reserve_3 geringfügig zum 01.03.2026 (8 h), BVAB 01.04.2026
+//   M104 B/15  02/2026  reserve_2 mit 500 € allein: keine Dienstgeberabgabe, erster Monat ohne BV
+//   M105 B/15  03/2026  reserve_2 500 € + reserve_3 400 €: Summe über 826,65 € → Dienstgeberabgabe 19,4 %, BV für
+//                       reserve_2 ab 01.03.; beide sind im März zugleich auf A/14 vollversichert (V76/V82)
 
 const { mbgmPaket, meldung } = require('../lib/bausteine');
 
@@ -90,6 +98,38 @@ const paketQ61 = (id, zurueck) => (ctx) => {
     ],
   });
 };
+
+/** Geringfügig beschäftigte Arbeiterin von DG B; Eintritt am Ersten `zurueck` Monate vor dem Fenster von `anmeldung`. */
+const geringfuegig = (ctx, anmeldung, zurueck, monatsbezug, stunden) => ({
+  dienstnehmerGruppe: 'arbeiter',
+  beschaeftigungsart: 'marginal',
+  eintritt: `${monatVor(ctx.zrVon(anmeldung), zurueck)}-01`,
+  austritt: null,
+  wochenstunden: stunden,
+  kvBasisStunden: 40,
+  grossSalaryCents: monatsbezug,
+});
+
+const anmeldungGeringfuegig = (id, rolle, zurueck, stunden) => (ctx) =>
+  meldung(ctx, {
+    fall: id,
+    art: 'anmeldung',
+    rolle,
+    dg: 'B',
+    traeger: '15',
+    felder: {
+      ADAT: ctx.ttmmjjjj(`${monatVor(ctx.zr, zurueck)}-01`),
+      BBER: '01',
+      GERF: 'J',
+      FRDV: 'N',
+      VWAZ: ctx.elda.wochenarbeitszeit(stunden, 0),
+      BVAB: ctx.ttmmjjjj(`${monatVor(ctx.zr, zurueck - 1)}-01`),
+    },
+  });
+
+const QUELLE_GF =
+  'E.32 (D.31 Verrechnungsbasis, Tarifgruppe geringfügig); kasseneck #869 lohnabrechnung-core.js ' +
+  '(dienstgeberBlock, dienstgeberabgabePflichtig), mbgm-endpoints.js (Wächter KECK-DAG); § 1 DAG; § 5 Abs 2 ASVG';
 
 const QUELLE_N =
   'E.32; kasseneck main mbgm-core.js, lohnabrechnung-core.js (Ein-/Austritt im Monat, BV-freier erster Monat); SIT KW42 N1/N3';
@@ -227,5 +267,86 @@ module.exports = [
     abhaengig: ['Q61', 'M102'],
     rang: 15,
     baue: paketQ61('M103', 1),
+  }),
+  fall({
+    id: 'Q62',
+    titel: 'Geringfügige über kasseneck: Anmeldung reserve_2 geringfügig auf B/15 zum 01.02.2026, 10 h (M3)',
+    zweck: 'Vorlauf für M104/M105 – rückwirkend wie Q61, bei DG B in KW45/46 frei.',
+    quelle: 'E.29.2 (M3, GERF J, VWAZ, BVAB)',
+    erwartung: 'übernommen',
+    fenster: ['di-nm'],
+    abhaengig: [],
+    rang: 11,
+    baue: anmeldungGeringfuegig('Q62', 'reserve_2', 2, 10),
+  }),
+  fall({
+    id: 'Q63',
+    titel: 'Geringfügige über kasseneck: Anmeldung reserve_3 geringfügig auf B/15 zum 01.03.2026, 8 h (M3)',
+    zweck: 'Zweite Geringfügige für M105 – erst die Summe beider überschreitet das 1,5-Fache der Grenze.',
+    quelle: 'E.29.2 (M3, GERF J, VWAZ, BVAB)',
+    erwartung: 'übernommen',
+    fenster: ['di-nm'],
+    abhaengig: [],
+    rang: 11,
+    baue: anmeldungGeringfuegig('Q63', 'reserve_3', 1, 8),
+  }),
+  fall({
+    id: 'M104',
+    titel:
+      'mBGM 02/2026 B/15 über kasseneck: eine Geringfügige mit 500 € – keine Dienstgeberabgabe, BV beitragsfrei',
+    zweck:
+      'Erste mBGM mit einer Geringfügigen aus kasseneck (#869; vorher warf baueMeldung): Tarifgruppe und ' +
+      'Verrechnungsposition für die UV, ohne Z01. Rechnet die ÖGK dieselben Beiträge (kein BW1850/BW1917)?',
+    quelle: QUELLE_GF,
+    erwartung: 'übernommen; Clearing Mi vm ohne BW1837/BW1850/BW1917',
+    fenster: ['di-nm'],
+    abhaengig: ['Q62'],
+    rang: 14,
+    baue: (ctx) =>
+      mbgmPaket(ctx, {
+        fall: 'M104',
+        dg: 'B',
+        traeger: '15',
+        monat: monatVor(ctx.zrVon('Q62'), 2),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [{ rolle: 'reserve_2', mitarbeiter: geringfuegig(ctx, 'Q62', 2, 50_000, 10) }],
+      }),
+  }),
+  fall({
+    id: 'M105',
+    titel:
+      'mBGM 03/2026 B/15 über kasseneck: zwei Geringfügige (500 € + 400 €) – Dienstgeberabgabe fällig, BV ab März',
+    zweck:
+      'Die Summe der Entgelte aller Geringfügigen (900 €) übersteigt das 1,5-Fache der Grenze → Z01 19,4 % ' +
+      'auf beide. reserve_2 ist im zweiten Monat (BV 1,53 %), reserve_3 im ersten (BV-frei). Nimmt die ÖGK ' +
+      'Z01 und die BV so an – auch bei zugleich vollversicherter Beschäftigung auf A/14?',
+    quelle: QUELLE_GF,
+    erwartung: 'übernommen; Clearing Mi vm ohne BW1837/BW1850/BW1917/BW1871',
+    fenster: ['di-nm'],
+    abhaengig: ['Q62', 'Q63', 'M104'],
+    rang: 15,
+    baue: (ctx) => {
+      const r2 = geringfuegig(ctx, 'Q62', 2, 50_000, 10);
+      const r3 = geringfuegig(ctx, 'Q63', 1, 40_000, 8);
+      return mbgmPaket(ctx, {
+        fall: 'M105',
+        dg: 'B',
+        traeger: '15',
+        monat: monatVor(ctx.zrVon('Q63'), 1),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          {
+            rolle: 'reserve_2',
+            mitarbeiter: r2,
+            monatskontext: { andereGeringfuegige: [{ employeeId: 'reserve_3', entgeltLaufendCent: 40_000 }] },
+          },
+          {
+            rolle: 'reserve_3',
+            mitarbeiter: r3,
+            monatskontext: { andereGeringfuegige: [{ employeeId: 'reserve_2', entgeltLaufendCent: 50_000 }] },
+          },
+        ],
+      });
+    },
   }),
 ];
