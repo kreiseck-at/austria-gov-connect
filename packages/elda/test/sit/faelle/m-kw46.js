@@ -281,7 +281,7 @@ module.exports = [
       'Q60 (Mo 12–14) ist im SIT-Bestand nicht angekommen, M98 lief deshalb auf BW1837. Dieselbe Anmeldung wie ' +
       'Q60, aber im Fenster Di 12–14 (simuliert 01.04.) und für eine bei DG B freie Person: zwei Monate ' +
       'rückwirkend. Nebenbei: Meldet die ÖGK die verspätete Anmeldung im Clearing?',
-    quelle: 'E.29.2 (M3, BVAB); SIT KW46 Clearing cm_155207951 (BW1837/VW1960 zu Mo-nm-Anmeldungen)',
+    quelle: 'E.29.2 (M3, BVAB); SIT KW46 Clearing Di 12:00 (BW1837/VW1960 zu Mo-nm-Anmeldungen)',
     erwartung: 'übernommen; danach M102/M103 ohne BW1837',
     fenster: ['di-nm'],
     abhaengig: [],
