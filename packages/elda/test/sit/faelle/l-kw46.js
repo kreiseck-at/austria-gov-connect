@@ -20,6 +20,7 @@
 //   L27  arbeiter     Austritt im Jahr mit Urlaubsersatzleistung (07.07.–30.09., Teilzeit)
 //   L28  reserve_3    Alleinverdiener mit zwei Kindern (AVAB J, ANZK 02) ohne VSNR des Partners
 //   L29  reserve_3    Negativtest über das Paket: zwei Geschlechter angekreuzt (GESW + GESM)
+//   L31  reserve_2    Sonderzahlungen über dem Jahressechstel (§ 67 Abs 2 EStG)
 //
 // Höchstbeitragsgrundlage (M97 aus KW45, dessen Vorlauf Q34 nur Mo 07–09 lief): Q60 meldet
 // die Angestellte auf A/14 zum 01.02.2026 an, BV ab 01.03.2026. Die mBGM 02 und 03 mit
@@ -364,6 +365,27 @@ module.exports = [
         rolle: 'reserve_3',
         monatsbezug: 350_000,
         mehr: { soleEarner: true, children: 2 },
+      }),
+  }),
+  l16({
+    id: 'L31',
+    titel: 'L16 2026 von kasseneck: Sonderzahlungen über dem Jahressechstel (01.05.–30.06., UZ + WR je 4.000 €)',
+    zweck:
+      'Zwei Monate zu 3.000 € ergeben ein Jahressechstel von 6.000 €; UZ und WR zusammen 8.000 € liegen 2.000 € ' +
+      'darüber. Der Teil über dem Sechstel ist nach dem Tarif zu versteuern (§ 67 Abs 2 EStG) und gehört nicht in ' +
+      'KZ 220. Rechnet kasseneck das so, dass der BMF-Katalog den Lohnzettel ohne Warnung nimmt? Werte erfunden.',
+    quelle: `${QUELLE_L16}; § 67 Abs 1 und 2 EStG; WKO „Der steuerliche Lohnzettel“ (KZ 220, „über dem Jahressechstel“)`,
+    erwartung: 'übernommen LF 1/1 ohne Warnung; KZ 220 nur innerhalb des Sechstels',
+    rang: 27,
+    baue: (ctx) =>
+      kasseneckL16Reihe(ctx, 'L31', {
+        rolle: 'reserve_2',
+        eintritt: '2026-05-01',
+        austritt: '2026-06-30',
+        posten: [
+          { typ: 'UZ', betragCent: 400_000 },
+          { typ: 'WR', betragCent: 400_000 },
+        ],
       }),
   }),
   fall({

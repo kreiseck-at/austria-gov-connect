@@ -700,6 +700,8 @@ function befehlGeneralprobe() {
   try {
     const probe = erstelleAblage(ordner);
     // Wie die Läufe: eine erfundene Rücksendung, damit T15 („nochmal abholen“) baut.
+    // Erfundene, schon abgeholte Rücksendungen: eine von jetzt (T15) und eine sehr alte (T16/T17).
+    probe.protokolliere({ art: 'ruecksendung', protokollnummer: '154000001', dateiName: 'alt.xml', zeit: '2026-01-01T00:00:00.000Z' });
     probe.protokolliere({ art: 'ruecksendung', protokollnummer: '155000001', dateiName: 'probe.xml' });
     const heute = wienerZeit(offlineJetzt());
     const montag = plusTage(heute.datum, 1 - heute.wochentag);

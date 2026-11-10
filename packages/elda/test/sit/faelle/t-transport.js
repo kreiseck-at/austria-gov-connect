@@ -57,6 +57,32 @@ module.exports = [
     baue: (ctx) => ({ protokollnummer: ctx.letzteRuecksendung() }),
   },
   {
+    id: 'T16',
+    titel: 'eine vor mindestens sieben Tagen abgeholte Rücksendung (Vorwoche) erneut empfangen',
+    zweck:
+      'T15 zeigt seit KW46: eine abgeholte Rücksendung kommt erneut. Gilt das auch über den Wochen-Neustart ' +
+      'der SIT hinweg? Entscheidet, wie lange kasseneck ein verlorenes Abholen nachholen kann.',
+    quelle: 'Schnittstellenbeschreibung V4 (empfangen); SIT KW46 T15',
+    erwartung: 'offen: 000 mit derselben Datei, oder 406/408',
+    fenster: 'jedes',
+    gefahr: null,
+    abhaengig: [],
+    aktion: 'empfangen',
+    baue: (ctx) => ({ protokollnummer: ctx.ruecksendungVor(7) }),
+  },
+  {
+    id: 'T17',
+    titel: 'eine vor mindestens 25 Tagen abgeholte Rücksendung (KW42) erneut empfangen',
+    zweck: 'Wie T16 mit einer Rücksendung aus einer früheren Zeitreise – gibt es eine Aufbewahrungsgrenze?',
+    quelle: 'Schnittstellenbeschreibung V4 (empfangen); SIT KW46 T15',
+    erwartung: 'offen: 000 mit derselben Datei, oder 406/408',
+    fenster: 'jedes',
+    gefahr: null,
+    abhaengig: [],
+    aktion: 'empfangen',
+    baue: (ctx) => ({ protokollnummer: ctx.ruecksendungVor(25) }),
+  },
+  {
     id: 'T14',
     titel: 'empfangen mit einer Protokollnummer, die es nicht gibt',
     zweck: 'Zeigt die Antwort auf eine unbekannte Protokollnummer (Beispiel der Schnittstellenbeschreibung).',

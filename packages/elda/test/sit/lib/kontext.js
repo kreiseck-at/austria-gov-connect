@@ -77,6 +77,18 @@ function baueKontext({
       if (!r) throw new Error('Noch keine Rücksendung abgeholt – erst `abholen --ja`.');
       return r.protokollnummer;
     },
+    /**
+     * Die jüngste abgeholte Rücksendung, die mindestens `tage` Tage alt ist (T16/T17: wie lange
+     * eine Rücksendung nach dem Abholen erneut empfangbar bleibt).
+     */
+    ruecksendungVor(tage) {
+      const grenze = jetzt.getTime() - tage * 86_400_000;
+      const r = ereignisse
+        .filter((e) => e.art === 'ruecksendung' && !e.ausFehler && Date.parse(e.zeit) <= grenze)
+        .at(-1);
+      if (!r) throw new Error(`Keine abgeholte Rücksendung, die mindestens ${tage} Tage alt ist.`);
+      return r.protokollnummer;
+    },
     protokollnummerVon(fallId) {
       return letzterErfolg(fallId).protokollnummer;
     },
