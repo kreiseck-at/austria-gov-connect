@@ -83,6 +83,20 @@ module.exports = [
     baue: (ctx) => ({ protokollnummer: ctx.ruecksendungVor(25) }),
   },
   {
+    id: 'T18',
+    titel: 'die älteste abgeholte Rücksendung (KW41, mindestens 35 Tage) erneut empfangen',
+    zweck:
+      'T16/T17 kamen nach 7 und 25 Tagen byte-gleich wieder. Gibt es überhaupt eine Grenze? Die älteste ' +
+      'Rücksendung der Ablage stammt aus der ersten Testwoche.',
+    quelle: 'Schnittstellenbeschreibung V4 (empfangen); SIT KW46 T15–T17',
+    erwartung: 'offen: 000 mit derselben Datei, oder 406/408',
+    fenster: 'jedes',
+    gefahr: null,
+    abhaengig: [],
+    aktion: 'empfangen',
+    baue: (ctx) => ({ protokollnummer: ctx.ruecksendungVor(35) }),
+  },
+  {
     id: 'T14',
     titel: 'empfangen mit einer Protokollnummer, die es nicht gibt',
     zweck: 'Zeigt die Antwort auf eine unbekannte Protokollnummer (Beispiel der Schnittstellenbeschreibung).',

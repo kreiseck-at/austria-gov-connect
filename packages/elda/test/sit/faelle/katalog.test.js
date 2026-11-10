@@ -902,6 +902,7 @@ test('M98/M99: Höchstbeitragsgrundlage – SV bei 6.930 € gedeckelt, BV erst 
 test('T16/T17: die jüngste abgeholte Rücksendung, die alt genug ist; L31: KZ 220 nur bis zum Jahressechstel', () => {
   assert.equal(GEBAUT.get('T16').ergebnis.protokollnummer, '154000001');
   assert.equal(GEBAUT.get('T17').ergebnis.protokollnummer, '154000001');
+  assert.equal(GEBAUT.get('T18').ergebnis.protokollnummer, '154000001');
   assert.equal(GEBAUT.get('T15').ergebnis.protokollnummer, '155000001');
   if (GEBAUT.has('L31')) {
     const l1 = saetze(GEBAUT.get('L31').ergebnis.inhalt)[2];
