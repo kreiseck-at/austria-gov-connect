@@ -294,7 +294,7 @@ const NICHT_GEBAUT = new Map();
 
 const ABLAGE = erstelleAblage(fs.mkdtempSync(path.join(WURZEL, 'sit-faelle-')));
 // Eine erfundene, schon abgeholte Rücksendung für T15.
-ABLAGE.protokolliere({ art: 'ruecksendung', protokollnummer: '154000001', dateiName: 'alt.xml', zeit: '2026-09-01T00:00:00.000Z' });
+ABLAGE.protokolliere({ art: 'ruecksendung', protokollnummer: '154000001', dateiName: 'alt.xml', zeit: '2026-08-01T00:00:00.000Z' });
 ABLAGE.protokolliere({ art: 'ruecksendung', protokollnummer: '155000001', dateiName: 'probe.xml' });
 
 /**
