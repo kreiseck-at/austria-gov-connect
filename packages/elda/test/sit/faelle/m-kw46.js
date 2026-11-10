@@ -8,8 +8,16 @@
 //   M99  A/14  03/2026  Di 12–14 (01.04.): 9.000 €, BV ab 01.03. vom vollen Entgelt (§ 6 Abs 1 BMSVG)
 //   M100 A/15  03/2026  Di 12–14: Austritte im ersten Monat (V72/V74 31.03., V80 20.03.) über kasseneck
 //   M101 A/14  03/2026  Di 12–14: Austritte im ersten Monat (V76 31.03., V82 20.03.) über kasseneck
+//
+// Nachgeholt Di 12–14: Die Anmeldungen vom Mo 12–14 fehlen im SIT-Bestand (M98 und M52 → BW1837 „kein
+// Versicherter gemeldet“, V15/V43/V50/V56/V58 → VW1960 „keine Anmeldung“), während V70 → M50 aus demselben
+// Fenster Di 07–09 sauber durchlief. Die Kette läuft deshalb noch einmal, ganz im Fenster Di 12–14, mit einer
+// Person, die in KW46 bei DG B nirgends angemeldet ist (reserve_1; ihr S30 liegt bei DG A):
+//   Q61  B/15  Anmeldung reserve_1 zum 01.02.2026, BVAB 01.03.2026 – zwei Monate rückwirkend
+//   M102 B/15  02/2026  9.000 €, erster Monat – SV bei 6.930 € gedeckelt, BV beitragsfrei
+//   M103 B/15  03/2026  9.000 €, BV ab 01.03. vom vollen Entgelt
 
-const { mbgmPaket } = require('../lib/bausteine');
+const { mbgmPaket, meldung } = require('../lib/bausteine');
 
 const fall = (mehr) => ({ gefahr: null, aktion: 'senden', braucht: 'kasseneck', ...mehr });
 const QUELLE =
@@ -66,7 +74,25 @@ const arbeiterMaerz = (ctx, anmeldung, { am20 = false, monatsbezug = 260_000 } =
   };
 };
 
-const QUELLE_N = 'E.32; kasseneck main mbgm-core.js, lohnabrechnung-core.js (Ein-/Austritt im Monat, BV-freier erster Monat); SIT KW42 N1/N3';
+/** Q61: Eintritt am Ersten zwei Monate vor dem Fenster, in dem die Anmeldung lief (JJJJ-MM-TT). */
+const q61Eintritt = (zr) => `${monatVor(zr, 2)}-01`;
+
+const paketQ61 = (id, zurueck) => (ctx) => {
+  const zrQ = ctx.zrVon('Q61');
+  return mbgmPaket(ctx, {
+    fall: id,
+    dg: 'B',
+    traeger: '15',
+    monat: monatVor(zrQ, zurueck),
+    bundesland: 'oberoesterreich',
+    beschaeftigte: [
+      { rolle: 'reserve_1', mitarbeiter: { ...q60Mitarbeiter(ctx), eintritt: q61Eintritt(zrQ) } },
+    ],
+  });
+};
+
+const QUELLE_N =
+  'E.32; kasseneck main mbgm-core.js, lohnabrechnung-core.js (Ein-/Austritt im Monat, BV-freier erster Monat); SIT KW42 N1/N3';
 
 module.exports = [
   fall({
@@ -124,7 +150,8 @@ module.exports = [
   }),
   fall({
     id: 'M101',
-    titel: 'mBGM 03/2026 A/14 über kasseneck: Austritt 31.03. nach fristloser Entlassung (V76) und 20.03. (V82)',
+    titel:
+      'mBGM 03/2026 A/14 über kasseneck: Austritt 31.03. nach fristloser Entlassung (V76) und 20.03. (V82)',
     zweck:
       'Wie M100 auf dem zweiten Konto. V83 meldete das BV-Ende, obwohl nie BV-Zeit bestand (VW1942 erwartet) – ' +
       'kommt zur mBGM ohne BV dennoch kein BW1871?',
@@ -145,5 +172,60 @@ module.exports = [
           { rolle: 'reserve_2', mitarbeiter: arbeiterMaerz(ctx, 'V82', { am20: true }) },
         ],
       }),
+  }),
+  fall({
+    id: 'Q61',
+    titel: 'HBGL nachgeholt: Anmeldung reserve_1 auf B/15 zum 01.02.2026, BVAB 01.03.2026, rückwirkend (M3)',
+    zweck:
+      'Q60 (Mo 12–14) ist im SIT-Bestand nicht angekommen, M98 lief deshalb auf BW1837. Dieselbe Anmeldung wie ' +
+      'Q60, aber im Fenster Di 12–14 (simuliert 01.04.) und für eine bei DG B freie Person: zwei Monate ' +
+      'rückwirkend. Nebenbei: Meldet die ÖGK die verspätete Anmeldung im Clearing?',
+    quelle: 'E.29.2 (M3, BVAB); SIT KW46 Clearing cm_155207951 (BW1837/VW1960 zu Mo-nm-Anmeldungen)',
+    erwartung: 'übernommen; danach M102/M103 ohne BW1837',
+    fenster: ['di-nm'],
+    abhaengig: [],
+    rang: 11,
+    baue: (ctx) =>
+      meldung(ctx, {
+        fall: 'Q61',
+        art: 'anmeldung',
+        rolle: 'reserve_1',
+        dg: 'B',
+        traeger: '15',
+        felder: {
+          ADAT: ctx.ttmmjjjj(q61Eintritt(ctx.zr)),
+          BBER: '02',
+          GERF: 'N',
+          FRDV: 'N',
+          VWAZ: ctx.elda.wochenarbeitszeit(40, 0),
+          BVAB: ctx.ttmmjjjj(`${monatVor(ctx.zr, 1)}-01`),
+        },
+      }),
+  }),
+  fall({
+    id: 'M102',
+    titel: 'mBGM 02/2026 B/15 – Q61 mit 9.000 € im Eintrittsmonat: SV bei 6.930 € gedeckelt, BV beitragsfrei',
+    zweck:
+      'M98 noch einmal auf einer Anmeldung, die im Bestand ist: Deckelt die ÖGK die allgemeine Beitragsgrundlage ' +
+      'wie kasseneck bei 6.930 € (kein BW1850/BW1917)? Gesendet im selben Fenster direkt nach Q61 – wie V70 → M50.',
+    quelle: QUELLE,
+    erwartung: 'übernommen; Clearing Mi vm ohne BW1837/BW1850/BW1917/BW1874',
+    fenster: ['di-nm'],
+    abhaengig: ['Q61'],
+    rang: 14,
+    baue: paketQ61('M102', 2),
+  }),
+  fall({
+    id: 'M103',
+    titel: 'mBGM 03/2026 B/15 – Q61 mit 9.000 €: SV gedeckelt bei 6.930 €, BV vom vollen Entgelt',
+    zweck:
+      'M99 noch einmal auf Q61: erster BV-Monat, BV-Grundlage 9.000 € ohne Höchstbeitragsgrundlage ' +
+      '(§ 6 Abs 1 BMSVG), SV-Grundlage gedeckelt.',
+    quelle: QUELLE,
+    erwartung: 'übernommen; Clearing Mi vm ohne BW1837/BW1850/BW1917/BW1871',
+    fenster: ['di-nm'],
+    abhaengig: ['Q61', 'M102'],
+    rang: 15,
+    baue: paketQ61('M103', 1),
   }),
 ];
