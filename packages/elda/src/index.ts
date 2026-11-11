@@ -230,3 +230,57 @@ export {
   type L16Geschlecht,
   type GeschlechtCodeElda,
 } from './geschlecht';
+
+// --- Krankentransport-Abrechnung (Organisationsbeschreibung DKT 2.2) -------
+export {
+  erstelleDktAbrechnung,
+  type DktAbrechnung,
+  type DktFall,
+  type DktLeistung,
+  type DktTransport,
+  type DktOrtsangabe,
+  type DktDiagnose,
+  type DktKostenbeteiligung,
+  type DktUebermittler,
+  type DktVertragspartner,
+  type IsoDatum,
+  type Uhrzeit,
+} from './dkt-abrechnung';
+export {
+  liesDktBestand,
+  type DktGelesenerBestand,
+  type DktGelesenerFall,
+  type DktGeleseneLeistung,
+  type DktGeleseneSumme,
+  type DktGelesenePauschale,
+  type DktAblehnung,
+  type DktKopf,
+} from './dkt-lesen';
+export {
+  ABLG,
+  ABRA,
+  ABST,
+  ABZR,
+  BEF,
+  BEST_DKT,
+  BUNDESLAND,
+  DIAKZ,
+  EFORM,
+  EGESL,
+  FART,
+  GRU,
+  KAT,
+  KBS,
+  NACA,
+  PART,
+  SAMMELNUMMERN,
+  TART,
+  UFACHL,
+  UIDV,
+  VERSICHERUNGSTRAEGER,
+  VERSION_DKT,
+  ZKR,
+  type AblehnungsGruppe,
+  type Bundesland,
+} from './dkt-codes';
+export { vpnrPruefzifferGueltig } from './pruefziffer';

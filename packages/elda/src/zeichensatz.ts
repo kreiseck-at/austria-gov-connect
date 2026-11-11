@@ -4,8 +4,11 @@ import { EldaError } from './errors';
  * Feldklasse im Sinne des ELDA-Zeichensatz-Dokuments. ELDA schränkt den
  * zulässigen Zeichenvorrat je nach Art des Feldes ein — für Personennamen
  * deutlich enger als für Unternehmensnamen und Adressen.
+ *
+ * `ascii` und `alphabetisch` gehören nicht zum DM-Org, sondern zur
+ * Krankentransport-Abrechnung (DKT 2.2); Begründung bei den Vorräten unten.
  */
-export type Feldklasse = 'personenname' | 'unternehmen' | 'frei';
+export type Feldklasse = 'personenname' | 'unternehmen' | 'frei' | 'ascii' | 'alphabetisch';
 
 /**
  * Die acht Codepunkte, an denen ISO-8859-15 von ISO-8859-1 abweicht.
@@ -68,11 +71,41 @@ const VORRAT_UNTERNEHMEN: ReadonlySet<number> = new Set([
   ...bereich(226, 255),
 ]);
 
+/**
+ * Zeichenvorrat der Krankentransport-Abrechnung (DKT 2.2). Das Dokument sagt
+ * nur: „Die Kodierung sämtlicher gelieferter Dateninhalte muss in 8-Bit ASCII
+ * erfolgen" (Kapitel A.3, Seite 9) und „Für Datenfelder, die Adressen und Namen
+ * beinhalten, dürfen keine diakritischen Zeichen verwendet werden" (Kapitel F.1,
+ * Seite 53). Welche 8-Bit-Codetabelle gemeint ist, steht nirgends.
+ *
+ * Zugelassen sind deshalb nur die druckbaren Zeichen 32–126: Sie sind in jeder
+ * 8-Bit-Erweiterung von ASCII dieselben, eine falsch geratene Codetabelle kann
+ * sie nicht verfälschen. Was darüber liegt, ist bis zur Klärung abzuweisen.
+ */
+const VORRAT_ASCII: ReadonlySet<number> = new Set(bereich(32, 126));
+
+/**
+ * Felder vom Typ `a` der DKT: „Alphabetisch, linksbündig, Grundstellung blank"
+ * (Kapitel F.1, Seite 53) — Buchstaben ohne diakritische Zeichen und das
+ * Leerzeichen, das als Grundstellung ohnehin vorkommt. Bindestrich, Apostroph
+ * und Punkt nennt das Dokument nicht; sie sind bis zur Klärung abgewiesen.
+ */
+const VORRAT_ALPHABETISCH: ReadonlySet<number> = new Set([0x20, ...bereich(65, 90), ...bereich(97, 122)]);
+
 function vorratFuer(klasse: Feldklasse): ReadonlySet<number> | undefined {
   if (klasse === 'personenname') return VORRAT_PERSONENNAME;
   if (klasse === 'unternehmen') return VORRAT_UNTERNEHMEN;
+  if (klasse === 'ascii') return VORRAT_ASCII;
+  if (klasse === 'alphabetisch') return VORRAT_ALPHABETISCH;
   return undefined;
 }
+
+const KLASSENNAME: Readonly<Record<Exclude<Feldklasse, 'frei'>, string>> = {
+  personenname: 'Personennamen',
+  unternehmen: 'Unternehmensnamen und Adressen',
+  ascii: 'die Krankentransport-Abrechnung (druckbares ASCII)',
+  alphabetisch: 'alphabetische Felder der Krankentransport-Abrechnung (Buchstaben ohne diakritische Zeichen)',
+};
 
 /** Codepunkt eines Zeichens in ISO-8859-15, oder `undefined`, wenn nicht darstellbar. */
 function codepunkt(zeichen: string): number | undefined {
@@ -108,7 +141,7 @@ export function pruefeVorrat(text: string, klasse: Feldklasse, feld: string): vo
     if (vorrat && !vorrat.has(code)) {
       throw new EldaError(
         `Feld ${feld}: Zeichen '${z}' an Position ${i + 1} gehört nicht zum zulässigen Zeichenvorrat ` +
-          `für ${klasse === 'personenname' ? 'Personennamen' : 'Unternehmensnamen und Adressen'}.`,
+          `für ${klasse === 'frei' ? 'dieses Feld' : KLASSENNAME[klasse]}.`,
       );
     }
   }
