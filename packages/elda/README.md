@@ -1675,7 +1675,19 @@ Darunter:
 
 Eine Legende zu Fehlerstatus und Fehlerindikation enthält der Katalog nicht;
 das DM-Org erklärt nur `G` (D.32: übernommen, aber „mit dem Fehlerstatus „G"
-gekennzeichnet"). Das Paket deutet die Buchstaben deshalb nicht.
+gekennzeichnet"). Das Fehlerprotokoll zum Bestand `LF` erklärt die drei
+Hauptbuchstaben („Erläuterung zum Status"):
+
+| Status | Bedeutung laut Protokoll | Was zu tun ist |
+| ------ | ------------------------ | -------------- |
+| `N` | Nicht-Übernahme | korrigieren und **neu** übermitteln, ohne Korrektur- und ohne Fehlerindikation |
+| `G` | gesperrt | Daten richtigstellen oder mit Fehlerindikator für richtig erklären; nochmals mit `KORR` und ursprünglicher Referenznummer |
+| `P` | Protokoll | Lohnzettel prüfen; nur im Fehlerfall richtigstellen und mit `KORR` und ursprünglicher Referenznummer senden |
+
+In der XML-Mitteilung kommen `G` und `P` beide als `typ="warnung"` bei Status
+„übernommen" – nur das Textprotokoll schreibt „Status \*G\*". Wer allein die
+XML liest, erkennt einen gesperrten Lohnzettel über `l16Regel(code)?.status`.
+Zusätze in Klammern (`P (I)`, `G(H)`) deutet das Paket nicht.
 
 **„Auf Monate aliquotiert".** Sieben Regeln (`F4802`, `F5205`, `F5402`,
 `F7402`, `F8202`, `F9121`, `F7006`) aliquotieren eine Grenze „entsprechend Feld
@@ -1738,6 +1750,17 @@ Für Version 29 gibt es noch keinen Katalog — `pruefeLohnzettel` lehnt sie ab.
 - Zwei Lohnzettel unter einem Informationssatz → „LF 2/2", Codes je Zeile.
 - **Die Codes kommen ohne „F"**: `1706`, `9991`, `7003`. `l16Regel(code)` sucht
   die Katalogzeile auch zu diesem Rohcode (`l16Regel('1706')` = Zeile `F1706`).
+- **Manche Codes kommen mit Jahreszusatz** (11.11.2026): `6201_2026` in der
+  XML-Mitteilung, `6201` im Textprotokoll derselben Übermittlung – entgegen dem
+  Katalog, der nur vierstellige Codes ankündigt. `l16Regel` schneidet den Zusatz ab.
+- **Rechenregeln mit Status `N` weisen ab, mit den Toleranzen des Fehlertexts**
+  (11.11.2026): `F6401` bei 1,01 € Abweichung abgewiesen, bei genau 1,00 €
+  übernommen; `F4800`, `F7004` (0,21 €), `F3806` (1 Cent) und `F6201` (0,41 €)
+  abgewiesen – je mit genau dem Code, den `pruefeLohnzettel` meldet.
+- **Status `P` und `G` sind Warnungen in der Mitteilung:** Pendlerpauschale ohne
+  Pendlereuro → `5404` (P); steuerfreie Bezüge § 68 Abs 2 über dem Maximalwert →
+  `9715` (G, „FEHLERHAFT! SIEHE PROTOKOLL"). Die Berichtigung mit `KORR` „K" und
+  der Referenznummer des gesperrten Lohnzettels ging ohne Warnung durch.
 
 ### Zeitstempel im Bestand: Wiener Ortszeit
 

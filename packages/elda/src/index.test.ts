@@ -207,5 +207,9 @@ test('index exportiert l16Regel: Mitteilungscodes ohne „F" finden die Katalogz
   assert.equal(elda.l16Regel('1706')?.code, 'F1706');
   assert.equal(elda.l16Regel('F9991')?.code, 'F9991');
   assert.equal(elda.l16Regel('KA20')?.code, 'KA20');
+  // Mitteilung mit Jahreszusatz (SIT 11.11.2026), Status G nur über die Katalogzeile erkennbar.
+  assert.equal(elda.l16Regel('6201_2026')?.code, 'F6201');
+  assert.equal(elda.l16Regel('9715')?.status, 'G');
+  assert.equal(elda.l16Regel('5404')?.status, 'P');
   assert.equal(elda.l16Regel('0000'), undefined);
 });
