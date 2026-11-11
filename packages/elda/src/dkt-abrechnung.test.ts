@@ -40,7 +40,6 @@ const BASIS: DktAbrechnung = {
   traeger: '17',
   abrechnungsstelle: '17',
   bundeslandAbrechnungsstelle: '7',
-  datenuebernehmer: '14',
   datentraegernummer: 7,
   erstellt: new Date('2026-11-03T08:00:00Z'),
   testdaten: true,
@@ -499,7 +498,7 @@ test('F.7.1: EKVK-Datensatz — VSNRV als 0000TTMMJJ, Blöcke P und E', () => {
   assert.equal(b.dateiende['ANZ07'], 2);
 });
 
-test('A.3/F.1: nur druckbares ASCII, Namen nur Buchstaben', () => {
+test('F.1: Namen nur Buchstaben, Adressen und Kennungen ohne diakritische Zeichen', () => {
   assert.throws(
     () => erstelleDktAbrechnung(mitFall({ versicherter: { ...FALL.versicherter, familienname: 'Müller' } })),
     /alphabetische Felder/,
@@ -511,7 +510,39 @@ test('A.3/F.1: nur druckbares ASCII, Namen nur Buchstaben', () => {
       ),
     /alphabetische Felder/,
   );
-  assert.throws(() => erstelleDktAbrechnung(mitFall({ texte: ['Rückfahrt'] })), /druckbares ASCII/);
+  assert.throws(() => erstelleDktAbrechnung(mitTransport({ vonOrt: 'Mödling' })), /druckbares ASCII/);
+  assert.throws(
+    () =>
+      erstelleDktAbrechnung({ ...BASIS, uebermittler: { ...BASIS.uebermittler, name: 'Müller Taxi GmbH' } }),
+    /druckbares ASCII/,
+  );
+});
+
+test('ELDA-Auskunft: Freitext in ISO-8859-15 — Umlaute und Euro-Zeichen als ein Byte, beim Lesen zurück', () => {
+  const leistungen = [{ ...FALL.leistungen[0]!, begruendungen: ['Umfahrung wegen Straßensperre'] }];
+  const eingabe = mitFall({
+    texte: ['Rückfahrt über Mödling, Maut 3 €'],
+    leistungen,
+    diagnose: { text: 'Schwäche' },
+  });
+  const roh = erstelleDktAbrechnung({ ...eingabe, hinweise: ['Größere Abweichung laut Distanzanzeiger'] });
+  // Jeder Satz bleibt 128 Bytes lang: ein Umlaut ist ein Byte.
+  for (const satz of roh.toString('latin1').split('\r\n')) assert.equal(satz.length, 128);
+  assert.ok(roh.includes(Buffer.from([0xfc, 0x63, 0x6b]))); // „ück"
+  assert.ok(roh.includes(Buffer.from([0x33, 0x20, 0xa4]))); // „3 €" — Euro auf 0xA4 (ISO-8859-15)
+  const b = liesDktBestand(roh);
+  assert.deepEqual(b.faelle[0]!.texte, ['Rückfahrt über Mödling, Maut 3 €']);
+  assert.deepEqual(b.faelle[0]!.leistungen[0]!.begruendungen, ['Umfahrung wegen Straßensperre']);
+  assert.deepEqual(b.faelle[0]!.diagnose, { kennzeichen: '2', inhalt: 'Schwäche' });
+  assert.equal(b.hinweise[1], 'Größere Abweichung laut Distanzanzeiger');
+  // Außerhalb von ISO-8859-15 bleibt abgewiesen.
+  assert.throws(() => erstelleDktAbrechnung(mitFall({ texte: ['Ağrı'] })), /ISO-8859-15/);
+});
+
+test('ELDA-Auskunft: VSTRU ist immer 14', () => {
+  const z = zeilen({ ...BASIS, traeger: '45', abrechnungsstelle: '45' });
+  assert.equal(z[0]!.slice(9, 11), '14');
+  assert.equal(z.at(-1)!.slice(9, 11), '14');
 });
 
 test('F.7.1/E.3: Namen in SART 01 werden auf Feldlänge gekürzt, andere Felder nie', () => {

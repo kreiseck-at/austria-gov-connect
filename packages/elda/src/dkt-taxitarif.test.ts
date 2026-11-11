@@ -146,7 +146,6 @@ test('Die Tarifposition geht unverändert in den Datenblock „L" der Abrechnung
     traeger: '17',
     abrechnungsstelle: '17',
     bundeslandAbrechnungsstelle: '7',
-    datenuebernehmer: '14',
     datentraegernummer: 1,
     erstellt: new Date('2026-11-03T08:00:00Z'),
     testdaten: true,

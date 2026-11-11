@@ -50,6 +50,7 @@ import {
   UIDV,
   VERSICHERUNGSTRAEGER,
   VERSION_DKT,
+  VSTRU_ELDA,
   type Bundesland,
 } from './dkt-codes';
 
@@ -286,12 +287,6 @@ export interface DktAbrechnung {
   abrechnungsstelle: string;
   /** BLNDA, Bundesland der zuständigen Abrechnungsstelle (D.15, zwingend). */
   bundeslandAbrechnungsstelle: Bundesland;
-  /**
-   * VSTRU, „Datenübernehmender Versicherungsträger – ELDA" (D.62). Das Muster
-   * E.3 trägt `14` (ÖGK-O; ELDA ist das Datensammelsystem der ÖGK Oberösterreich,
-   * C.3). Ausdrücklich steht der Wert nirgends — deshalb Eingabe.
-   */
-  datenuebernehmer: string;
   /** DTNR, „Lfd. Nr. des Datenträgers pro übermittelnder Stelle und übernehmendem Versicherungsträger" (D.20). */
   datentraegernummer: number;
   /** Erstellungszeitpunkt für EDAT/EZEI/ERDAT, umgerechnet in Wiener Ortszeit. */
@@ -642,7 +637,6 @@ export function erstelleDktAbrechnung(e: DktAbrechnung): Buffer {
   for (const [feld, code] of [
     ['VSTR', e.traeger],
     ['VSTRA', e.abrechnungsstelle],
-    ['VSTRU', e.datenuebernehmer],
   ] as const) {
     pruefeCode(VERSICHERUNGSTRAEGER, code, feld, 'D.62');
     if (NUR_LEISTUNGSZUSTAENDIG.includes(code)) {
@@ -1058,7 +1052,7 @@ export function erstelleDktAbrechnung(e: DktAbrechnung): Buffer {
   );
   if (satznummer - 1 > 99_999) throw fehler('Mehr als 99999 Sätze passen nicht in SATNR (D.46).');
 
-  const umschlag = { VSTRU: e.datenuebernehmer, OBUS: e.uebermittler.vpnr, VSTR: e.traeger };
+  const umschlag = { VSTRU: VSTRU_ELDA, OBUS: e.uebermittler.vpnr, VSTR: e.traeger };
   const vorlauf = satz(DKT_VORLAUF, {
     ...umschlag,
     SART: '00',

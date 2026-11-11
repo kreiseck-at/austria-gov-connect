@@ -52,6 +52,16 @@ function an(nr: number, name: string, pos: number, laenge: number, stufe?: DktSt
     : { nr, name, pos, laenge, typ: 'a/n', klasse: 'ascii', stufe };
 }
 
+/**
+ * Freitextfeld (Begründung, Hinweis, Diagnosetext): voller Zeichensatz des
+ * Bestands, ISO-8859-15 — Auskunft des ELDA Service Support vom 11.11.2026:
+ * „Verwenden Sie bitte für die DKT-Bestände den Zeichensatz ISO 8859-15". Für
+ * Namen und Adressen gilt weiter F.1 („keine diakritischen Zeichen").
+ */
+function txt(nr: number, name: string, pos: number, laenge: number, stufe: DktStufe): DktFeld {
+  return { nr, name, pos, laenge, typ: 'a/n', klasse: 'frei', stufe };
+}
+
 function a(nr: number, name: string, pos: number, laenge: number, stufe: DktStufe): DktFeld {
   return { nr, name, pos, laenge, typ: 'a', klasse: 'alphabetisch', stufe };
 }
@@ -265,8 +275,9 @@ export const DKT_LEISTUNG: readonly DktFeld[] = [
   an(1, 'KOPF', 1, 20, 'Z'),
   n(2, 'SART', 21, 2, 'Z'),
   an(3, 'RNR', 23, 10, 'Z'),
-  an(4, 'BLO1', 33, 43, 'Z'),
-  an(5, 'BLO2', 76, 43, 'ZA'),
+  // Die Blöcke sind bereits feldweise geprüft; der Container trägt, was sie tragen.
+  txt(4, 'BLO1', 33, 43, 'Z'),
+  txt(5, 'BLO2', 76, 43, 'ZA'),
   res(6, 119, 10),
 ];
 
@@ -291,14 +302,14 @@ export const DKT_BLOCK_LEISTUNG: readonly DktFeld[] = [
 export const DKT_BLOCK_DIAGNOSE: readonly DktFeld[] = [
   a(1, 'BLOKZ', 1, 1, 'Z'),
   n(2, 'DIAKZ', 2, 1, 'Z'),
-  an(3, 'DIAGN', 3, 30, 'Z'),
+  txt(3, 'DIAGN', 3, 30, 'Z'),
   res(4, 33, 11),
 ];
 
 /** Datenblock Begründung „B" (F.10.3, Seite 68). */
 export const DKT_BLOCK_BEGRUENDUNG: readonly DktFeld[] = [
   a(1, 'BLOKZ', 1, 1, 'Z'),
-  an(2, 'GRUN', 2, 42, 'Z'),
+  txt(2, 'GRUN', 2, 42, 'Z'),
 ];
 
 /**
@@ -333,7 +344,7 @@ export const DKT_SUMME: readonly DktFeld[] = [
 export const DKT_TEXT: readonly DktFeld[] = [
   an(1, 'KOPF', 1, 20, 'Z'),
   n(2, 'SART', 21, 2, 'Z'),
-  an(3, 'TXT', 23, 100, 'Z'),
+  txt(3, 'TXT', 23, 100, 'Z'),
   res(4, 123, 6),
 ];
 
@@ -350,7 +361,7 @@ export const DKT_PAUSCHALE: readonly DktFeld[] = [
   n(9, 'PBETRN', 38, 10, 'Z'),
   n(10, 'PUST', 48, 8, 'Z'),
   n(11, 'PBETRB', 56, 10, 'Z'),
-  an(12, 'PBEGR', 66, 63, 'Z'),
+  txt(12, 'PBEGR', 66, 63, 'Z'),
 ];
 
 /** SART 99 Dateiende (F.14, Seite 73). */

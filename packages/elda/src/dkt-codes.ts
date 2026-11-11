@@ -16,6 +16,14 @@ export const PROJ_DKT = 'TK';
  */
 export const BEST_DKT = { echt: 'TK', test: 'T1', rueckmeldung: 'TR' } as const;
 
+/**
+ * Datenübernehmender Versicherungsträger VSTRU bei der Übermittlung über ELDA.
+ * Auskunft des ELDA Service Support vom 11.11.2026: „Im Feld VSTRU tragen Sie
+ * bitte immer den Wert 14 ein." Das Muster E.3 trägt denselben Wert (ÖGK-O; ELDA
+ * ist das Datensammelsystem der ÖGK Oberösterreich, C.3).
+ */
+export const VSTRU_ELDA = '14';
+
 /** Fachgebiet FACHL, „65" fix (D.25, Seite 29; E.1, Seite 48). */
 export const FACHGEBIET_DKT = '65';
 
