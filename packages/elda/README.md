@@ -1882,6 +1882,54 @@ Jahrhundert steht nicht im Satz.
     noch nicht gegen ELDA gelaufen. Ebenso offen: wie ELDA Bestand `T1`
     behandelt, solange die Software nicht freigegeben ist.
 
+### Distanzanzeiger (Transportkilometer)
+
+Die Kilometer einer Krankenbeförderung kommen nicht aus dem Taxameter, sondern
+aus dem Distanzanzeiger der Sozialversicherung: „Als Grundlage für die
+Ermittlung der Transportkilometer sind die Kilometrierungspunkte nach dem
+Distanzanzeiger der österreichischen Sozialversicherung … heranzuziehen"
+(Gesamtvertrag § 9 Abs. 5). Der Client spricht dessen REST-Schnittstelle
+(Schnittstellendokumentation Version 1.32.710, Stand April 2026).
+
+```ts
+import { createDistanzanzeiger, DISTANZANZEIGER_ENDPUNKTE } from '@kreiseck/elda';
+
+const distanz = createDistanzanzeiger({
+  endpunkt: DISTANZANZEIGER_ENDPUNKTE.test,
+  apiKey: process.env.DISTANZANZEIGER_KEY!,
+});
+
+const e = await distanz.abfragen([
+  { plz: 3100, ort: 'st. pölten', str: 'mariazeller str', hnr: '79' },
+  { ort: 'kh stockerau' },
+]);
+if (e.art === 'distanz') {
+  e.kilometer; // ganze Kilometer: bis 499 m ab-, darüber aufgerundet (§ 9 Abs. 5)
+  e.meter; // Gesamtdistanz laut Server
+} else {
+  e.suchen; // mindestens ein Ort war mehrdeutig — Treffer je Ort zur Auswahl
+}
+```
+
+- **Sparsam mit dem Key.** Ein Aufruf ist genau eine Anfrage. Anfragen laufen
+  nacheinander mit Mindestabstand (`mindestabstandMs`, Voreinstellung eine
+  Sekunde), und nichts wird von selbst wiederholt — auch kein Fehler. Der Key
+  gilt für die ganze Software; eine Sperre träfe alle Betriebe. Abfragen
+  gehören deshalb an die einzelne Fahrt, nicht in eine Schleife über Bestände;
+  das Ergebnis je Fahrt zu speichern ist Sache des Aufrufers.
+- **Mehrdeutige Orte** wählt der Client nicht selbst aus. Er gibt die Treffer
+  zurück; die zweite Anfrage mit der gewählten Adresse (am sichersten über
+  `okz`) stellt der Aufrufer.
+- **Der Key** steht in keiner Fehlermeldung. Die Tests laufen gegen eine
+  Attrappe und sprechen nie mit dem Server.
+- **Offen:** Die Dokumentation druckt für den Echtbetrieb eine andere Adresse
+  (`distanzanzeiger.gesundheitskasse.at/api/v1`) als die Zugangsmitteilung der
+  ÖGK (`distanzanzeiger.sozialversicherung.at/api/v1/index.php`); der Endpunkt
+  ist deshalb Pflichtangabe. Die Ablehnung ohne Key kommt laut Dokumentation
+  mit HTTP 200, am Testserver mit 401 — der Client liest den Körper. Ein
+  Anfragelimit nennt die Dokumentation nicht. Mit einem Key ist der Client noch
+  nicht gelaufen.
+
 ### Zeitstempel im Bestand: Wiener Ortszeit
 
 `BestandOptionen.erstellt` ist ein echter Zeitpunkt (typischerweise das
@@ -1953,6 +2001,9 @@ gedacht.
   2025" vom 16.12.2024, und „Kostenanteile bei Krankenbeförderungen" vom
   23.05.2025; WKO-Fachverband, „Krankenbeförderung mit Taxis", Klarstellung
   „Mehrfachtransporte" (ab 1.6.2025).
+- „Schnittstellendokumentation Distanzanzeiger", Version 1.32.710, Stand April
+  2026 (Testclient des Distanzanzeigers); Gesamtvertragliche Vereinbarung über
+  die Krankenbeförderung mit Taxis (Fachverband/Dachverband), § 9 Abs. 5.
 
 **Seitenangaben.** Gegenüber der 42. Ergänzung hat die 43. Inhalt nur in
 D.5 (10-stellige ÖGK-Beitragskontonummer), D.54 (Verrechnungsgrundlage bei
