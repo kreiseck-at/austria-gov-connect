@@ -24,6 +24,7 @@ weder Belegketten noch Signaturen.
 | `@kreiseck/uid` | UID-Bestätigungsverfahren (Stufe 1 + 2) | fertig |
 | `@kreiseck/finanzonline` | Übrige FinanzOnline-Verfahren (DataBox u. a.) | DataBox (Teil), Rest geplant |
 | `@kreiseck/elda` | Sozialversicherung (ELDA), Transfer-Webservice v4 | Transport fertig, Meldungs-Builder geplant |
+| `@kreiseck/distanzanzeiger` | Distanzanzeiger der Sozialversicherung (Transportkilometer) | fertig |
 
 ## Doku
 
