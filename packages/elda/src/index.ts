@@ -286,6 +286,14 @@ export {
 } from './dkt-codes';
 export { vpnrPruefzifferGueltig } from './pruefziffer';
 export {
+  DKT_EINGABEFELDER,
+  pruefeDktEingabe,
+  erstelleDktTestRuecksendung,
+  type DktEingabefeld,
+  type DktEingabepruefung,
+  type DktTestErgebnis,
+} from './dkt-pruefhilfen';
+export {
   taxiEinzelfahrt,
   taxiMehrfachtransport,
   alsMehrfachtransportAbzurechnen,
