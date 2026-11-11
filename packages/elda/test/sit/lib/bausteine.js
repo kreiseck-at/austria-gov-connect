@@ -63,7 +63,9 @@ function ohneBv(eintrag) {
  *   Eingabeform von kasseneck (dienstnehmerGruppe, eintritt, wochenstunden, …);
  *   Name und Versicherungsnummer kommen aus den Testdaten der Rolle. `nurSv`
  *   meldet die Person bewusst ohne BV (Verrechnungsgrundlage 2, Basis BV
- *   entfernt) – wie ein Programm, das die BV-Zeit nicht kennt.
+ *   entfernt) – wie ein Programm, das die BV-Zeit nicht kennt. `sonderzahlung`
+ *   ist der Sonderzahlungs-Kontext von kasseneck (Posten, bisherige SZ des
+ *   Jahres). `abwandlung` verändert den fertigen Eintrag für einen Negativtest.
  * @param a.stornos fertige Storno-Einträge (Stornomeldung), stehen im Paket vor
  *   den neuen mBGM. Ihre Referenzwerte folgen in `referenzwerte` nach denen der
  *   neuen mBGM.
@@ -78,6 +80,7 @@ function mbgmPaket(
   const referenzwerte = [];
   const eintraege = beschaeftigte.map((b, i) => {
     const { rolle, mitarbeiter, nurSv = false, monatskontext, zeiten, endabrechnung, verlaengerungVon } = b;
+    const { sonderzahlung = null, abwandlung = (e) => e } = b;
     const person = ctx.rolle(rolle);
     // Für einen Monat, den nur noch eine Urlaubsersatzleistung verlängert (§ 11 Abs 2 ASVG), baut kasseneck die
     // Meldung aus der Abrechnung des Austrittsmonats (`verlaengerungVon`).
@@ -86,7 +89,7 @@ function mbgmPaket(
       monat: verlaengerungVon ?? monat,
       parameter,
       bundesland,
-      sonderzahlungKontext: null,
+      sonderzahlungKontext: sonderzahlung,
       // Die anderen Beschäftigten desselben Monats (z. B. `andereGeringfuegige` für die Dienstgeberabgabe).
       monatskontext,
       // Endabrechnung wie im Lohnlauf (payslip-endpoints): UEL als Zeitkonto-Zeile `uel_laufend` und als Eingabe.
@@ -114,7 +117,7 @@ function mbgmPaket(
           referenzwert: refw,
         })
       : k.mbgm.baueMeldung({ abrechnung, mitarbeiter: daten, referenzwert: refw });
-    return nurSv ? ohneBv(eintrag) : eintrag;
+    return abwandlung(nurSv ? ohneBv(eintrag) : eintrag);
   });
   const paketref = ctx.referenzwert(fall);
   const saetze = ctx.elda.erstelleMbgmPaket(

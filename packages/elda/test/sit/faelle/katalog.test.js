@@ -41,6 +41,7 @@ const IM_FENSTER = {
 };
 
 const SART = {
+  Q67: 'M3',
   Q65: 'M3',
   Q66: 'M4',
   Q64: 'M3',
@@ -163,6 +164,7 @@ const SART = {
   Q53: 'M4',
 };
 const VSTR = {
+  Q67: '15',
   Q62: '15',
   Q63: '15',
   Q61: '15',
@@ -273,7 +275,7 @@ const IM_FENSTER_KW46 = {
 };
 // V72–V83 mit: M100/M101 rechnen mit kasseneck, das nur das Parameterwerk 2026 kennt – die
 // Anmeldungen und Abmeldungen, auf denen sie aufbauen, müssen in derselben (KW46-)Woche liegen.
-const istKw46 = (id) => /^(L2\d|L3[01]|Q6\d|M9[89]|M10[0-9]|V7[2-9]|V8[0-3])$/.test(id);
+const istKw46 = (id) => /^(L2\d|L3[01]|Q6\d|M9[89]|M1(0\d|1[0-3])|V7[2-9]|V8[0-3])$/.test(id);
 /** Lohnzettel von kasseneck mit Geschlecht (KW46). */
 const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28', 'L31'];
 const zeitpunkt = (id, fenster) =>
@@ -1029,6 +1031,38 @@ test('M107–M109: UEL über kasseneck – Austrittsmonat ohne KEUE, Verlängeru
     const f = FELDER_E29.find((x) => x.name === n);
     assert.equal(q66.slice(f.pos - 1, f.pos - 1 + f.laenge), wert, `Q66: ${n}`);
   }
+});
+
+test('M110–M113: Höchstbeitragsgrundlage der Sonderzahlungen über kasseneck, Gegenprobe ungedeckelt', () => {
+  if (!GEBAUT.has('M110')) return;
+  const kern = (id) =>
+    saetze(GEBAUT.get(id).ergebnis.inhalt)
+      .map((x) => x.trimEnd())
+      .filter((x) => /^(T1|BS|V1)/.test(x))
+      .map((x) => `${x.slice(0, 2)} ${x.slice(20)}`);
+  const kopf = 'T1 B002               01';
+  const laufend = ['BS AB00000693000', 'V1 T01+039050+00000270617'];
+  // Gegenprobe: ungedeckelt, erster Monat ohne BV.
+  assert.deepEqual(kern('M112'), [kopf, 'BS AB00000900000', 'V1 T01+039050+00000351450']);
+  assert.deepEqual(kern('M110'), [
+    kopf,
+    ...laufend,
+    'BS SZ00000900000',
+    'V1 T02+037550+00000337950',
+    'BS BV00001800000',
+    'V1 V01+001530+00000027540',
+  ]);
+  // Rest bis 13.860 €: 4.860 €; die BV bleibt auf dem vollen Entgelt.
+  assert.deepEqual(kern('M111'), [
+    kopf,
+    ...laufend,
+    'BS SZ00000486000',
+    'V1 T02+037550+00000182493',
+    'BS BV00001800000',
+    'V1 V01+001530+00000027540',
+  ]);
+  // Deckel ausgeschöpft: keine SZ-Basis mehr, BV auf 9.000 € + 2.000 €.
+  assert.deepEqual(kern('M113'), [kopf, ...laufend, 'BS BV00001100000', 'V1 V01+001530+00000016830']);
 });
 
 test('T16/T17: die jüngste abgeholte Rücksendung, die alt genug ist; L31: KZ 220 nur bis zum Jahressechstel', () => {
