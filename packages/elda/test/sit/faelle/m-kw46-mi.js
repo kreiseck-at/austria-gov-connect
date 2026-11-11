@@ -12,6 +12,17 @@
 //   M112 B/15  01/2026  Gegenprobe: AB absichtlich ungedeckelt 9.000 € – rechnet die ÖGK auf der SIT überhaupt
 //                       nach? Ohne Clearing hier wäre „kein Clearing“ bei M102/M103/M111 wertlos.
 //   M113 B/15  12/2026  9.000 € + WR 2.000 € nach ausgeschöpfter Grenze: SZ-Grundlage 0, BV trotzdem auf 2.000 €
+//
+// Nachgelegt nach dem Clearing Mi vm:
+//   M115 A/15  03/2026  Die mBGM zu V78/V79 fehlte; die ÖGK hat dafür eine mBGM von Amts wegen erstellt (X1
+//                       BW1922 + BW1916 VA/VB). Was passiert, wenn die echte mBGM ein Jahr später nachkommt?
+//   M116 B/15  06/2026  Gegenprobe zu M110/M111: SZ absichtlich über dem Jahresdeckel (15.000 € statt 13.860 €)
+//                       für reserve_1 aus Q61 – prüft die SIT die SZ-Höchstbeitragsgrundlage überhaupt?
+//   M117 A/14  09/2026  mBGM VOR der Anmeldung im selben Fenster, danach Q68 (Anmeldung 01.09.) und Q69
+//                       (Abmeldung 30.09.) für angestelltenlehrling (ihr V04 auf A/14 fehlt im Bestand, B014).
+//                       Anlass: M98/M52 bekamen Di nm BW1837 auf Paketebene und Mi vm BW1862 je Person – das
+//                       Paket wurde offenbar neu verarbeitet, als auf dem Konto jemand gemeldet war. Zählt in der
+//                       Sammelverarbeitung die Reihenfolge des Eingangs, oder kommen die Versichertenmeldungen zuerst?
 
 const { mbgmPaket, meldung } = require('../lib/bausteine');
 const { kasseneck } = require('../lib/kasseneck');
@@ -69,6 +80,13 @@ function bisherNach(jahr, monate) {
 }
 
 const UZ_JUNI = [6, [{ typ: 'UZ', betragCent: MONATSBEZUG }]];
+const UZ_GEGENPROBE = 1_500_000;
+
+/** Monat `zurueck` Monate vor `iso` als JJJJ-MM. */
+function monatVorIso(iso, zurueck) {
+  const [j, m] = iso.split('-').map(Number);
+  return new Date(Date.UTC(j, m - 1 - zurueck, 1)).toISOString().slice(0, 7);
+}
 const WR_NOVEMBER = [11, [{ typ: 'WR', betragCent: MONATSBEZUG }]];
 
 /** Negativtest: die Basis `typ` mit `betragCent` statt des gedeckelten Werts, Positionen je Satz neu gerundet. */
@@ -195,5 +213,170 @@ module.exports = [
           bisherNach(jahrVon(ctx), [UZ_JUNI, WR_NOVEMBER]),
         ),
       })(ctx),
+  }),
+  fall({
+    id: 'M115',
+    titel: 'mBGM 03/2026 A/15 nachgereicht: V78/V79 (01.–31.03.), nachdem die ÖGK eine mBGM von Amts wegen erstellt hat',
+    zweck:
+      'Zu V78/V79 lief nie eine mBGM. Das Clearing Mi vm brachte X1 BW1922 (mBGM fehlt) und BW1916 VA/VB (mBGM SV ' +
+      'von Amts wegen erstellt). Ersetzt die echte mBGM die amtliche lautlos, oder kommt ein eigener Clearingfall?',
+    quelle: 'E.32; SIT KW46 Clearing Mi vm (X1 BW1922/BW1916); kasseneck mbgm-core.js',
+    erwartung: 'offen: übernommen; Clearing Mi nm leer (BW1916 obsolet) oder ein Hinweis zur amtlichen mBGM',
+    fenster: MI_VM,
+    abhaengig: ['V78', 'V79'],
+    rang: 26,
+    baue: (ctx) => {
+      const eintritt = ctx.zrVon('V78');
+      const [j, m] = eintritt.split('-').map(Number);
+      const ende = new Date(Date.UTC(j, m, 0)).toISOString().slice(0, 10);
+      return mbgmPaket(ctx, {
+        fall: 'M115',
+        dg: 'A',
+        traeger: '15',
+        monat: eintritt.slice(0, 7),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          {
+            rolle: 'freier_dn',
+            mitarbeiter: {
+              dienstnehmerGruppe: 'arbeiter',
+              beschaeftigungsart: 'fulltime',
+              eintritt,
+              austritt: ende,
+              wochenstunden: 38.5,
+              kvBasisStunden: 38.5,
+              grossSalaryCents: 260_000,
+            },
+          },
+        ],
+      });
+    },
+  }),
+  fall({
+    id: 'M116',
+    titel: 'Gegenprobe mBGM 06/2026 B/15: UZ 15.000 € absichtlich ungedeckelt statt 13.860 € (reserve_1 aus Q61)',
+    zweck:
+      'Wie M112 für die Sonderzahlungen: kasseneck deckelt die SZ-Grundlage bei 13.860 € im Jahr, gemeldet wird ' +
+      'der volle UZ. Ohne Clearing hier sagt das Ausbleiben bei M110/M111/M113 nichts.',
+    quelle: `${QUELLE}; Negativtest`,
+    erwartung: 'formal übernommen; Clearing Mi nm mit einem Fall zur SZ-Grundlage',
+    fenster: MI_VM,
+    abhaengig: ['Q61'],
+    rang: 18,
+    baue: (ctx) => {
+      const eintritt = `${monatVorIso(ctx.zrVon('Q61'), 2)}-01`;
+      const jahr = Number(eintritt.slice(0, 4));
+      const monate = 6 - Number(eintritt.slice(5, 7)) + 1;
+      return mbgmPaket(ctx, {
+        fall: 'M116',
+        dg: 'B',
+        traeger: '15',
+        monat: `${jahr}-06`,
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          {
+            rolle: 'reserve_1',
+            mitarbeiter: { ...mitarbeiter(jahr), eintritt },
+            sonderzahlung: {
+              posten: [{ typ: 'UZ', betragCent: UZ_GEGENPROBE }],
+              bisherigeSzJahrCent: 0,
+              bisherigeSzSvGrundlageJahrCent: 0,
+              bisherigeSzBemessungJahrCent: 0,
+              laufendeBezuegeJahrCent: MONATSBEZUG * monate,
+              kalenderMonateImJahr: monate,
+            },
+            abwandlung: ungedeckelt('SZ', UZ_GEGENPROBE),
+          },
+        ],
+      });
+    },
+  }),
+  fall({
+    id: 'M117',
+    titel: 'mBGM 09/2026 A/14 über kasseneck VOR der Anmeldung (Q68/Q69 folgen im selben Fenster)',
+    zweck:
+      'Gesendet vor Q68. Verarbeitet die Sammelverarbeitung erst die Versichertenmeldungen (kein Clearing) oder ' +
+      'in der Reihenfolge des Eingangs (BW1862 „keine Versicherungszeit SV gespeichert“)?',
+    quelle: 'E.32; SIT KW46 Clearing Di nm/Mi vm (M98/M52: BW1837, dann BW1862)',
+    erwartung: 'offen: übernommen; Clearing Mi nm leer oder BW1862',
+    fenster: MI_VM,
+    abhaengig: [],
+    rang: 9,
+    baue: (ctx) => {
+      const jahr = Number(ctx.zr.slice(0, 4)) - 1;
+      return mbgmPaket(ctx, {
+        fall: 'M117',
+        dg: 'A',
+        traeger: '14',
+        monat: `${jahr}-09`,
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          {
+            rolle: 'angestelltenlehrling',
+            mitarbeiter: {
+              ...mitarbeiter(jahr),
+              eintritt: `${jahr}-09-01`,
+              austritt: `${jahr}-09-30`,
+              grossSalaryCents: 280_000,
+            },
+          },
+        ],
+      });
+    },
+  }),
+  fall({
+    id: 'Q68',
+    titel: 'Anmeldung angestelltenlehrling als Angestellte auf A/14 zum 01.09.2026 – NACH der mBGM M117 (M3)',
+    zweck: 'Zweiter Schritt zu M117. Ohne BVAB: das Dienstverhältnis endet im ersten Monat (Q69).',
+    quelle: 'E.29.2 (M3)',
+    erwartung: 'übernommen',
+    fenster: MI_VM,
+    braucht: undefined,
+    abhaengig: ['M117'],
+    rang: 10,
+    baue: (ctx) => {
+      const jahr = Number(ctx.zr.slice(0, 4)) - 1;
+      return meldung(ctx, {
+        fall: 'Q68',
+        art: 'anmeldung',
+        rolle: 'angestelltenlehrling',
+        dg: 'A',
+        traeger: '14',
+        felder: {
+          ADAT: ctx.ttmmjjjj(`${jahr}-09-01`),
+          BBER: '02',
+          GERF: 'N',
+          FRDV: 'N',
+          VWAZ: ctx.elda.wochenarbeitszeit(40, 0),
+        },
+      });
+    },
+  }),
+  fall({
+    id: 'Q69',
+    titel: 'Abmeldung angestelltenlehrling A/14 zum 30.09.2026, ohne BVEN (M4)',
+    zweck: 'Schließt Q68 im ersten Monat; ohne sie liefen ab 10/2026 mBGM von Amts wegen auf.',
+    quelle: 'E.29.2 (M4)',
+    erwartung: 'übernommen, kein VW1942',
+    fenster: MI_VM,
+    braucht: undefined,
+    abhaengig: ['Q68'],
+    rang: 11,
+    baue: (ctx) => {
+      const jahr = Number(ctx.zr.slice(0, 4)) - 1;
+      return meldung(ctx, {
+        fall: 'Q69',
+        art: 'abmeldung',
+        rolle: 'angestelltenlehrling',
+        dg: 'A',
+        traeger: '14',
+        felder: {
+          GERF: 'N',
+          ADAT: ctx.ttmmjjjj(`${jahr}-09-30`),
+          EBSV: ctx.ttmmjjjj(`${jahr}-09-30`),
+          AGRD: '03',
+        },
+      });
+    },
   }),
 ];

@@ -69,10 +69,12 @@ function ohneBv(eintrag) {
  * @param a.stornos fertige Storno-Einträge (Stornomeldung), stehen im Paket vor
  *   den neuen mBGM. Ihre Referenzwerte folgen in `referenzwerte` nach denen der
  *   neuen mBGM.
+ * @param a.pruefen false nur für Negativtests: das Paket geht auch mit eigenen
+ *   Prüfbefunden hinaus, damit die Antwort der SIT sichtbar wird.
  */
 function mbgmPaket(
   ctx,
-  { fall, dg, traeger, monat, bundesland, beschaeftigte, stornos = [], optionen = {} },
+  { fall, dg, traeger, monat, bundesland, beschaeftigte, stornos = [], optionen = {}, pruefen = true },
 ) {
   const k = kasseneck();
   const parameter = k.ladeParameter(Number(monat.slice(0, 4)));
@@ -132,7 +134,7 @@ function mbgmPaket(
     }),
   );
   const befunde = [...ctx.elda.pruefeAbfolge(saetze), ...ctx.elda.pruefeMbgmPaket(saetze)];
-  if (befunde.length > 0) {
+  if (pruefen && befunde.length > 0) {
     throw new Error(`mBGM-Paket ${fall} hat Befunde: ${JSON.stringify(befunde).slice(0, 500)}`);
   }
   return {
