@@ -368,3 +368,122 @@ test('Protokollfehler trägt die rohe Antwort', async () => {
     return true;
   });
 });
+
+// Antwort des Servers vom 11.11.2026 auf den absichtlich falsch geschriebenen Ort
+// „Böhmkrchen" (gemeint: Böheimkirchen) → „melk, kh". Anders als im Beispiel der
+// Dokumentation tragen die Treffer hier `ort` und `id`, Straße und Hausnummer sind leer.
+const ANTWORT_TREFFERLISTE = {
+  success: true,
+  notes: '',
+  version: '1.33.0 Datenstand: 10/26',
+  data: {
+    geomarketing: [
+      {
+        geocoder: {
+          query: { ort: 'Böhmkrchen' },
+          count: 3,
+          geo_state: 4,
+          message: 'Verortung:Orts genau',
+          found: [
+            {
+              zip: '8741',
+              gem: 'Weißkirchen in Steiermark',
+              district: 'Murtal',
+              state: 'Steiermark',
+              ort: 'Baumkirchen',
+              okz: '15286',
+              id: 'N2682E4681',
+              str: '',
+              hnr: '',
+              score: 20,
+            },
+            {
+              zip: '8741',
+              gem: 'Weißkirchen in Steiermark',
+              district: 'Murtal',
+              state: 'Steiermark',
+              ort: 'Baumkirchen',
+              okz: '15254',
+              id: 'N2682E4680',
+              str: '',
+              hnr: '',
+              score: 20,
+            },
+            {
+              zip: '6121',
+              gem: 'Baumkirchen',
+              district: 'Innsbruck (Land)',
+              state: 'Tirol',
+              ort: 'Baumkirchen',
+              okz: '16474',
+              id: 'N2688E4439',
+              str: '',
+              hnr: '',
+              score: 20,
+            },
+          ],
+        },
+      },
+      {
+        geocoder: {
+          query: { ort: 'KH melk' },
+          count: 1,
+          geo_state: 4,
+          message: 'Verortung:Orts genau',
+          found: [
+            {
+              zip: '3390',
+              gem: 'Melk',
+              district: 'Melk',
+              state: 'Niederösterreich',
+              ort: 'KH Melk',
+              okz: '3000017',
+              id: 'N2804E4717',
+              str: '',
+              hnr: '',
+              score: 90,
+            },
+          ],
+        },
+      },
+    ],
+  },
+};
+
+test('Beobachtete Trefferliste: zu stark abweichende Schreibweise liefert Vorschläge mit niedriger Übereinstimmung', async () => {
+  const e = await client(attrappe([json(ANTWORT_TREFFERLISTE)])).abfragen([
+    { ort: 'Böhmkrchen' },
+    { ort: 'melk, kh' },
+  ]);
+  assert.equal(e.art, 'mehrdeutig');
+  if (e.art !== 'mehrdeutig') return;
+  const [start, ziel] = e.suchen;
+  assert.deepEqual(start!.abfrage, { ort: 'Böhmkrchen' });
+  assert.equal(start!.anzahl, 3);
+  assert.equal(start!.status, 4);
+  // Der gemeinte Ort ist nicht unter den Vorschlägen; alle tragen die Übereinstimmung 20.
+  assert.deepEqual(
+    start!.treffer.map((t) => [t.ort, t.plz, t.bundesland, t.okz, t.id, t.score]),
+    [
+      ['Baumkirchen', '8741', 'Steiermark', '15286', 'N2682E4681', 20],
+      ['Baumkirchen', '8741', 'Steiermark', '15254', 'N2682E4680', 20],
+      ['Baumkirchen', '6121', 'Tirol', '16474', 'N2688E4439', 20],
+    ],
+  );
+  // Auch ein eindeutiger Ort steht in der Liste, sobald ein anderer es nicht ist — der Server schreibt die Abfrage dabei um.
+  assert.deepEqual(ziel!.abfrage, { ort: 'KH melk' });
+  assert.deepEqual(ziel!.treffer, [
+    {
+      plz: '3390',
+      gemeinde: 'Melk',
+      bezirk: 'Melk',
+      bundesland: 'Niederösterreich',
+      ort: 'KH Melk',
+      okz: '3000017',
+      id: 'N2804E4717',
+      str: '',
+      hnr: '',
+      score: 90,
+    },
+  ]);
+});
