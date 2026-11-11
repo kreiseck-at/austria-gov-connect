@@ -11,6 +11,7 @@ const os = require('node:os');
 const path = require('node:path');
 const elda = require('../../../dist/index.js');
 const { baueEldaEnvelope } = require('../../../dist/envelope.js');
+const { FELDER_E29 } = require('../../../dist/felder-e29.js');
 const { ladeKatalog } = require('../lib/katalog');
 const { ladeTestdaten } = require('../lib/testdaten');
 const { erstelleAblage } = require('../lib/ablage');
@@ -40,6 +41,12 @@ const IM_FENSTER = {
 };
 
 const SART = {
+  Q65: 'M3',
+  Q66: 'M4',
+  Q64: 'M3',
+  Q62: 'M3',
+  Q63: 'M3',
+  Q61: 'M3',
   V95: 'M8',
   V96: 'M8',
   V100: 'M8',
@@ -156,6 +163,10 @@ const SART = {
   Q53: 'M4',
 };
 const VSTR = {
+  Q62: '15',
+  Q63: '15',
+  Q61: '15',
+  Q64: '15',
   Q30: '15',
   Q31: '15',
   Q32: '15',
@@ -262,7 +273,7 @@ const IM_FENSTER_KW46 = {
 };
 // V72–V83 mit: M100/M101 rechnen mit kasseneck, das nur das Parameterwerk 2026 kennt – die
 // Anmeldungen und Abmeldungen, auf denen sie aufbauen, müssen in derselben (KW46-)Woche liegen.
-const istKw46 = (id) => /^(L2\d|L3[01]|Q6\d|M9[89]|M10[01]|V7[2-9]|V8[0-3])$/.test(id);
+const istKw46 = (id) => /^(L2\d|L3[01]|Q6\d|M9[89]|M10[0-9]|V7[2-9]|V8[0-3])$/.test(id);
 /** Lohnzettel von kasseneck mit Geschlecht (KW46). */
 const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28', 'L31'];
 const zeitpunkt = (id, fenster) =>
@@ -294,7 +305,12 @@ const NICHT_GEBAUT = new Map();
 
 const ABLAGE = erstelleAblage(fs.mkdtempSync(path.join(WURZEL, 'sit-faelle-')));
 // Eine erfundene, schon abgeholte Rücksendung für T15.
-ABLAGE.protokolliere({ art: 'ruecksendung', protokollnummer: '154000001', dateiName: 'alt.xml', zeit: '2026-08-01T00:00:00.000Z' });
+ABLAGE.protokolliere({
+  art: 'ruecksendung',
+  protokollnummer: '154000001',
+  dateiName: 'alt.xml',
+  zeit: '2026-08-01T00:00:00.000Z',
+});
 ABLAGE.protokolliere({ art: 'ruecksendung', protokollnummer: '155000001', dateiName: 'probe.xml' });
 
 /**
@@ -391,7 +407,11 @@ test('bekannt nicht baubar: nur mit kasseneck, nur aus dem erwarteten Grund, und
 
 test('jeder Sendefall: drei Sätze, VR, TM, simuliertes Erstellungsdatum, Seriennummer, Träger, Satzart', () => {
   for (const [id, { ergebnis, ctx }] of GEBAUT) {
-    if (!Buffer.isBuffer(ergebnis.inhalt) || /^[MSL]/.test(id) || [...L16_KW45, ...L16_KASSENECK_KW45].includes(id)) {
+    if (
+      !Buffer.isBuffer(ergebnis.inhalt) ||
+      /^[MSL]/.test(id) ||
+      [...L16_KW45, ...L16_KASSENECK_KW45].includes(id)
+    ) {
       continue;
     }
     const s = saetze(ergebnis.inhalt, id === 'B03' ? '\n' : '\r\n');
@@ -729,7 +749,9 @@ test('M97: kasseneck deckelt die SV-Grundlage bei 6.930 €, die BV-Grundlage bl
   if (!GEBAUT.has('M97')) return;
   const s = saetze(GEBAUT.get('M97').ergebnis.inhalt);
   // BS: Satzart, laufende Nummer, Kennung, OBUS, VSTR (20 Stellen), dann Verrechnungsbasis + Betrag in Cent.
-  const basen = Object.fromEntries(s.filter((x) => x.startsWith('BS')).map((x) => [feld(x, 21, 2), feld(x, 23, 11)]));
+  const basen = Object.fromEntries(
+    s.filter((x) => x.startsWith('BS')).map((x) => [feld(x, 21, 2), feld(x, 23, 11)]),
+  );
   assert.deepEqual(basen, { AB: '00000693000', BV: '00000900000' });
   const v1 = s.filter((x) => x.startsWith('V1')).map((x) => x.slice(20));
   assert.deepEqual(v1, ['T01+039050+00000270617', 'V01+001530+00000013770']);
@@ -768,7 +790,10 @@ test('Q55: L16 aus Monatsabrechnungen von kasseneck – Halbjahr, Sonderzahlunge
   assert.equal(feld(l1, 320, 10), '0000297534', 'KZ 220 Sonderzahlungen innerhalb des Sechstels');
   assert.equal(feld(l1, 342, 10), '0000050789', 'KZ 225 SV auf Sonderzahlungen');
   assert.equal(feld(l1, 364, 10), '0000325260', 'KZ 230 SV laufend (6 × 542,10 €)');
-  assert.ok(ergebnis.hinweise.some((h) => /F2801/.test(h)), 'Hinweis auf F2801');
+  assert.ok(
+    ergebnis.hinweise.some((h) => /F2801/.test(h)),
+    'Hinweis auf F2801',
+  );
   assert.match(l1, /SIT-Q55-20260101/, 'REFN aus employeeId und Beginn');
 });
 
@@ -792,7 +817,8 @@ test('Z04/Z05: falscher Digest bzw. derselbe Digest groß – nur Mi nm, mit Gef
   const echt = 'ab01'.repeat(32);
   const body = `<securityParameters><kundenpasswort>${echt}</kundenpasswort></securityParameters>`;
   const z = (id) => KATALOG.find((f) => f.id === id);
-  const wert = (id) => /<kundenpasswort>([^<]*)</.exec(z(id).baue().manipulation({ body, headers: {} }).body)[1];
+  const wert = (id) =>
+    /<kundenpasswort>([^<]*)</.exec(z(id).baue().manipulation({ body, headers: {} }).body)[1];
   assert.match(wert('Z04'), /^[0-9a-f]{128}$/);
   assert.notEqual(wert('Z04'), echt);
   assert.equal(wert('Z05'), echt.toUpperCase());
@@ -837,7 +863,11 @@ test('L20–L26: L16 von kasseneck mit Geschlecht – LF, echtes DTUE, GESW/GESM
     const s = saetze(ergebnis.inhalt);
     assert.equal(s.length, 4, `${id}: Vorlauf, I1, L1, Schluss`);
     assert.equal(feld(s[0], 23, 2), 'LF', `${id}: BEST`);
-    assert.equal(feld(s[2], 52, 8), wienerZeit(ctx.jetzt).datum.replaceAll('-', ''), `${id}: DTUE = echter Tag`);
+    assert.equal(
+      feld(s[2], 52, 8),
+      wienerZeit(ctx.jetzt).datum.replaceAll('-', ''),
+      `${id}: DTUE = echter Tag`,
+    );
     assert.ok(!ergebnis.hinweise.some((h) => /F2801/.test(h)), `${id}: kein Hinweis auf F2801`);
   }
   // E.14: GESW 280, GESM 281, GESD 282, VOLL 283, TEIL 284, SOZS 132, KORR 656, REFN 66 (30), BELZ/ENLZ 120.
@@ -870,11 +900,18 @@ test('L27–L29: UEL in KZ 220, AVAB mit Kinderzahl, zwei Geschlechter; S15/S16:
   if (GEBAUT.has('L28')) {
     assert.equal(feld(l1('L28'), 285, 1), 'J', 'L28: AVAB');
     assert.equal(feld(l1('L28'), 706, 2), '02', 'L28: zwei Kinder');
-    assert.ok(GEBAUT.get('L28').ergebnis.hinweise.some((h) => /F3101/.test(h)), 'L28: Hinweis auf F3101');
+    assert.ok(
+      GEBAUT.get('L28').ergebnis.hinweise.some((h) => /F3101/.test(h)),
+      'L28: Hinweis auf F3101',
+    );
   }
   assert.equal(feld(l1('L29'), 280, 3), 'JJ ', 'L29: GESW und GESM');
   assert.equal(feld(l1('L30'), 280, 3), ' J ', 'L30: nur GESM');
-  assert.equal(feld(l1('L30'), 285, 11), `J${GEBAUT.get('L30').ctx.rolle('reserve_1').vsnr}`, 'L30: AVAB mit VSNR der Partnerin');
+  assert.equal(
+    feld(l1('L30'), 285, 11),
+    `J${GEBAUT.get('L30').ctx.rolle('reserve_1').vsnr}`,
+    'L30: AVAB mit VSNR der Partnerin',
+  );
   assert.equal(feld(l1('L30'), 706, 2), '02', 'L30: zwei Kinder');
   const vs = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
   assert.equal(feld(vs('S15'), 553, 1), '4', 'S15: offen');
@@ -897,6 +934,101 @@ test('M98/M99: Höchstbeitragsgrundlage – SV bei 6.930 € gedeckelt, BV erst 
   assert.deepEqual(v1('M98'), ['T01+039050+00000270617']);
   assert.deepEqual(basen('M99'), { AB: '00000693000', BV: '00000900000' }, 'M99: BV vom vollen Entgelt');
   assert.deepEqual(v1('M99'), ['T01+039050+00000270617', 'V01+001530+00000013770']);
+  // Nachgeholt auf Q61 (B/15): dieselben Beträge, Beitragszeiträume vom Fenster der Anmeldung aus gerechnet.
+  assert.deepEqual(basen('M102'), { AB: '00000693000' }, 'M102: erster Monat ohne BV');
+  assert.deepEqual(v1('M102'), ['T01+039050+00000270617']);
+  assert.deepEqual(basen('M103'), { AB: '00000693000', BV: '00000900000' }, 'M103: BV vom vollen Entgelt');
+  assert.deepEqual(v1('M103'), ['T01+039050+00000270617', 'V01+001530+00000013770']);
+  const q61 = saetze(GEBAUT.get('Q61').ergebnis.inhalt).find((x) => x.startsWith('M3'));
+  assert.ok(q61.includes('01022026') && q61.includes('01032026'), 'Q61: ADAT 01.02., BVAB 01.03.');
+});
+
+test('M104/M105: Geringfügige über kasseneck – Dienstgeberabgabe erst ab der Summe über dem 1,5-Fachen', () => {
+  if (!GEBAUT.has('M104')) return;
+  const zeilen = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt).map((x) => x.trimEnd());
+  const kern = (id) =>
+    zeilen(id)
+      .filter((x) => /^(T1|BS|V1)/.test(x))
+      .map((x) => `${x.slice(0, 2)} ${x.slice(20)}`);
+  // Tarifgruppe B010 (geringfügig), nur UV 1,1 %; erster Monat ohne BV.
+  assert.deepEqual(kern('M104'), [
+    'T1 B010               01',
+    'BS AB00000050000',
+    'V1 T01+001100+00000000550',
+  ]);
+  // Summe 900 € über 826,65 € → Z01 19,4 % auf beide; BV nur für reserve_2 (zweiter Monat).
+  assert.deepEqual(kern('M105'), [
+    'T1 B010               01',
+    'BS AB00000050000',
+    'V1 T01+001100+00000000550',
+    'V1 Z01+019400+00000009700',
+    'BS BV00000050000',
+    'V1 V01+001530+00000000765',
+    'T1 B010               01',
+    'BS AB00000040000',
+    'V1 T01+001100+00000000440',
+    'V1 Z01+019400+00000007760',
+  ]);
+});
+
+test('M106: Angestelltenlehrling über kasseneck – B044, A05 im Band 2.225–2.427 €', () => {
+  if (!GEBAUT.has('M106')) return;
+  const kern = saetze(GEBAUT.get('M106').ergebnis.inhalt)
+    .map((x) => x.trimEnd())
+    .filter((x) => /^(T1|BS|V1)/.test(x))
+    .map((x) => `${x.slice(0, 2)} ${x.slice(20)}`);
+  assert.deepEqual(kern, [
+    'T1 B044               01',
+    'BS AB00000230000',
+    'V1 T01+028450+00000065435',
+    'V1 A05-000150-00000000345',
+  ]);
+});
+
+test('M107–M109: UEL über kasseneck – Austrittsmonat ohne KEUE, Verlängerungsmonat mit KEUE J und VVON 1', () => {
+  if (!GEBAUT.has('M109')) return;
+  const kern = (id) =>
+    saetze(GEBAUT.get(id).ergebnis.inhalt)
+      .map((x) => x.trimEnd())
+      .filter((x) => /^(G1|T1|BS|V1)/.test(x))
+      .map((x) => `${x.slice(0, 2)} ${x.slice(20)}`);
+  const ohneG1 = (id) => kern(id).filter((x) => !x.startsWith('G1'));
+  assert.deepEqual(ohneG1('M107'), [
+    'T1 B001               01',
+    'BS AB00000240000',
+    'V1 T01+039050+00000093720',
+    'V1 A02-001950-00000004680',
+  ]);
+  // Austrittsmonat: die UEL liegt ganz im März → kein KEUE, aber BV ab 01.02.
+  assert.deepEqual(ohneG1('M108'), [
+    'T1 B001               01',
+    'BS AB00000240000',
+    'V1 T01+039050+00000093720',
+    'V1 A02-001950-00000004680',
+    'BS BV00000240000',
+    'V1 V01+001530+00000003672',
+  ]);
+  // Verlängerungsmonat: VVON 01, KEUE J; AV-Abschlag nach dem UEL-Betrag allein.
+  assert.deepEqual(ohneG1('M109'), [
+    'T1 B001               01J',
+    'BS AB00000040000',
+    'V1 T01+039050+00000015620',
+    'V1 A03-002950-00000001180',
+    'BS BV00000040000',
+    'V1 V01+001530+00000000612',
+  ]);
+  const q66 = saetze(GEBAUT.get('Q66').ergebnis.inhalt).find((x) => x.startsWith('M4'));
+  for (const [n, wert] of [
+    ['ADAT', '05032026'],
+    ['EBSV', '28022026'],
+    ['AGRD', '03'],
+    ['UEAB', '01032026'],
+    ['UEBI', '05032026'],
+    ['BVEN', '05032026'],
+  ]) {
+    const f = FELDER_E29.find((x) => x.name === n);
+    assert.equal(q66.slice(f.pos - 1, f.pos - 1 + f.laenge), wert, `Q66: ${n}`);
+  }
 });
 
 test('T16/T17: die jüngste abgeholte Rücksendung, die alt genug ist; L31: KZ 220 nur bis zum Jahressechstel', () => {
@@ -913,6 +1045,9 @@ test('T16/T17: die jüngste abgeholte Rücksendung, die alt genug ist; L31: KZ 2
     const g = saetze(GEBAUT.get('M100').ergebnis.inhalt).filter((x) => /^G\d/.test(x));
     assert.equal(g.length, 3, 'M100: drei Versicherte');
     const bs = saetze(GEBAUT.get('M100').ergebnis.inhalt).filter((x) => x.startsWith('BS'));
-    assert.ok(bs.every((x) => feld(x, 21, 2) !== 'BV'), 'M100: keine BV im ersten Monat');
+    assert.ok(
+      bs.every((x) => feld(x, 21, 2) !== 'BV'),
+      'M100: keine BV im ersten Monat',
+    );
   }
 });
