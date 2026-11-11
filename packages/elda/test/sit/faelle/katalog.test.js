@@ -12,6 +12,7 @@ const path = require('node:path');
 const elda = require('../../../dist/index.js');
 const { baueEldaEnvelope } = require('../../../dist/envelope.js');
 const { FELDER_E29 } = require('../../../dist/felder-e29.js');
+const { FELDER_L1 } = require('../../../dist/felder-e14.js');
 const { ladeKatalog } = require('../lib/katalog');
 const { ladeTestdaten } = require('../lib/testdaten');
 const { erstelleAblage } = require('../lib/ablage');
@@ -41,6 +42,12 @@ const IM_FENSTER = {
 };
 
 const SART = {
+  Q67: 'M3',
+  Q68: 'M3',
+  Q69: 'M4',
+  Q70: 'M3',
+  Q71: 'M4',
+  Q72: 'M6',
   Q65: 'M3',
   Q66: 'M4',
   Q64: 'M3',
@@ -163,6 +170,12 @@ const SART = {
   Q53: 'M4',
 };
 const VSTR = {
+  Q67: '15',
+  Q68: '14',
+  Q69: '14',
+  Q70: '15',
+  Q71: '15',
+  Q72: '15',
   Q62: '15',
   Q63: '15',
   Q61: '15',
@@ -273,7 +286,7 @@ const IM_FENSTER_KW46 = {
 };
 // V72–V83 mit: M100/M101 rechnen mit kasseneck, das nur das Parameterwerk 2026 kennt – die
 // Anmeldungen und Abmeldungen, auf denen sie aufbauen, müssen in derselben (KW46-)Woche liegen.
-const istKw46 = (id) => /^(L2\d|L3[01]|Q6\d|M9[89]|M10[0-9]|V7[2-9]|V8[0-3])$/.test(id);
+const istKw46 = (id) => /^(L2\d|L3\d|L4[0-6]|Q[67]\d|M9[89]|M1(0\d|1\d|2\d|3[0-3])|V7[2-9]|V8[0-3])$/.test(id);
 /** Lohnzettel von kasseneck mit Geschlecht (KW46). */
 const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28', 'L31'];
 const zeitpunkt = (id, fenster) =>
@@ -883,6 +896,10 @@ test('L20–L26: L16 von kasseneck mit Geschlecht – LF, echtes DTUE, GESW/GESM
   assert.equal(feld(l1('L20'), 66, 30).trim(), 'SIT-L20-20260101', 'L20: REFN');
   assert.equal(feld(l1('L24'), 66, 30), feld(l1('L20'), 66, 30), 'L24: REFN wie L20');
   assert.equal(feld(l1('L24'), 656, 1), 'K', 'L24: Berichtigung');
+  if (GEBAUT.has('L46')) {
+    assert.equal(feld(l1('L46'), 66, 30), feld(l1('L20'), 66, 30), 'L46: REFN wie L20');
+    assert.equal(feld(l1('L46'), 656, 1), 'S', 'L46: Storno');
+  }
   assert.equal(feld(l1('L20'), 656, 1), ' ', 'L20: ohne KORR');
   assert.notEqual(feld(l1('L24'), 298, 10), feld(l1('L20'), 298, 10), 'L24: andere Beträge');
   assert.equal(feld(l1('L25'), 66, 30).trim(), 'SIT-L20-20260801', 'L25: eigene REFN je Dienstverhältnis');
@@ -916,6 +933,45 @@ test('L27–L29: UEL in KZ 220, AVAB mit Kinderzahl, zwei Geschlechter; S15/S16:
   const vs = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
   assert.equal(feld(vs('S15'), 553, 1), '4', 'S15: offen');
   assert.equal(feld(vs('S16'), 553, 1), '6', 'S16: inter');
+});
+
+test('L34/L35: Pendlerpauschale in BPEN und KZ 243, steuerfreie Überstundenzuschläge in KZ 215 und SB682', () => {
+  if (!GEBAUT.has('L34')) return;
+  const l1 = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[2];
+  const zahl = (id, pos) => Number(feld(l1(id), pos, 10));
+  // Klein, 20–40 km: 58 € im Monat, Jänner bis Juni.
+  assert.equal(zahl('L34', 397), 34_800, 'L34: BPEN');
+  assert.equal(zahl('L34', 441), 34_800, 'L34: KZ 243 = Pendlerpauschale');
+  assert.equal(zahl('L34', 757), 0, 'L34: kein Pendlereuro (BPEND 0)');
+  assert.equal(zahl('L34', 309), 0, 'L34: KZ 215 leer');
+  // F6401: KZ 245 = 210 − 215 − 220 − 230 − 243.
+  for (const id of ['L34', 'L35']) {
+    assert.equal(
+      zahl(id, 452),
+      zahl(id, 298) - zahl(id, 309) - zahl(id, 320) - zahl(id, 364) - zahl(id, 441),
+      `${id}: F6401`,
+    );
+  }
+  assert.ok(zahl('L35', 309) > 0, 'L35: KZ 215');
+  assert.equal(zahl('L35', 1090), zahl('L35', 309), 'L35: SB682 = KZ 215');
+  assert.equal(zahl('L35', 397), 0, 'L35: keine Pendlerpauschale');
+  assert.equal(feld(l1('L35'), 120, 8), '01073112', 'L35: 01.07.–31.12.');
+  // L43: derselbe Satz wie L34, nur BPEND (Feld 132) gesetzt.
+  assert.equal(zahl('L43', 757), 9_000, 'L43: Pendlereuro 90 €');
+  assert.equal(feld(l1('L43'), 756, 1), '+', 'L43: Vorzeichen');
+  assert.equal(l1('L43').slice(0, 65), l1('L34').slice(0, 65), 'L43: Kopf wie L34');
+  assert.equal(l1('L43').slice(130, 755), l1('L34').slice(130, 755), 'L43: Beträge wie L34');
+  // L45: zehn Monate (März angebrochen) zu 306 €.
+  assert.equal(zahl('L45', 397), 306_000, 'L45: BPEN 3.060 €');
+  assert.equal(feld(l1('L45'), 120, 8), '15033112', 'L45: 15.03.–31.12.');
+});
+
+test('L36–L42: Rechenregeln des L16 – genau die eine Regel verletzt, die der Fall nennt', () => {
+  for (const f of KATALOG.filter((x) => /^L(3[6-9]|4[0-2])$/.test(x.id))) {
+    assert.deepEqual(GEBAUT.get(f.id).ergebnis.eigeneBefunde, f.eigeneBefunde, `${f.id}: eigene Befunde (Status N)`);
+  }  const l1 = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[2];
+  assert.equal(feld(l1('L44'), 66, 30), feld(l1('L41'), 66, 30), 'L44: Referenznummer von L41');
+  assert.equal(feld(l1('L44'), 656, 1), 'K', 'L44: Berichtigung');
 });
 
 test('M98/M99: Höchstbeitragsgrundlage – SV bei 6.930 € gedeckelt, BV erst ab März vom vollen Entgelt', () => {
@@ -1029,6 +1085,74 @@ test('M107–M109: UEL über kasseneck – Austrittsmonat ohne KEUE, Verlängeru
     const f = FELDER_E29.find((x) => x.name === n);
     assert.equal(q66.slice(f.pos - 1, f.pos - 1 + f.laenge), wert, `Q66: ${n}`);
   }
+});
+
+test('M110–M113: Höchstbeitragsgrundlage der Sonderzahlungen über kasseneck, Gegenprobe ungedeckelt', () => {
+  if (!GEBAUT.has('M110')) return;
+  const kern = (id) =>
+    saetze(GEBAUT.get(id).ergebnis.inhalt)
+      .map((x) => x.trimEnd())
+      .filter((x) => /^(T1|BS|V1)/.test(x))
+      .map((x) => `${x.slice(0, 2)} ${x.slice(20)}`);
+  const kopf = 'T1 B002               01';
+  const laufend = ['BS AB00000693000', 'V1 T01+039050+00000270617'];
+  // Gegenprobe: ungedeckelt, erster Monat ohne BV.
+  assert.deepEqual(kern('M112'), [kopf, 'BS AB00000900000', 'V1 T01+039050+00000351450']);
+  assert.deepEqual(kern('M110'), [
+    kopf,
+    ...laufend,
+    'BS SZ00000900000',
+    'V1 T02+037550+00000337950',
+    'BS BV00001800000',
+    'V1 V01+001530+00000027540',
+  ]);
+  // Rest bis 13.860 €: 4.860 €; die BV bleibt auf dem vollen Entgelt.
+  assert.deepEqual(kern('M111'), [
+    kopf,
+    ...laufend,
+    'BS SZ00000486000',
+    'V1 T02+037550+00000182493',
+    'BS BV00001800000',
+    'V1 V01+001530+00000027540',
+  ]);
+  // Deckel ausgeschöpft: keine SZ-Basis mehr, BV auf 9.000 € + 2.000 €.
+  assert.deepEqual(kern('M113'), [kopf, ...laufend, 'BS BV00001100000', 'V1 V01+001530+00000016830']);
+  // Gegenprobe zur Dienstgeberabgabe: beide Geringfügige mit BV, aber ohne Z01.
+  assert.deepEqual(kern('M114'), [
+    'T1 B010               01',
+    'BS AB00000050000',
+    'V1 T01+001100+00000000550',
+    'BS BV00000050000',
+    'V1 V01+001530+00000000765',
+    'T1 B010               01',
+    'BS AB00000040000',
+    'V1 T01+001100+00000000440',
+    'BS BV00000040000',
+    'V1 V01+001530+00000000612',
+  ]);
+});
+
+test('L32/L33: Jahreslohnzettel 2026 von kasseneck – 01.01.–31.12., Sonderzahlungen in ihren Monaten', () => {
+  if (!GEBAUT.has('L32')) return;
+  const ist = {};
+  for (const id of ['L32', 'L33']) {
+    const l1 = saetze(GEBAUT.get(id).ergebnis.inhalt).find((x) => x.startsWith('L1'));
+    const w = (n) => {
+      const f = FELDER_L1['28'].find((x) => x.name === n);
+      return l1.slice(f.pos - 1, f.pos - 1 + f.laenge);
+    };
+    ist[id] = ['BELZ', 'ENLZ', 'B210', 'B220', 'B225', 'B230', 'B245'].map((n) => `${n}=${w(n)}`).join(' ');
+  }
+  // 14 × 3.000 €, SZ ganz im Sechstel; SV auf die SZ 17,07 %, laufend 18,07 %.
+  assert.equal(
+    ist.L32,
+    'BELZ=0101 ENLZ=3112 B210=0004200000 B220=0000600000 B225=0000102420 B230=0000650520 B245=0002949480',
+  );
+  // 14 × 9.000 €: SV-SZ nur auf 13.860 € (KZ 225), laufend nur auf 12 × 6.930 € (KZ 230).
+  assert.equal(
+    ist.L33,
+    'BELZ=0101 ENLZ=3112 B210=0012600000 B220=0001800000 B225=0000236590 B230=0001502700 B245=0009297300',
+  );
 });
 
 test('T16/T17: die jüngste abgeholte Rücksendung, die alt genug ist; L31: KZ 220 nur bis zum Jahressechstel', () => {

@@ -63,14 +63,18 @@ function ohneBv(eintrag) {
  *   Eingabeform von kasseneck (dienstnehmerGruppe, eintritt, wochenstunden, …);
  *   Name und Versicherungsnummer kommen aus den Testdaten der Rolle. `nurSv`
  *   meldet die Person bewusst ohne BV (Verrechnungsgrundlage 2, Basis BV
- *   entfernt) – wie ein Programm, das die BV-Zeit nicht kennt.
+ *   entfernt) – wie ein Programm, das die BV-Zeit nicht kennt. `sonderzahlung`
+ *   ist der Sonderzahlungs-Kontext von kasseneck (Posten, bisherige SZ des
+ *   Jahres). `abwandlung` verändert den fertigen Eintrag für einen Negativtest.
  * @param a.stornos fertige Storno-Einträge (Stornomeldung), stehen im Paket vor
  *   den neuen mBGM. Ihre Referenzwerte folgen in `referenzwerte` nach denen der
  *   neuen mBGM.
+ * @param a.pruefen false nur für Negativtests: das Paket geht auch mit eigenen
+ *   Prüfbefunden hinaus, damit die Antwort der SIT sichtbar wird.
  */
 function mbgmPaket(
   ctx,
-  { fall, dg, traeger, monat, bundesland, beschaeftigte, stornos = [], optionen = {} },
+  { fall, dg, traeger, monat, bundesland, beschaeftigte, stornos = [], optionen = {}, pruefen = true },
 ) {
   const k = kasseneck();
   const parameter = k.ladeParameter(Number(monat.slice(0, 4)));
@@ -78,6 +82,7 @@ function mbgmPaket(
   const referenzwerte = [];
   const eintraege = beschaeftigte.map((b, i) => {
     const { rolle, mitarbeiter, nurSv = false, monatskontext, zeiten, endabrechnung, verlaengerungVon } = b;
+    const { sonderzahlung = null, abwandlung = (e) => e } = b;
     const person = ctx.rolle(rolle);
     // Für einen Monat, den nur noch eine Urlaubsersatzleistung verlängert (§ 11 Abs 2 ASVG), baut kasseneck die
     // Meldung aus der Abrechnung des Austrittsmonats (`verlaengerungVon`).
@@ -86,7 +91,7 @@ function mbgmPaket(
       monat: verlaengerungVon ?? monat,
       parameter,
       bundesland,
-      sonderzahlungKontext: null,
+      sonderzahlungKontext: sonderzahlung,
       // Die anderen Beschäftigten desselben Monats (z. B. `andereGeringfuegige` für die Dienstgeberabgabe).
       monatskontext,
       // Endabrechnung wie im Lohnlauf (payslip-endpoints): UEL als Zeitkonto-Zeile `uel_laufend` und als Eingabe.
@@ -114,7 +119,7 @@ function mbgmPaket(
           referenzwert: refw,
         })
       : k.mbgm.baueMeldung({ abrechnung, mitarbeiter: daten, referenzwert: refw });
-    return nurSv ? ohneBv(eintrag) : eintrag;
+    return abwandlung(nurSv ? ohneBv(eintrag) : eintrag);
   });
   const paketref = ctx.referenzwert(fall);
   const saetze = ctx.elda.erstelleMbgmPaket(
@@ -129,7 +134,7 @@ function mbgmPaket(
     }),
   );
   const befunde = [...ctx.elda.pruefeAbfolge(saetze), ...ctx.elda.pruefeMbgmPaket(saetze)];
-  if (befunde.length > 0) {
+  if (pruefen && befunde.length > 0) {
     throw new Error(`mBGM-Paket ${fall} hat Befunde: ${JSON.stringify(befunde).slice(0, 500)}`);
   }
   return {
@@ -149,18 +154,23 @@ function mbgmPaket(
  *   `erstelleLohnzettelBestand`
  * @param a.erstellt Erstellungszeitpunkt (Vorlauf, DTUE/ZTUE); ohne Angabe der
  *   simulierte Tag des Fensters
+ * @param a.pruefen false nur für Negativtests: der Lohnzettel geht auch mit
+ *   eigenen Befunden (Status N) hinaus; deren Codes stehen dann in `eigeneBefunde`.
  */
-function lohnzettel(ctx, { fall, dg, traeger, uebermittlung, erstellt }) {
+function lohnzettel(ctx, { fall, dg, traeger, uebermittlung, erstellt, pruefen = true }) {
   const { versicherungstraeger: _vstr, ...opt } = ctx.bestandOptionen({ dg, traeger, erstellt });
   const saetze = ctx.elda.lohnzettelSaetze(uebermittlung, opt.erstellt);
   const befunde = ctx.elda
     .pruefeLohnzettel(saetze, uebermittlung.version, { heute: opt.erstellt })
     .filter((b) => b.status.startsWith('N'));
-  if (befunde.length > 0) throw new Error(`L16 ${fall} hat Befunde mit Status N: ${JSON.stringify(befunde)}`);
+  if (pruefen && befunde.length > 0) {
+    throw new Error(`L16 ${fall} hat Befunde mit Status N: ${JSON.stringify(befunde)}`);
+  }
   return {
     inhalt: ctx.elda.erstelleLohnzettelBestand(uebermittlung, opt),
     dateiName: ctx.dateiName(fall),
     referenzwerte: uebermittlung.lohnzettel.map((lz) => lz.felder.REFN),
+    ...(pruefen ? {} : { eigeneBefunde: befunde.map((b) => b.code) }),
   };
 }
 

@@ -22,8 +22,22 @@
  * führt (`N`, `P`, `G`, `I`, `P (I)` …). Eine Legende dazu enthält der
  * Katalog nicht; das DM-Org sagt nur zu `G` etwas (Kapitel D.32: das
  * Finanzministerium „übernimmt … zwar den Lohnzettel, aber er wird mit dem
- * Fehlerstatus „G" gekennzeichnet"). Das Paket deutet die Buchstaben deshalb
- * nicht.
+ * Fehlerstatus „G" gekennzeichnet"). Das Fehlerprotokoll zum Bestand `LF`
+ * („Erläuterung zum Status", SIT-Plattform 11.11.2026) erklärt die drei
+ * Hauptbuchstaben:
+ *
+ * - `N` Nicht-Übernahme: nicht verwertbar; korrigieren und neu übermitteln,
+ *   ohne Korrektur- und ohne Fehlerindikation.
+ * - `G` gesperrt: Daten richtigstellen oder mit Fehlerindikator für richtig
+ *   erklären, nochmals mit Korrekturindikation und ursprünglicher
+ *   Referenznummer senden.
+ * - `P` Protokoll: Lohnzettel prüfen; nur im Fehlerfall richtigstellen und
+ *   mit Korrekturindikation und ursprünglicher Referenznummer senden.
+ *
+ * In der XML-Mitteilung kommen `G` und `P` beide als `typ="warnung"` bei
+ * Status „übernommen"; unterscheiden lassen sie sich dort nur über den
+ * Fehlerstatus der Katalogzeile (`l16Regel(code)?.status`). Zusätze in
+ * Klammern (`P (I)`, `G(H)`) deutet das Paket nicht.
  *
  * Nicht übernommen sind die Unterzeilen `F6201_2021` bis `F6201_2026`: Sie
  * unterscheiden laut Katalog nur „in ELDA" die Jahresfassung der Prüfung
@@ -413,10 +427,15 @@ export const L16_PRUEFKATALOG: ReadonlyMap<string, L16Regel> = new Map(
  * Ein Code, der schon so im Katalog steht (`F1706`, `KA20`), wird unverändert
  * gesucht.
  *
+ * Einen Jahreszusatz liefert die Mitteilung entgegen dem Katalog doch: am
+ * 11.11.2026 kam `6201_2026` (im Textprotokoll derselben Übermittlung `6201`).
+ * Der Zusatz wird abgeschnitten; die Unterzeilen `F6201_2021` bis `F6201_2026`
+ * führt dieses Abbild ohnehin nicht (siehe oben).
+ *
  * @returns die Regel, oder `undefined`, wenn der Katalog den Code nicht kennt.
  */
 export function l16Regel(code: string): L16Regel | undefined {
-  const c = code.trim();
+  const c = code.trim().replace(/_\d{4}$/, '');
   return L16_PRUEFKATALOG.get(c) ?? (/^\d{4}$/.test(c) ? L16_PRUEFKATALOG.get(`F${c}`) : undefined);
 }
 

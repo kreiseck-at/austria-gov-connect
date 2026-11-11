@@ -572,4 +572,48 @@ module.exports = [
     rang: 16,
     baue: paketUel('M109', 'maerz'),
   }),
+  fall({
+    id: 'M114',
+    titel:
+      'Gegenprobe mBGM 04/2026 B/15: zwei Geringfügige über dem 1,5-Fachen, Dienstgeberabgabe Z01 absichtlich weggelassen',
+    zweck:
+      'Wie M105 einen Monat später, aber ohne Z01 – so, wie kasseneck vor #869 gemeldet hätte. Merkt die ÖGK die ' +
+      'fehlende Dienstgeberabgabe im Clearing? Nur dann sagt „kein Clearing“ bei M105 etwas.',
+    quelle: `${QUELLE_GF}; Negativtest`,
+    erwartung:
+      'formal übernommen; Clearing Mi nm zur Dienstgeberabgabe – oder keins (dann prüft die SIT die DAG nicht monatlich)',
+    fenster: ['mi-vm'],
+    abhaengig: ['Q62', 'Q63', 'M105'],
+    rang: 18,
+    baue: (ctx) => {
+      const ohneDag = (e) => ({
+        ...e,
+        tarifbloecke: e.tarifbloecke.map((t) => ({
+          ...t,
+          basen: t.basen.map((b) => ({ ...b, positionen: b.positionen.filter((p) => p.typ !== 'Z01') })),
+        })),
+      });
+      return mbgmPaket(ctx, {
+        fall: 'M114',
+        dg: 'B',
+        traeger: '15',
+        monat: monatVor(ctx.zrVon('Q63'), 0),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          {
+            rolle: 'reserve_2',
+            mitarbeiter: geringfuegig(ctx, 'Q62', 2, 50_000, 10),
+            monatskontext: { andereGeringfuegige: [{ employeeId: 'reserve_3', entgeltLaufendCent: 40_000 }] },
+            abwandlung: ohneDag,
+          },
+          {
+            rolle: 'reserve_3',
+            mitarbeiter: geringfuegig(ctx, 'Q63', 1, 40_000, 8),
+            monatskontext: { andereGeringfuegige: [{ employeeId: 'reserve_2', entgeltLaufendCent: 50_000 }] },
+            abwandlung: ohneDag,
+          },
+        ],
+      });
+    },
+  }),
 ];

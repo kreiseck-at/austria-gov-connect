@@ -21,6 +21,15 @@
 //   L28  reserve_3    Alleinverdiener mit zwei Kindern (AVAB J, ANZK 02) ohne VSNR des Partners
 //   L29  reserve_3    Negativtest über das Paket: zwei Geschlechter angekreuzt (GESW + GESM)
 //   L31  reserve_2    Sonderzahlungen über dem Jahressechstel (§ 67 Abs 2 EStG)
+//   L34  arbeiter     Pendlerpauschale (klein, 20–40 km) – BPEN und KZ 243, ohne Pendlereuro
+//   L35  reserve_1    zehn Überstunden im Monat – steuerfreie Zuschläge § 68 Abs 2 in KZ 215 / SB682
+//   L43  arbeiter     Gegenprobe zu L34: derselbe Lohnzettel mit Pendlereuro (BPEND) – fällt 5404 weg?
+//   L44  reserve_3    der Weg aus Status G: L41 berichtigt (KORR K, Referenznummer von L41, § 68 unter dem Maximum)
+//   L45  arbeiterlehrling Pendlerpauschale groß über 60 km bei Eintritt 15.03. – wie aliquotiert F5402 den Höchstbetrag?
+//   L46  angestellte  Storno von L20/L24 über kasseneck (KORR S, gleiche REFN) – kasseneck dokumentiert nur „K“
+//   L36–L42 reserve_3 Rechenregeln des BMF-Katalogs über das Paket, je eine Regel verletzt bzw. genau auf der
+//                     Toleranz: F6401 (±1,00 €), F4800, F7004 (±0,20 €), F3806, F6201 (±0,40 €) mit Status N und
+//                     F3805/F9715 mit Status G („übernimmt zwar, … mit dem Fehlerstatus G gekennzeichnet“, D.32)
 //
 // Höchstbeitragsgrundlage (M97 aus KW45, dessen Vorlauf Q34 nur Mo 07–09 lief): Q60 meldet
 // die Angestellte auf A/14 zum 01.02.2026 an, BV ab 01.03.2026. Die mBGM 02 und 03 mit
@@ -80,6 +89,10 @@ function kasseneckL16Reihe(
     korrektur,
     employeeId = `SIT-${id}`,
     posten,
+    szJeMonat,
+    jahrAbgeschlossen = false,
+    zeiten,
+    zusatzBetraege,
     mehr = {},
   },
 ) {
@@ -99,11 +112,28 @@ function kasseneckL16Reihe(
     grossSalaryCents: monatsbezug,
     ...mehr,
   };
-  const monate = monateZwischen(eintritt, austritt);
-  const aliquot = Math.round((monatsbezug * tageInklusive(eintritt, austritt)) / 365);
+  // Läuft das Dienstverhältnis über das Jahr hinaus (`austritt` null), rechnet die Reihe bis 31.12.
+  const monate = monateZwischen(eintritt, austritt ?? `${jahr}-12-31`);
+  const aliquot = austritt ? Math.round((monatsbezug * tageInklusive(eintritt, austritt)) / 365) : null;
+  // `szJeMonat` ({ '06': posten, … }): Sonderzahlungen in den genannten Monaten, mit den bisherigen SZ des
+  // Jahres wie im Lohnlauf (Sechstel, SZ-Höchstbeitragsgrundlage); sonst UZ + WR aliquot im letzten Monat.
+  let bisher = { sz: 0, svGrundlage: 0, bemessung: 0 };
+  const szKontext = (monat, i) => {
+    const p = szJeMonat?.[monat.slice(5, 7)];
+    if (!p) return null;
+    return {
+      posten: p,
+      bisherigeSzJahrCent: bisher.sz,
+      bisherigeSzSvGrundlageJahrCent: bisher.svGrundlage,
+      bisherigeSzBemessungJahrCent: bisher.bemessung,
+      laufendeBezuegeJahrCent: monatsbezug * (i + 1),
+      kalenderMonateImJahr: Number(monat.slice(5, 7)),
+    };
+  };
   const payslips = monate.map((monat, i) => {
-    const kontext =
-      sonderzahlungen && i === monate.length - 1
+    const kontext = szJeMonat
+      ? szKontext(monat, i)
+      : sonderzahlungen && i === monate.length - 1
         ? {
             posten: posten ?? [
               { typ: 'UZ', betragCent: aliquot },
@@ -116,13 +146,29 @@ function kasseneckL16Reihe(
             kalenderMonateImJahr: monate.length,
           }
         : null;
-    const a = lohn.erstelleAbrechnung({ mitarbeiter, monat, parameter, bundesland: 'salzburg', sonderzahlungKontext: kontext });
-    if (a.meta?.fehler) throw new Error(`${id}: kasseneck rechnet ${monat} nicht: ${JSON.stringify(a.meta.fehler)}`);
+    const a = lohn.erstelleAbrechnung({
+      mitarbeiter,
+      monat,
+      parameter,
+      bundesland: 'salzburg',
+      sonderzahlungKontext: kontext,
+      ...(zeiten ? { zeiten } : {}),
+    });
+    if (a.meta?.fehler)
+      throw new Error(`${id}: kasseneck rechnet ${monat} nicht: ${JSON.stringify(a.meta.fehler)}`);
+    if (szJeMonat && kontext) {
+      bisher = {
+        sz: bisher.sz + a.brutto.sonderzahlung.innerhalbSechstel,
+        svGrundlage: bisher.svGrundlage + a.sv.grundlageSZ,
+        bemessung: bisher.bemessung + a.lst.szBesteuerung.bemessungFest,
+      };
+    }
     return { id: monat, monat, ...a };
   });
   const p = ctx.rolle(rolle);
   const gender = geschlecht ?? PERSONENSTAND[p.geschlecht];
-  if (!gender) throw new Error(`${id}: Geschlecht der Rolle ${rolle} unbekannt (${JSON.stringify(p.geschlecht)})`);
+  if (!gender)
+    throw new Error(`${id}: Geschlecht der Rolle ${rolle} unbekannt (${JSON.stringify(p.geschlecht)})`);
   const dg = ctx.dienstgeber('B');
   const iso = (ttmmjjjj) => `${ttmmjjjj.slice(4, 8)}-${ttmmjjjj.slice(2, 4)}-${ttmmjjjj.slice(0, 2)}`;
   const { uebermittlung, hinweise } = k.baueL16Uebermittlung({
@@ -149,11 +195,20 @@ function kasseneckL16Reihe(
       steuernummer: '91-123/4565',
       land: 'A',
     },
-    jahrAbgeschlossen: false,
+    jahrAbgeschlossen,
     ...(korrektur ? { korrektur } : {}),
   });
-  const { versicherungstraeger: _vstr, ...lfOpt } = ctx.bestandOptionen({ dg: 'B', traeger: '15', erstellt: ctx.jetzt });
-  const { befunde } = k.pruefeL16Uebermittlung(uebermittlung, { erstellt: lfOpt.erstellt, heute: lfOpt.erstellt });
+  const { versicherungstraeger: _vstr, ...lfOpt } = ctx.bestandOptionen({
+    dg: 'B',
+    traeger: '15',
+    erstellt: ctx.jetzt,
+  });
+  // Felder, die kasseneck (noch) nicht führt, für eine Gegenprobe nachgetragen (L43: Pendlereuro).
+  if (zusatzBetraege) Object.assign(uebermittlung.lohnzettel[0].betraege, zusatzBetraege);
+  const { befunde } = k.pruefeL16Uebermittlung(uebermittlung, {
+    erstellt: lfOpt.erstellt,
+    heute: lfOpt.erstellt,
+  });
   const n = befunde.filter((b) => b.status.startsWith('N'));
   if (n.length > 0) throw new Error(`${id}: kasseneck-L16 hat Befunde mit Status N: ${JSON.stringify(n)}`);
   return {
@@ -167,9 +222,10 @@ function kasseneckL16Reihe(
 /**
  * L16 2026 über das Paket für reserve_3 (Arbeiter, männlich, 01.01.–28.02.2026, 3.000 € im Monat, Beträge
  * wie Q50). `mehr` ergänzt oder überschreibt Felder des L1-Satzes (L29: GESW zusätzlich, L30: AVAB mit
- * Versicherungsnummer der Partnerin).
+ * Versicherungsnummer der Partnerin), `betraege` einzelne Beträge (L36–L42); `pruefen: false` lässt einen
+ * Negativtest trotz eigener Befunde hinaus.
  */
-function l16Paket(ctx, fall, mehr = {}) {
+function l16Paket(ctx, fall, mehr = {}, { betraege = {}, pruefen = true } = {}) {
   const p = ctx.rolle('reserve_3');
   const dg = ctx.dienstgeber('B');
   return lohnzettel(ctx, {
@@ -210,10 +266,19 @@ function l16Paket(ctx, fall, mehr = {}) {
             ...mehr,
           },
           // Zwei Monate zu 3.000 €, gerechnet mit kasseneck (wie L16_BETRAEGE[3000] in q-kw45.js).
-          betraege: { B210: 600_000, BIEB: 108_420, B230: 108_420, B245: 491_580, BIEL: 56_764, B260: 56_764 },
+          betraege: {
+            B210: 600_000,
+            BIEB: 108_420,
+            B230: 108_420,
+            B245: 491_580,
+            BIEL: 56_764,
+            B260: 56_764,
+            ...betraege,
+          },
         },
       ],
     },
+    pruefen,
   });
 }
 
@@ -222,7 +287,8 @@ const l16 = (mehr) => fall({ fenster: AB_MO_NM, braucht: 'kasseneck-l16', ...meh
 module.exports = [
   l16({
     id: 'L20',
-    titel: 'L16 2026 von kasseneck mit Geschlecht: Angestellte, Halbjahr, Austritt 30.06., UZ + WR aliquot (Q55 neu)',
+    titel:
+      'L16 2026 von kasseneck mit Geschlecht: Angestellte, Halbjahr, Austritt 30.06., UZ + WR aliquot (Q55 neu)',
     zweck:
       'Q55 kam in KW45 mit W 2801, weil kasseneck kein Geschlecht führte. Seit #881 steht es am Mitarbeiter und ' +
       'geht als GESW/GESM/GESD in den Satz. Derselbe Lohnzettel muss jetzt ohne Warnung durchgehen.',
@@ -233,7 +299,8 @@ module.exports = [
   }),
   l16({
     id: 'L21',
-    titel: 'L16 2026 von kasseneck: Teilzeit-Arbeiter 20 von 40 Stunden, 1.600 €, Halbjahr mit UZ + WR aliquot (GESM)',
+    titel:
+      'L16 2026 von kasseneck: Teilzeit-Arbeiter 20 von 40 Stunden, 1.600 €, Halbjahr mit UZ + WR aliquot (GESM)',
     zweck:
       'Teilzeit nach § 19d Abs 1 AZG leitet kasseneck aus Wochenstunden und KV-Normalarbeitszeit ab (TEIL J), ' +
       'soziale Stellung Arbeiter (SOZS 2), männlich (GESM). Geht der Satz so durch?',
@@ -241,7 +308,12 @@ module.exports = [
     erwartung: 'übernommen LF 1/1 ohne Warnung',
     rang: 21,
     baue: (ctx) =>
-      kasseneckL16Reihe(ctx, 'L21', { rolle: 'reserve_2', gruppe: 'arbeiter', stunden: 20, monatsbezug: 160_000 }),
+      kasseneckL16Reihe(ctx, 'L21', {
+        rolle: 'reserve_2',
+        gruppe: 'arbeiter',
+        stunden: 20,
+        monatsbezug: 160_000,
+      }),
   }),
   l16({
     id: 'L22',
@@ -307,7 +379,8 @@ module.exports = [
   }),
   l16({
     id: 'L26',
-    titel: 'L16 2026 von kasseneck: geringfügig Beschäftigte, 500 € bei 10 Stunden, Halbjahr ohne Sonderzahlungen',
+    titel:
+      'L16 2026 von kasseneck: geringfügig Beschäftigte, 500 € bei 10 Stunden, Halbjahr ohne Sonderzahlungen',
     zweck:
       'Unter der Geringfügigkeitsgrenze rechnet kasseneck keine DN-SV und keine Lohnsteuer. Ein Lohnzettel ist ' +
       'trotzdem Pflicht – geht er mit KZ 230 und KZ 260 = 0 durch?',
@@ -325,7 +398,8 @@ module.exports = [
   }),
   l16({
     id: 'L27',
-    titel: 'L16 2026 von kasseneck: Austritt im Jahr mit Urlaubsersatzleistung, 07.07.–30.09., Teilzeit 30 Stunden',
+    titel:
+      'L16 2026 von kasseneck: Austritt im Jahr mit Urlaubsersatzleistung, 07.07.–30.09., Teilzeit 30 Stunden',
     zweck:
       'So sieht der Lohnzettel aus, der im Februar 2027 für einen unterjährigen Austritt echt hinausgeht: ' +
       'Eintritt mitten im Monat, Austritt zum Quartalsende, UZ und WR aliquot (86/365) und der ' +
@@ -369,7 +443,8 @@ module.exports = [
   }),
   l16({
     id: 'L31',
-    titel: 'L16 2026 von kasseneck: Sonderzahlungen über dem Jahressechstel (01.05.–30.06., UZ + WR je 4.000 €)',
+    titel:
+      'L16 2026 von kasseneck: Sonderzahlungen über dem Jahressechstel (01.05.–30.06., UZ + WR je 4.000 €)',
     zweck:
       'Zwei Monate zu 3.000 € ergeben ein Jahressechstel von 6.000 €; UZ und WR zusammen 8.000 € liegen 2.000 € ' +
       'darüber. Der Teil über dem Sechstel ist nach dem Tarif zu versteuern (§ 67 Abs 2 EStG) und gehört nicht in ' +
@@ -402,18 +477,25 @@ module.exports = [
   }),
   fall({
     id: 'L30',
-    titel: 'Gegenprobe zu L28 über das Paket: AVAB J, zwei Kinder, MIT Versicherungsnummer der Partnerin (PVLN/PGBD)',
+    titel:
+      'Gegenprobe zu L28 über das Paket: AVAB J, zwei Kinder, MIT Versicherungsnummer der Partnerin (PVLN/PGBD)',
     zweck:
       'L28 kam mit W 3101/3200/3300, weil kasseneck die VSNR der Partnerin nicht führt. Verschwinden die drei ' +
       'Warnungen, wenn PVLN und PGBD gesetzt sind? Dann braucht kasseneck das Feld für jeden AVAB-Fall. ' +
       'Partnerin: Testperson reserve_1.',
-    quelle: 'E.14 Felder 33–35 (AVAB, PVLN, PGBD), 110 (ANZK); Prüfkatalog L16 F3101, F3200, F3300; SIT KW46 L28',
+    quelle:
+      'E.14 Felder 33–35 (AVAB, PVLN, PGBD), 110 (ANZK); Prüfkatalog L16 F3101, F3200, F3300; SIT KW46 L28',
     erwartung: 'übernommen ohne 3101/3200/3300',
     fenster: AB_MO_NM,
     rang: 41,
     baue: (ctx) => {
       const partnerin = ctx.rolle('reserve_1').vsnr;
-      return l16Paket(ctx, 'L30', { AVAB: 'J', ANZK: '02', PVLN: partnerin.slice(0, 4), PGBD: partnerin.slice(4) });
+      return l16Paket(ctx, 'L30', {
+        AVAB: 'J',
+        ANZK: '02',
+        PVLN: partnerin.slice(0, 4),
+        PGBD: partnerin.slice(4),
+      });
     },
   }),
   fall({
@@ -444,6 +526,228 @@ module.exports = [
         },
       }),
   }),
+  l16({
+    id: 'L32',
+    titel:
+      'Jahreslohnzettel 2026 von kasseneck: Angestellte 01.01.–31.12., Dienstverhältnis läuft weiter, UZ Juni, WR November',
+    zweck:
+      'Der häufigste L16 überhaupt – nach Jahresende für jedes laufende Dienstverhältnis – lief noch nie über ' +
+      'kasseneck auf der SIT (L20–L31 hatten alle einen Austritt). kasseneck braucht dafür `jahrAbgeschlossen`; ' +
+      'die Sonderzahlungen kommen in ihren Monaten mit Sechstel aus dem Lohnlauf.',
+    quelle: `${QUELLE_L16}; D.32 (Lohnzahlungszeitraum bis 31.12.); kasseneck l16-elda-core.js lohnzahlungszeitraum`,
+    erwartung: 'übernommen (W 0800 möglich: echtes Übermittlungsdatum vor dem Jahresende)',
+    baue: (ctx) =>
+      kasseneckL16Reihe(ctx, 'L32', {
+        rolle: 'angestellte',
+        austritt: null,
+        jahrAbgeschlossen: true,
+        szJeMonat: { '06': [{ typ: 'UZ', betragCent: 300_000 }], 11: [{ typ: 'WR', betragCent: 300_000 }] },
+      }),
+  }),
+  l16({
+    id: 'L33',
+    titel:
+      'Jahreslohnzettel 2026 von kasseneck: 9.000 € im Monat, UZ und WR je 9.000 € – SV bei beiden Höchstbeitragsgrundlagen',
+    zweck:
+      'Wie L32 für die Person aus M110–M113: laufende SV bei 6.930 € gedeckelt, Sonderzahlungen nur bis ' +
+      '13.860 € im Jahr. Passen die SV-Beiträge im L16 für die Prüfung des BMF?',
+    quelle: `${QUELLE_L16}; § 54, § 108 Abs 3 ASVG; SIT M110–M113`,
+    erwartung: 'übernommen (W 0800 möglich)',
+    baue: (ctx) =>
+      kasseneckL16Reihe(ctx, 'L33', {
+        rolle: 'freier_dn',
+        monatsbezug: 900_000,
+        austritt: null,
+        jahrAbgeschlossen: true,
+        szJeMonat: { '06': [{ typ: 'UZ', betragCent: 900_000 }], 11: [{ typ: 'WR', betragCent: 900_000 }] },
+      }),
+  }),
+  l16({
+    id: 'L34',
+    titel: 'L16 2026 von kasseneck mit Pendlerpauschale (klein, 20–40 km): Arbeiter, Halbjahr, BPEN und KZ 243',
+    zweck:
+      'kasseneck zieht die Pendlerpauschale vor dem Tarif ab und schreibt sie in BPEN und KZ 243 (FC 6201). ' +
+      'Den Pendlereuro rechnet es nicht (die App kennt nur die Stufe, nicht die Kilometer) – BPEND bleibt leer. ' +
+      'Nimmt der BMF-Katalog eine Pendlerpauschale ohne Pendlereuro ohne Warnung an? Lief auf der SIT noch nie.',
+    quelle: `${QUELLE_L16}; § 16 Abs 1 Z 6 EStG, § 33 Abs 5 Z 4 EStG; E.14 Felder 55/56 (BPEN), 131/132 (BPEND)`,
+    erwartung: 'offen: übernommen ohne Warnung, oder eine Warnung zum fehlenden Pendlereuro',
+    rang: 32,
+    baue: (ctx) =>
+      kasseneckL16Reihe(ctx, 'L34', {
+        rolle: 'arbeiter',
+        gruppe: 'arbeiter',
+        monatsbezug: 250_000,
+        mehr: { commuterAllowance: 'Klein — 20 bis 40 km' },
+      }),
+  }),
+  l16({
+    id: 'L35',
+    titel:
+      'L16 2026 von kasseneck mit zehn Überstunden im Monat: steuerfreie Zuschläge § 68 Abs 2 in KZ 215 und SB682',
+    zweck:
+      'kasseneck rechnet Überstunden mit 50 % Grundzuschlag und stellt die Zuschläge der ersten 15 Stunden ' +
+      '(höchstens 170 € im Monat) steuerfrei. Im L16 landet die Summe in KZ 215 und, weil kasseneck nur ' +
+      '§ 68 Abs 2 kennt, ganz in SB682 (F3806: 215 = SB681 + SB682). Geht der Lohnzettel ohne Warnung durch?',
+    quelle: `${QUELLE_L16}; § 68 Abs 2 EStG; Prüfkatalog L16 F3806; E.14 Felder 40 (B215), 180/181 (SB681/SB682)`,
+    erwartung: 'übernommen LF 1/1 ohne Warnung',
+    rang: 33,
+    baue: (ctx) =>
+      kasseneckL16Reihe(ctx, 'L35', {
+        rolle: 'reserve_1',
+        eintritt: '2026-07-01',
+        austritt: '2026-12-31',
+        zeiten: { ueberstundenMin: 600 },
+      }),
+  }),
+  l16({
+    id: 'L43',
+    titel: 'Gegenprobe zu L34: derselbe kasseneck-L16 mit Pendlereuro 90 € (30 km × 6 € × 6/12) in BPEND',
+    zweck:
+      'L34 kam mit Status P / 5404, weil BPEND leer war. Hier steht derselbe Lohnzettel mit einem Pendlereuro für ' +
+      'erfundene 30 km. Verschwindet 5404, fehlt kasseneck genau die einfache Entfernung in km am Mitarbeiter ' +
+      '(den Satz von 6 € je km und Jahr kennt es schon). Die Lohnsteuer bleibt die ohne Pendlereuro.',
+    quelle: `${QUELLE_L16}; § 33 Abs 5 Z 4 EStG; Prüfkatalog L16 F5404, F9121; SIT KW46 L34`,
+    erwartung: 'übernommen ohne 5404 (ein 7003/7002 wäre ein anderer Befund)',
+    abhaengig: ['L34'],
+    rang: 34,
+    baue: (ctx) =>
+      kasseneckL16Reihe(ctx, 'L43', {
+        rolle: 'arbeiter',
+        gruppe: 'arbeiter',
+        monatsbezug: 250_000,
+        mehr: { commuterAllowance: 'Klein — 20 bis 40 km' },
+        zusatzBetraege: { BPEND: 9_000 },
+      }),
+  }),
+  l16({
+    id: 'L45',
+    titel:
+      'L16 2026 von kasseneck: Pendlerpauschale groß über 60 km, Eintritt 15.03., läuft weiter – F5402 an der Grenze',
+    zweck:
+      'F5402 erlaubt 3.672 € im Jahr „auf Monate aliquotiert", ohne zu sagen wie. kasseneck gibt die Pauschale ' +
+      'für jeden Monat voll, auch für den angebrochenen März (ab 11 Pendeltagen steht sie ganz zu): 10 × 306 € = ' +
+      '3.060 €. Zählen angebrochene Monate voll, ist das genau die Grenze; aliquotiert ELDA nach Tagen ' +
+      '(287/360 × 3.672 € ≈ 2.927 €), kommt F5402 mit Status N. Dazu wie L34 die Warnung 5404.',
+    quelle: `${QUELLE_L16}; Prüfkatalog L16 F5402 („> 3672 auf Monate aliquotiert + 5,00 Toleranz"), F5404; § 16 Abs 1 Z 6 EStG`,
+    erwartung: 'offen: übernommen mit 5404 (Monate zählen voll) oder nicht übernommen mit 5402 (nach Tagen)',
+    rang: 35,
+    baue: (ctx) =>
+      kasseneckL16Reihe(ctx, 'L45', {
+        rolle: 'arbeiterlehrling',
+        eintritt: '2026-03-15',
+        austritt: null,
+        jahrAbgeschlossen: true,
+        szJeMonat: { '06': [{ typ: 'UZ', betragCent: 300_000 }], 11: [{ typ: 'WR', betragCent: 300_000 }] },
+        mehr: { commuterAllowance: 'Groß — über 60 km' },
+      }),
+  }),
+  l16({
+    id: 'L46',
+    titel: 'Storno von L20/L24 über kasseneck: KORR S, gleiche REFN, Beträge wie L24',
+    zweck:
+      'kasseneck kennt als Korrektur nur „K“ (l16-elda-core.js), reicht den Wert aber unverändert in Feld 104 ' +
+      'durch. Laut E.14 braucht ein Storno „S“ keine Nullbeträge mehr; über das Paket ging das (L05). Nimmt ELDA ' +
+      'den Storno auch aus dem kasseneck-Bau? Dann fehlt kasseneck für einen Storno nur die Oberfläche.',
+    quelle: `${QUELLE_L16}; E.14 Feld 104 (KORR „S“); SIT L05`,
+    erwartung: 'übernommen ohne Warnung',
+    abhaengig: ['L24'],
+    rang: 36,
+    baue: (ctx) =>
+      kasseneckL16Reihe(ctx, 'L46', {
+        rolle: 'angestellte',
+        monatsbezug: 310_000,
+        korrektur: 'S',
+        employeeId: 'SIT-L20',
+      }),
+  }),
+  fall({
+    id: 'L44',
+    titel: 'Berichtigung von L41 nach Status G: KORR K, Referenznummer von L41, KZ 215 = SB682 = 100 €',
+    zweck:
+      'Das Protokoll zu L41 schreibt für G vor: „in jedem Fall Daten richtig stellen oder mit Fehlerindikator für ' +
+      'richtig erklären; nochmals mit Korrekturindikation und ursprünglicher Referenznummer senden“. F9715 lässt ' +
+      'keine Fehlerindikation zu (Katalog: N) – also richtigstellen. Geht die Berichtigung ohne Warnung durch? ' +
+      'Das ist der Weg, den kasseneck bei einem gesperrten Lohnzettel anbieten muss.',
+    quelle: 'SIT-Protokoll zu L41 (Erläuterung zum Status G); E.14 Feld 104 (KORR K, gleiche REFN); Prüfkatalog F9715',
+    erwartung: 'übernommen ohne Warnung',
+    fenster: AB_MO_NM,
+    abhaengig: ['L41'],
+    rang: 43,
+    baue: (ctx) =>
+      l16Paket(
+        ctx,
+        'L44',
+        { KORR: 'K', REFN: ctx.referenzwertVon('L41') },
+        { betraege: { B215: 10_000, SB682: 10_000, B245: 481_580 } },
+      ),
+  }),
+  ...[
+    {
+      id: 'L36',
+      titel: 'Negativtest L16: KZ 245 um 1,01 € neben 210 − 215 − 220 − 230 − 243 (F6401, Toleranz ±1,00 €)',
+      betraege: { B245: 491_479 },
+      erwartung: 'nicht übernommen, F6401',
+      eigene: ['F6401'],
+    },
+    {
+      id: 'L37',
+      titel: 'Grenzprobe L16: KZ 245 um genau 1,00 € daneben – innerhalb der Toleranz von F6401',
+      betraege: { B245: 491_480 },
+      erwartung: 'übernommen ohne F6401 (Gegenprobe zu L36)',
+      eigene: [],
+    },
+    {
+      id: 'L38',
+      titel: 'Negativtest L16: KZ 230 um 10 € kleiner als BIEB − 225 − 226, KZ 245 passend dazu (F4800)',
+      betraege: { B230: 107_420, B245: 492_580 },
+      erwartung: 'nicht übernommen, F4800',
+      eigene: ['F4800'],
+    },
+    {
+      id: 'L39',
+      titel: 'Negativtest L16: KZ 260 um 0,21 € kleiner als BIEL − BABL (F7004, Toleranz ±0,20 €)',
+      betraege: { B260: 56_743 },
+      erwartung: 'nicht übernommen, F7004',
+      eigene: ['F7004'],
+    },
+    {
+      id: 'L40',
+      titel: 'Negativtest L16: KZ 215 = 100,00 €, SB682 = 99,99 € (F3806 ohne Toleranz)',
+      betraege: { B215: 10_000, SB682: 9_999, B245: 481_580 },
+      erwartung: 'nicht übernommen, F3806',
+      eigene: ['F3806'],
+    },
+    {
+      id: 'L41',
+      titel:
+        'Negativtest L16: KZ 215 = SB682 = 3.000 € in zwei Monaten – § 68 über dem Maximalwert (F3805/F9715, Status G)',
+      betraege: { B215: 300_000, SB682: 300_000, B245: 191_580, BIEL: 0, B260: 0 },
+      erwartung: 'offen: übernommen mit Kennzeichen G (Warnung 3805/9715?) – wie zeigt die SIT den Status G?',
+      eigene: [],
+    },
+    {
+      id: 'L42',
+      titel: 'Negativtest L16: KZ 243 = 0,41 € ohne einen einzigen Abzug darunter (F6201, Toleranz ±0,40 €)',
+      betraege: { B243: 41, B245: 491_539 },
+      erwartung: 'nicht übernommen, F6201',
+      eigene: ['F6201'],
+    },
+  ].map(({ id, titel, betraege, erwartung, eigene }) =>
+    fall({
+      id,
+      titel,
+      zweck:
+        'Die Rechenregeln des BMF-Katalogs stehen mit Status N, Toleranzen laut Fehlertext. Bisher ging kein L16 ' +
+        'mit Rechenfehler auf die SIT: Rechnet ELDA die Formel wirklich nach, mit derselben Toleranz wie ' +
+        '`pruefeLohnzettel`, und weist sie ab (wie F9991 bei L02)? Status G kam noch nie.',
+      quelle: 'Prüfkatalog L16 Version 09 (Fehlerstatus, Toleranzen im Fehlertext); DM-Org D.32 (Fehlerstatus G)',
+      erwartung,
+      fenster: AB_MO_NM,
+      rang: 42,
+      eigeneBefunde: eigene,
+      baue: (ctx) => l16Paket(ctx, id, {}, { betraege, pruefen: false }),
+    }),
+  ),
 ];
 
 /** Derselbe Tag einen Monat später (JJJJ-MM-TT) – die BVAB-Regel von kasseneck (Eintritt + 1 Monat). */
