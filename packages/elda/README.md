@@ -1761,6 +1761,12 @@ Für Version 29 gibt es noch keinen Katalog — `pruefeLohnzettel` lehnt sie ab.
   Pendlereuro → `5404` (P); steuerfreie Bezüge § 68 Abs 2 über dem Maximalwert →
   `9715` (G, „FEHLERHAFT! SIEHE PROTOKOLL"). Die Berichtigung mit `KORR` „K" und
   der Referenznummer des gesperrten Lohnzettels ging ohne Warnung durch.
+- **„Auf Monate aliquotiert" heißt bei `F5402`: angebrochene Monate zählen voll**
+  (11.11.2026): Pendlerpauschale 3.060 € für 15.03.–31.12. (zehn Monate zu 306 €)
+  ohne `5402` übernommen; nach Tagen (287/360) läge die Grenze bei rund 2.927 €.
+  Das Paket prüft Obergrenzen ohnehin mit dem größten Anteil.
+- **Kontrollsechstel:** derselbe Lohnzettel mit UZ und WR je 3.000 € kam mit
+  `9330` (P (I), § 77 Abs 4a EStG) – ELDA rechnet das Kontrollsechstel nach.
 
 ### Zeitstempel im Bestand: Wiener Ortszeit
 

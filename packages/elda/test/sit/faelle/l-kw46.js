@@ -25,6 +25,8 @@
 //   L35  reserve_1    zehn Überstunden im Monat – steuerfreie Zuschläge § 68 Abs 2 in KZ 215 / SB682
 //   L43  arbeiter     Gegenprobe zu L34: derselbe Lohnzettel mit Pendlereuro (BPEND) – fällt 5404 weg?
 //   L44  reserve_3    der Weg aus Status G: L41 berichtigt (KORR K, Referenznummer von L41, § 68 unter dem Maximum)
+//   L45  arbeiterlehrling Pendlerpauschale groß über 60 km bei Eintritt 15.03. – wie aliquotiert F5402 den Höchstbetrag?
+//   L46  angestellte  Storno von L20/L24 über kasseneck (KORR S, gleiche REFN) – kasseneck dokumentiert nur „K“
 //   L36–L42 reserve_3 Rechenregeln des BMF-Katalogs über das Paket, je eine Regel verletzt bzw. genau auf der
 //                     Toleranz: F6401 (±1,00 €), F4800, F7004 (±0,20 €), F3806, F6201 (±0,40 €) mit Status N und
 //                     F3805/F9715 mit Status G („übernimmt zwar, … mit dem Fehlerstatus G gekennzeichnet“, D.32)
@@ -615,6 +617,47 @@ module.exports = [
         monatsbezug: 250_000,
         mehr: { commuterAllowance: 'Klein — 20 bis 40 km' },
         zusatzBetraege: { BPEND: 9_000 },
+      }),
+  }),
+  l16({
+    id: 'L45',
+    titel:
+      'L16 2026 von kasseneck: Pendlerpauschale groß über 60 km, Eintritt 15.03., läuft weiter – F5402 an der Grenze',
+    zweck:
+      'F5402 erlaubt 3.672 € im Jahr „auf Monate aliquotiert", ohne zu sagen wie. kasseneck gibt die Pauschale ' +
+      'für jeden Monat voll, auch für den angebrochenen März (ab 11 Pendeltagen steht sie ganz zu): 10 × 306 € = ' +
+      '3.060 €. Zählen angebrochene Monate voll, ist das genau die Grenze; aliquotiert ELDA nach Tagen ' +
+      '(287/360 × 3.672 € ≈ 2.927 €), kommt F5402 mit Status N. Dazu wie L34 die Warnung 5404.',
+    quelle: `${QUELLE_L16}; Prüfkatalog L16 F5402 („> 3672 auf Monate aliquotiert + 5,00 Toleranz"), F5404; § 16 Abs 1 Z 6 EStG`,
+    erwartung: 'offen: übernommen mit 5404 (Monate zählen voll) oder nicht übernommen mit 5402 (nach Tagen)',
+    rang: 35,
+    baue: (ctx) =>
+      kasseneckL16Reihe(ctx, 'L45', {
+        rolle: 'arbeiterlehrling',
+        eintritt: '2026-03-15',
+        austritt: null,
+        jahrAbgeschlossen: true,
+        szJeMonat: { '06': [{ typ: 'UZ', betragCent: 300_000 }], 11: [{ typ: 'WR', betragCent: 300_000 }] },
+        mehr: { commuterAllowance: 'Groß — über 60 km' },
+      }),
+  }),
+  l16({
+    id: 'L46',
+    titel: 'Storno von L20/L24 über kasseneck: KORR S, gleiche REFN, Beträge wie L24',
+    zweck:
+      'kasseneck kennt als Korrektur nur „K“ (l16-elda-core.js), reicht den Wert aber unverändert in Feld 104 ' +
+      'durch. Laut E.14 braucht ein Storno „S“ keine Nullbeträge mehr; über das Paket ging das (L05). Nimmt ELDA ' +
+      'den Storno auch aus dem kasseneck-Bau? Dann fehlt kasseneck für einen Storno nur die Oberfläche.',
+    quelle: `${QUELLE_L16}; E.14 Feld 104 (KORR „S“); SIT L05`,
+    erwartung: 'übernommen ohne Warnung',
+    abhaengig: ['L24'],
+    rang: 36,
+    baue: (ctx) =>
+      kasseneckL16Reihe(ctx, 'L46', {
+        rolle: 'angestellte',
+        monatsbezug: 310_000,
+        korrektur: 'S',
+        employeeId: 'SIT-L20',
       }),
   }),
   fall({

@@ -286,7 +286,7 @@ const IM_FENSTER_KW46 = {
 };
 // V72–V83 mit: M100/M101 rechnen mit kasseneck, das nur das Parameterwerk 2026 kennt – die
 // Anmeldungen und Abmeldungen, auf denen sie aufbauen, müssen in derselben (KW46-)Woche liegen.
-const istKw46 = (id) => /^(L2\d|L3\d|L4[0-4]|Q[67]\d|M9[89]|M1(0\d|1\d|2\d|3[0-3])|V7[2-9]|V8[0-3])$/.test(id);
+const istKw46 = (id) => /^(L2\d|L3\d|L4[0-6]|Q[67]\d|M9[89]|M1(0\d|1\d|2\d|3[0-3])|V7[2-9]|V8[0-3])$/.test(id);
 /** Lohnzettel von kasseneck mit Geschlecht (KW46). */
 const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28', 'L31'];
 const zeitpunkt = (id, fenster) =>
@@ -896,6 +896,10 @@ test('L20–L26: L16 von kasseneck mit Geschlecht – LF, echtes DTUE, GESW/GESM
   assert.equal(feld(l1('L20'), 66, 30).trim(), 'SIT-L20-20260101', 'L20: REFN');
   assert.equal(feld(l1('L24'), 66, 30), feld(l1('L20'), 66, 30), 'L24: REFN wie L20');
   assert.equal(feld(l1('L24'), 656, 1), 'K', 'L24: Berichtigung');
+  if (GEBAUT.has('L46')) {
+    assert.equal(feld(l1('L46'), 66, 30), feld(l1('L20'), 66, 30), 'L46: REFN wie L20');
+    assert.equal(feld(l1('L46'), 656, 1), 'S', 'L46: Storno');
+  }
   assert.equal(feld(l1('L20'), 656, 1), ' ', 'L20: ohne KORR');
   assert.notEqual(feld(l1('L24'), 298, 10), feld(l1('L20'), 298, 10), 'L24: andere Beträge');
   assert.equal(feld(l1('L25'), 66, 30).trim(), 'SIT-L20-20260801', 'L25: eigene REFN je Dienstverhältnis');
@@ -957,6 +961,9 @@ test('L34/L35: Pendlerpauschale in BPEN und KZ 243, steuerfreie Überstundenzusc
   assert.equal(feld(l1('L43'), 756, 1), '+', 'L43: Vorzeichen');
   assert.equal(l1('L43').slice(0, 65), l1('L34').slice(0, 65), 'L43: Kopf wie L34');
   assert.equal(l1('L43').slice(130, 755), l1('L34').slice(130, 755), 'L43: Beträge wie L34');
+  // L45: zehn Monate (März angebrochen) zu 306 €.
+  assert.equal(zahl('L45', 397), 306_000, 'L45: BPEN 3.060 €');
+  assert.equal(feld(l1('L45'), 120, 8), '15033112', 'L45: 15.03.–31.12.');
 });
 
 test('L36–L42: Rechenregeln des L16 – genau die eine Regel verletzt, die der Fall nennt', () => {
