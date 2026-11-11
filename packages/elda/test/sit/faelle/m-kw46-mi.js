@@ -23,6 +23,8 @@
 //                       Anlass: M98/M52 bekamen Di nm BW1837 auf Paketebene und Mi vm BW1862 je Person – das
 //                       Paket wurde offenbar neu verarbeitet, als auf dem Konto jemand gemeldet war. Zählt in der
 //                       Sammelverarbeitung die Reihenfolge des Eingangs, oder kommen die Versichertenmeldungen zuerst?
+//   M126 A/15  01/2026  dasselbe auf einem Konto-Monat ohne jeden Versicherten, danach Q70/Q71 (geringfuegig):
+//                       bei Eingangsreihenfolge BW1837 auf Paketebene
 
 const { mbgmPaket, meldung } = require('../lib/bausteine');
 const { kasseneck } = require('../lib/kasseneck');
@@ -122,6 +124,104 @@ const paket =
       beschaeftigte: [{ rolle: 'freier_dn', mitarbeiter: mitarbeiter(jahr), ...mehr }],
     });
   };
+
+/**
+ * Reihenfolge-Probe: mBGM für einen Monat (Eintritt am Ersten, Austritt am Letzten) VOR der Anmeldung im selben
+ * Fenster, danach Anmeldung (ohne BVAB, das DV endet im ersten Monat) und Abmeldung ohne BVEN.
+ */
+function reihenfolgeProbe(a) {
+  const [idM, idAn, idAb] = a.ids;
+  const tage = (ctx) => {
+    const jahr = Number(ctx.zr.slice(0, 4)) - 1;
+    const von = `${jahr}-${String(a.monat).padStart(2, '0')}-01`;
+    const bis = new Date(Date.UTC(jahr, a.monat, 0)).toISOString().slice(0, 10);
+    return { jahr, von, bis };
+  };
+  const angestellt = a.gruppe === 'angestellter';
+  return [
+    fall({
+      id: idM,
+      titel: a.titelMbgm,
+      zweck: a.zweckMbgm,
+      quelle: 'E.32; SIT KW46 Clearing Di nm/Mi vm (M98/M52: BW1837, dann BW1862)',
+      erwartung: a.erwartungMbgm,
+      fenster: MI_VM,
+      abhaengig: [],
+      rang: 9,
+      baue: (ctx) => {
+        const { jahr, von, bis } = tage(ctx);
+        return mbgmPaket(ctx, {
+          fall: idM,
+          dg: a.dg,
+          traeger: a.traeger,
+          monat: von.slice(0, 7),
+          bundesland: 'oberoesterreich',
+          beschaeftigte: [
+            {
+              rolle: a.rolle,
+              mitarbeiter: {
+                ...mitarbeiter(jahr),
+                dienstnehmerGruppe: a.gruppe,
+                ...(angestellt ? {} : { wochenstunden: 38.5, kvBasisStunden: 38.5 }),
+                eintritt: von,
+                austritt: bis,
+                grossSalaryCents: a.entgeltCent,
+              },
+            },
+          ],
+        });
+      },
+    }),
+    fall({
+      id: idAn,
+      titel: a.titelAnmeldung,
+      zweck: `Zweiter Schritt zu ${idM}. Ohne BVAB: das Dienstverhältnis endet im ersten Monat (${idAb}).`,
+      quelle: 'E.29.2 (M3)',
+      erwartung: 'übernommen',
+      fenster: MI_VM,
+      braucht: undefined,
+      abhaengig: [idM],
+      rang: 10,
+      baue: (ctx) =>
+        meldung(ctx, {
+          fall: idAn,
+          art: 'anmeldung',
+          rolle: a.rolle,
+          dg: a.dg,
+          traeger: a.traeger,
+          felder: {
+            ADAT: ctx.ttmmjjjj(tage(ctx).von),
+            BBER: angestellt ? '02' : '01',
+            GERF: 'N',
+            FRDV: 'N',
+            VWAZ: angestellt ? ctx.elda.wochenarbeitszeit(40, 0) : ctx.elda.wochenarbeitszeit(38, 30),
+          },
+        }),
+    }),
+    fall({
+      id: idAb,
+      titel: a.titelAbmeldung,
+      zweck: `Schließt ${idAn} im ersten Monat; ohne sie liefen danach mBGM von Amts wegen auf.`,
+      quelle: 'E.29.2 (M4)',
+      erwartung: 'übernommen, kein VW1942',
+      fenster: MI_VM,
+      braucht: undefined,
+      abhaengig: [idAn],
+      rang: 11,
+      baue: (ctx) => {
+        const { bis } = tage(ctx);
+        return meldung(ctx, {
+          fall: idAb,
+          art: 'abmeldung',
+          rolle: a.rolle,
+          dg: a.dg,
+          traeger: a.traeger,
+          felder: { GERF: 'N', ADAT: ctx.ttmmjjjj(bis), EBSV: ctx.ttmmjjjj(bis), AGRD: '03' },
+        });
+      },
+    }),
+  ];
+}
 
 module.exports = [
   fall({
@@ -291,92 +391,36 @@ module.exports = [
       });
     },
   }),
-  fall({
-    id: 'M117',
-    titel: 'mBGM 09/2026 A/14 über kasseneck VOR der Anmeldung (Q68/Q69 folgen im selben Fenster)',
-    zweck:
+  ...reihenfolgeProbe({
+    ids: ['M117', 'Q68', 'Q69'],
+    rolle: 'angestelltenlehrling',
+    dg: 'A',
+    traeger: '14',
+    monat: 9,
+    gruppe: 'angestellter',
+    entgeltCent: 280_000,
+    titelMbgm: 'mBGM 09/2026 A/14 über kasseneck VOR der Anmeldung (Q68/Q69 folgen im selben Fenster)',
+    zweckMbgm:
       'Gesendet vor Q68. Verarbeitet die Sammelverarbeitung erst die Versichertenmeldungen (kein Clearing) oder ' +
       'in der Reihenfolge des Eingangs (BW1862 „keine Versicherungszeit SV gespeichert“)?',
-    quelle: 'E.32; SIT KW46 Clearing Di nm/Mi vm (M98/M52: BW1837, dann BW1862)',
-    erwartung: 'offen: übernommen; Clearing Mi nm leer oder BW1862',
-    fenster: MI_VM,
-    abhaengig: [],
-    rang: 9,
-    baue: (ctx) => {
-      const jahr = Number(ctx.zr.slice(0, 4)) - 1;
-      return mbgmPaket(ctx, {
-        fall: 'M117',
-        dg: 'A',
-        traeger: '14',
-        monat: `${jahr}-09`,
-        bundesland: 'oberoesterreich',
-        beschaeftigte: [
-          {
-            rolle: 'angestelltenlehrling',
-            mitarbeiter: {
-              ...mitarbeiter(jahr),
-              eintritt: `${jahr}-09-01`,
-              austritt: `${jahr}-09-30`,
-              grossSalaryCents: 280_000,
-            },
-          },
-        ],
-      });
-    },
+    erwartungMbgm: 'offen: übernommen; Clearing Mi nm leer oder BW1862',
+    titelAnmeldung: 'Anmeldung angestelltenlehrling als Angestellte auf A/14 zum 01.09.2026 – NACH der mBGM M117 (M3)',
+    titelAbmeldung: 'Abmeldung angestelltenlehrling A/14 zum 30.09.2026, ohne BVEN (M4)',
   }),
-  fall({
-    id: 'Q68',
-    titel: 'Anmeldung angestelltenlehrling als Angestellte auf A/14 zum 01.09.2026 – NACH der mBGM M117 (M3)',
-    zweck: 'Zweiter Schritt zu M117. Ohne BVAB: das Dienstverhältnis endet im ersten Monat (Q69).',
-    quelle: 'E.29.2 (M3)',
-    erwartung: 'übernommen',
-    fenster: MI_VM,
-    braucht: undefined,
-    abhaengig: ['M117'],
-    rang: 10,
-    baue: (ctx) => {
-      const jahr = Number(ctx.zr.slice(0, 4)) - 1;
-      return meldung(ctx, {
-        fall: 'Q68',
-        art: 'anmeldung',
-        rolle: 'angestelltenlehrling',
-        dg: 'A',
-        traeger: '14',
-        felder: {
-          ADAT: ctx.ttmmjjjj(`${jahr}-09-01`),
-          BBER: '02',
-          GERF: 'N',
-          FRDV: 'N',
-          VWAZ: ctx.elda.wochenarbeitszeit(40, 0),
-        },
-      });
-    },
-  }),
-  fall({
-    id: 'Q69',
-    titel: 'Abmeldung angestelltenlehrling A/14 zum 30.09.2026, ohne BVEN (M4)',
-    zweck: 'Schließt Q68 im ersten Monat; ohne sie liefen ab 10/2026 mBGM von Amts wegen auf.',
-    quelle: 'E.29.2 (M4)',
-    erwartung: 'übernommen, kein VW1942',
-    fenster: MI_VM,
-    braucht: undefined,
-    abhaengig: ['Q68'],
-    rang: 11,
-    baue: (ctx) => {
-      const jahr = Number(ctx.zr.slice(0, 4)) - 1;
-      return meldung(ctx, {
-        fall: 'Q69',
-        art: 'abmeldung',
-        rolle: 'angestelltenlehrling',
-        dg: 'A',
-        traeger: '14',
-        felder: {
-          GERF: 'N',
-          ADAT: ctx.ttmmjjjj(`${jahr}-09-30`),
-          EBSV: ctx.ttmmjjjj(`${jahr}-09-30`),
-          AGRD: '03',
-        },
-      });
-    },
+  ...reihenfolgeProbe({
+    ids: ['M126', 'Q70', 'Q71'],
+    rolle: 'geringfuegig',
+    dg: 'A',
+    traeger: '15',
+    monat: 1,
+    gruppe: 'arbeiter',
+    entgeltCent: 260_000,
+    titelMbgm: 'mBGM 01/2026 A/15 über kasseneck VOR der Anmeldung, Konto im Monat sonst leer (Q70/Q71 folgen)',
+    zweckMbgm:
+      'Wie M117, aber auf einem Konto, auf dem im Monat niemand gemeldet ist (A/15 hat in KW46 erst ab 02/2026 ' +
+      'Versicherte). Bei Verarbeitung in Eingangsreihenfolge käme BW1837 auf Paketebene („kein Versicherter“).',
+    erwartungMbgm: 'offen: übernommen; Clearing Mi nm leer oder BW1837/BW1862',
+    titelAnmeldung: 'Anmeldung geringfuegig als Arbeiterin auf A/15 zum 01.01.2026 – NACH der mBGM M126 (M3)',
+    titelAbmeldung: 'Abmeldung geringfuegig A/15 zum 31.01.2026, ohne BVEN (M4)',
   }),
 ];
