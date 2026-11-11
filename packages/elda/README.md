@@ -1794,8 +1794,9 @@ const zurueck = liesDktBestand(datei); // ebenso ein abgeholter Retourdatenträg
 
 Gesendet wird über denselben Transferweg wie die übrigen Meldungen
 (`elda.senden({ dateiName, inhalt: datei })`, Seriennummer des Betriebs; so von
-ELDA bestätigt). Was der Träger zurückschickt, holt `empfangen` ab;
-`liesDktBestand` liest es.
+ELDA bestätigt und am Kundentest gelaufen). Zuerst kommt das
+Übernahmeprotokoll von ELDA als Text (`mb_<Protokollnummer>`). Was der Träger
+zurückschickt, holt `empfangen` ebenfalls ab; `liesDktBestand` liest es.
 
 **Golden-Test.** Das „Praxisbezogene Muster-Abrechnungsbeispiel" (E.3, Seite
 51) steht im PDF nur als Bild. Es ist zeichengenau abgeschrieben
@@ -1878,9 +1879,30 @@ Jahrhundert steht nicht im Satz.
    nicht erzwungen.
 9. **Skonto, Sammelabrechnungen** mehrerer Leistungserbringer, **Wochen-,
    Quartals- und Jahreszeiträume** — nicht gebaut.
-10. **Satztrenner.** CRLF wie bei den übrigen ELDA-Beständen; für Projekt `TK`
-    noch nicht gegen ELDA gelaufen. Laut ELDA lassen sich Bestände schon vor
-    der Freigabe der Software an die Kundentestumgebung übertragen.
+10. *(geklärt)* **Satztrenner, Dateiname und was ELDA prüft.** Am 11.11.2026
+    sind zehn Testbestände (BEST `T1`, erfundene Daten) an die
+    ELDA-Kundentestumgebung gegangen. Laut ELDA lassen sich Bestände dort schon
+    vor der Freigabe der Software übertragen.
+
+    | Bestand | Ergebnis von `senden` | Rücksendung |
+    | --- | --- | --- |
+    | wie vom Paket gebaut (CRLF, kein Trenner am Ende) | `000` | `mb_<Nr>` |
+    | zwei Fälle, Mehrfachtransport, Umlaute im Freitext | `000` | `mb_<Nr>` |
+    | nur `LF` als Satztrenner | `000` | `mb_<Nr>` |
+    | CRLF auch nach dem letzten Satz | `000` | `mb_<Nr>` |
+    | ein Satz mit 127 Zeichen | `000` | `mb_<Nr>` und `warnung_<Nr>`: „Zeile 4, Satzlaenge nicht korrekt. 127 anstatt 128 Zeichen. (W3)" |
+    | SANZ im Schlusssatz falsch | `403`, „fehlerCode: E4" | `fehler_<Nr>`: „Zeile 9, falsche Satzanzahl! (E4)" |
+    | dieselbe Datei ein zweites Mal | `405`, „duplikatVon: …" | `fehler_<Nr>` (E17, erkannt an Größe und MD5) |
+    | VSTR `07` bzw. `47` | `000` | `mb_<Nr>` mit „BVAEB-OEB" bzw. „SVS-GW SBG" |
+    | Dateiname ohne Endung | `000` | `mb_<Nr>` |
+
+    Das Übernahmeprotokoll `mb_<Nr>` ist Text. Es nennt Vertragspartnernummer,
+    Fachgruppe, Versicherungsträger und Abrechnungszeitraum aus der Datei und
+    schließt mit „Der Erhalt dieser Meldung wird bestaetigt. Die inhaltliche
+    Pruefung erfolgt zu einem spaeteren Zeitpunkt." ELDA prüft also den Rahmen
+    (Träger, Satzanzahl; die Satzlänge nur als Warnung). Fälle, Beträge und
+    Codes prüft erst der Träger; eine falsche Satzlänge fällt bei ELDA nicht
+    als Fehler auf.
 
 ### Taxitarif der Krankenbeförderung (ÖGK-Gesamtvertrag)
 
