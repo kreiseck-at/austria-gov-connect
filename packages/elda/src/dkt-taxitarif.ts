@@ -1,10 +1,21 @@
 import { EldaError } from './errors';
 
 /**
- * Tarif für die Krankenbeförderung durch Vertragstaxis nach dem Gesamtvertrag
- * zwischen dem Fachverband für die Beförderungsgewerbe mit Personenkraftwagen
- * und dem Dachverband (§ 9, Anlage 2) — die Positionen, mit denen eine Fahrt in
+ * Tarif für die Krankenbeförderung durch Vertragstaxis nach der
+ * gesamtvertraglichen Vereinbarung vom 12.12.2023 zwischen dem Fachverband für
+ * die Beförderungsgewerbe mit Personenkraftwagen und der Österreichischen
+ * Gesundheitskasse (§ 9, Anlage 2) — die Positionen, mit denen eine Fahrt in
  * der DKT-Abrechnung als Leistung (Datenblock „L") erscheint.
+ *
+ * Geltung: alle Bundesländer außer Wien (Vertragsparteien sind die Fachgruppen
+ * der übrigen Länder; die Tarifliste führt Wien ohne Betrag). Neben der ÖGK gilt
+ * die Liste für die Träger laut Anlage 1 des Vertrags, darunter die BVAEB: „Die
+ * BVAEB ist rückwirkend mit 1.1.2024 österreichweit dem neuen ÖGK-Gesamtvertrag
+ * beigetreten" (WKO Niederösterreich, „Krankenbeförderung – Verrechnung mit
+ * Krankenkassen"). Die SVS hat eine eigene Vereinbarung vom 17.12.2024 mit
+ * denselben Grundbeträgen (Anlage 1 „Tarifvereinbarung", Tarife ab 01.01.2025),
+ * aber ohne Positionsnummern und ohne ausgerechnete Beträge für Rollstuhl und
+ * Mehrfachtransport — für die SVS ist dieses Modul deshalb nicht belegt.
  *
  * Quellen:
  * - „TARIFLISTE Krankenbeförderung durch Vertragstaxi, gültig ab 01.01.2025"
@@ -15,10 +26,16 @@ import { EldaError } from './errors';
  *   31.12.2026 nicht angewendet" — die Liste von 2025 gilt 2026 unverändert.
  * - ÖGK-Informationsblatt „Krankenbeförderung ab 01.01.2024" (Stand 27.02.2026).
  * - WKO-Fachverband, Klarstellung „Mehrfachtransporte" (ab 1.6.2025).
+ * - Fachverband-Rundschreiben vom 01.01.2025 (Mindestpauschale „bis 5,5km").
  *
- * Die Tarife stehen als Daten mit Gültigkeitszeitraum. Ab 01.01.2027 wird wieder
- * valorisiert (§ 9 Abs. 3); für Fahrten außerhalb eines hinterlegten Zeitraums
- * bricht die Rechnung ab, statt mit alten Sätzen weiterzurechnen.
+ * Die Tarife stehen als Daten mit Gültigkeitszeitraum. Ab 01.01.2027 sieht § 9
+ * Abs. 3 wieder die Valorisierung vor („mit dem endgültigen rollierenden
+ * Durchschnitts-VPI des Zeitraumes von November des zweitvorangegangenen Jahres
+ * bis Oktober des vorangegangenen Jahres"). Rundung und Ausgangsbasis nennt der
+ * Vertrag nicht, eine Tarifliste für 2027 war am 11.11.2026 nicht veröffentlicht
+ * — die Beträge werden deshalb nicht errechnet, sondern aus der Liste
+ * übernommen, sobald sie vorliegt. Für Fahrten außerhalb eines hinterlegten
+ * Zeitraums bricht die Rechnung ab, statt mit alten Sätzen weiterzurechnen.
  *
  * Gerechnet wird je Fahrt in eine Richtung („sowohl für den Transport zur …
  * Behandlungsstelle … als auch retour", § 9 Abs. 4): Hin- und Rückfahrt sind zwei
@@ -157,10 +174,14 @@ export interface TaxiEinzelfahrt {
  *
  * - Innerhalb einer Landeshauptstadt: die Ortspauschale (Erläuterung 3).
  * - Sonst der km-Tarif, mindestens aber die Mindestpauschale: „Für kurze
- *   Strecken ist eine Mindestpauschale vorgesehen" (Informationsblatt). Ab
- *   welcher Strecke, nennt keine Quelle; als Mindestbetrag gelesen greift sie,
- *   solange Kilometer × km-Tarif darunter liegt — dieselbe Lesart wie in
- *   Erläuterung 2 („unterschreitet die Mindestpauschale").
+ *   Strecken ist eine Mindestpauschale vorgesehen" (Informationsblatt). Sie
+ *   greift, solange Kilometer × km-Tarif darunter liegt. Das Rundschreiben des
+ *   Fachverbands vom 01.01.2025 nennt dieselbe Grenze als Strecke: „10,35 €
+ *   Mindestpauschale (bis 5,5km – darüber kommt der KM-Tarif zur Anwendung)" —
+ *   bei ganzen Kilometern also bis 5 km, ab 6 km der km-Tarif. Die
+ *   Tarifvereinbarung der SVS sagt es ausdrücklich: „Ergibt die Multiplikation
+ *   der gefahrenen Kilometer mit dem Kilometertarif … einen höheren Betrag, so
+ *   gelangt dieser zur Abrechnung."
  */
 export function taxiEinzelfahrt(e: TaxiEinzelfahrt): TaxiLeistung {
   const stand = tarifstand(e.datum);

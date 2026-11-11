@@ -1869,8 +1869,13 @@ Jahrhundert steht nicht im Satz.
    setzt VSTRU selbst.
 5. **Negative Korrekturen** durch den Vertragspartner (VORZ 1, D.65): wie die
    Summensätze dann aussehen, sagt Kapitel E/F nicht — nicht gebaut.
-6. **Textformat bei „MF"** (Trennzeichen, Reihenfolge) steht nirgends; der
-   Aufrufer schreibt den Text, das Paket prüft nur „MF" und die Nummern.
+6. **Textformat bei „MF".** Belegt ist nur der Inhalt: „bei jedem Patienten
+   das Begründungsfeld gleich zu befüllen: VSNR erster Patient / VSNR zweiter
+   Patient / VSNR dritter Patient", und zwar „egal bei welchem
+   Sozialversicherungsträger der Patient versichert ist" (WKO-Fachverband,
+   Klarstellung ab 1.6.2025). Trennzeichen und Stellung von „MF" stehen
+   nirgends; der Aufrufer schreibt den Text, das Paket prüft nur „MF" und die
+   Nummern.
 7. **Wann SART 07 zwingend ist** (F.7: „ab Versichertenkategorie 28,
    ausgenommen KAT 29" bei „EU/EWR-Schweiz-Betreuungsfällen", die Tabelle führt
    aber auch Drittstaaten) — nicht erzwungen.
@@ -1908,7 +1913,9 @@ Jahrhundert steht nicht im Satz.
 
 Aus den Kilometern einer Fahrt wird die Leistungszeile der Abrechnung — Position,
 Tarif und Anzahl nach der „Tarifliste Krankenbeförderung durch Vertragstaxi,
-gültig ab 01.01.2025" (Gesamtvertrag § 9, Anlage 2):
+gültig ab 01.01.2025" (Anlage 2 der gesamtvertraglichen Vereinbarung vom
+12.12.2023 zwischen dem WKO-Fachverband für die Beförderungsgewerbe mit
+Personenkraftwagen und der ÖGK, § 9):
 
 ```ts
 import { taxiEinzelfahrt, taxiMehrfachtransport, alsMehrfachtransportAbzurechnen } from '@kreiseck/elda';
@@ -1934,7 +1941,9 @@ Umsatzsteuersatz ergänzt der Aufrufer.
   keine Wartezeiten (§ 9 Abs. 4 und 7, ÖGK-Informationsblatt).
 - **Kilometer** sind ganze Kilometer laut Distanzanzeiger (§ 9 Abs. 5; siehe
   `@kreiseck/distanzanzeiger`).
-- **Mindestpauschale** greift, solange Kilometer × km-Tarif darunter liegt.
+- **Mindestpauschale** greift, solange Kilometer × km-Tarif darunter liegt. Das
+  Rundschreiben des Fachverbands vom 01.01.2025 nennt dieselbe Grenze als
+  Strecke: „bis 5,5km – darüber kommt der KM-Tarif zur Anwendung".
 - **Ortspauschale** gilt, wenn Ausgangs- und Zielort innerhalb des Stadtgebiets
   einer Landeshauptstadt liegen (Ortstafel) — das gibt der Aufrufer an. Wien
   steht ohne Betrag in der Tarifliste.
@@ -1943,12 +1952,40 @@ Umsatzsteuersatz ergänzt der Aufrufer.
   Versicherten), die übrigen sind `null`.
 - **Tarifstand nach Fahrtdatum.** Hinterlegt ist 01.01.2025 bis 31.12.2026 (2026
   ohne Valorisierung, Fachverband-Rundschreiben vom 15.12.2025). Für andere
-  Tage bricht die Rechnung ab — ab 2027 wird wieder valorisiert (§ 9 Abs. 3).
+  Tage bricht die Rechnung ab.
 
-Offen: ab welcher Strecke die Mindestpauschale gilt, nennt keine Quelle
-ausdrücklich (gelesen als Mindestbetrag); bei wem sie im Mehrfachtransport zu
-verrechnen ist; ob SVS, BVAEB und KFA dieselben Positionsnummern verwenden (SVS
-und KFA Wien haben eigene Gesamtverträge). Nicht geprüft wird, dass ein
+**Für welche Träger die Liste gilt** (Stand der Quellen: 11.11.2026):
+
+| Träger | Grundlage | Stand |
+| --- | --- | --- |
+| ÖGK, alle Länder außer Wien | Vereinbarung vom 12.12.2023, Anlage 2 | Positionen 050–071 hinterlegt |
+| BVAEB, alle Länder außer Wien | dem ÖGK-Vertrag „rückwirkend mit 1.1.2024 österreichweit … beigetreten" (WKO Niederösterreich; Anlage 1 des Vertrags) | dieselbe Liste; der Verzicht auf die Valorisierung 2026 gilt „für alle Krankenversicherungsträger, die dem ÖGK-Gesamtvertrag beigetreten sind" |
+| SVS, alle Länder außer Wien | eigene Vereinbarung vom 17.12.2024, befristet bis 31.12.2026; Anlage 1 „Tarifvereinbarung" | Grundbeträge gleich (1,86 je km, 10,35, 12,42 / 14,49 / 16,56, „exkl. USt."); Rollstuhl und Mehrfachtransport nur als Prozentsatz, **keine Positionsnummern** — nicht belegt, also nicht freigegeben |
+| Wien (BVAEB, SVS, KFA) | eigene Tarifblätter der Fachgruppe Wien | nicht hinterlegt |
+
+**Ab 2027.** § 9 Abs. 3 sieht die jährliche Valorisierung „mit dem endgültigen
+rollierenden Durchschnitts-VPI des Zeitraumes von November des
+zweitvorangegangenen Jahres bis Oktober des vorangegangenen Jahres" vor. Rundung
+und Ausgangsbasis nennt der Vertrag nicht, und eine Tarifliste für 2027 war am
+11.11.2026 weder beim Fachverband noch bei den Landes-Fachgruppen
+veröffentlicht. Die Beträge werden deshalb nicht errechnet, sondern aus der
+Liste übernommen, sobald sie vorliegt (das Rundschreiben für 2026 erschien am
+15.12.2025). Die Vereinbarung der SVS endet mit 31.12.2026; eine Verlängerung
+war nicht zu finden.
+
+**Kostenanteil des Versicherten.** Das Taxi hebt nichts ein: „Die Forderung oder
+Entgegennahme von Zuzahlungen … von Versicherten sind aus keinen, wie auch immer
+gearteten Gründen … zulässig" (§ 3 Abs. 2). Die ÖGK schreibt den Kostenanteil im
+Nachhinein selbst vor (Satzung § 47 Abs. 3a; seit 01.07.2025). Bei der BVAEB
+gilt seit 01.06.2026 ein Kostenanteil je Wegstrecke (Satzung § 26 Abs. 5): „Die
+Einhebung der Kostenbeteiligung erfolgt direkt durch die BVAEB" (Fachgruppe
+Oberösterreich, Mai 2026). Die SVS verrechnet ihre 20 Prozent ebenfalls selbst. Für die Vorschreibung verlangt die ÖGK den Transportgrund:
+„GRU: ‚26' für Dialyse, ‚30' Strahlen-/Chemotherapie" (Schreiben vom
+23.05.2025).
+
+Offen: bei wem die Mindestpauschale im Mehrfachtransport zu verrechnen ist;
+welche Positionsnummern die SVS erwartet; ob BVAEB und SVS den Transportgrund
+wie die ÖGK gekennzeichnet haben wollen. Nicht geprüft wird, dass ein
 Mehrfachtransport nicht teurer sein darf als die Einzeltransporte — dafür wären
 die Einzelstrecken nötig.
 
