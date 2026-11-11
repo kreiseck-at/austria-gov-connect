@@ -1798,6 +1798,52 @@ ELDA bestätigt und am Kundentest gelaufen). Zuerst kommt das
 Übernahmeprotokoll von ELDA als Text (`mb_<Protokollnummer>`). Was der Träger
 zurückschickt, holt `empfangen` ebenfalls ab; `liesDktBestand` liest es.
 
+**Eingaben vorab prüfen.** `pruefeDktEingabe(feld, wert)` wendet auf eine
+Texteingabe dieselbe Regel an wie der Satzbau — Zeichenvorrat und Länge des
+Zielfelds —, damit ein unzulässiger Name beim Erfassen auffällt und nicht erst
+bei der Monatsabrechnung:
+
+```ts
+import { pruefeDktEingabe, DKT_EINGABEFELDER } from '@kreiseck/elda';
+
+pruefeDktEingabe('familienname', 'Weinzierl'); // { zulaessig: true }
+pruefeDktEingabe('familienname', 'Müller'); // { zulaessig: false, meldung: 'Feld ZUNVS: Zeichen …' }
+pruefeDktEingabe('begruendung', 'Gehunfähig'); // { zulaessig: true } – Freitext in ISO 8859-15
+pruefeDktEingabe('vorname', 'Maximiliana-Theresia'); // abgewiesen: Bindestrich
+DKT_EINGABEFELDER.transportOrt.laenge; // 16
+```
+
+Felder: `familienname`, `vorname`, `verordnerName`, `strasse`, `ort`,
+`transportOrt`, `uebermittlerName`, `begruendung`, `text`, `diagnosetext`,
+`rechnungsnummer`, `kennzeichen`, `transportnummer`, `bewilligungsnummer`. Zu
+lange Namen des Versicherten und des Verordners sind zulässig; das Ergebnis
+nennt dann unter `gekuerzt`, was im Satz landet (F.7.1: „werden diese im
+Datensatz der Satzart 01 abgeschnitten angegeben"). Alle anderen Felder werden
+bei Überlänge abgewiesen.
+
+**Testhilfe für Rückmeldungen.** `erstelleDktTestRuecksendung(gesendet,
+ergebnisse)` baut aus einer gesendeten Abrechnung einen Retourdatenträger (BEST
+`TR`) mit wählbarem Ergebnis je Belegnummer — für Tests, die eine Rückmeldung
+den gesendeten Fahrten zuordnen:
+
+```ts
+import { erstelleDktTestRuecksendung, liesDktBestand } from '@kreiseck/elda';
+
+const zurueck = erstelleDktTestRuecksendung(datei, {
+  2: { art: 'gekuerzt', anerkanntCent: 3348, ablehnungsgrund: '76' },
+  3: { art: 'abgelehnt', ablehnungsgrund: '03' },
+}); // nicht genannte Fälle gelten als angenommen
+liesDktBestand(zurueck).faelle[1].leistungen[0].ablehnungsgrund; // { code: '76', … }
+```
+
+Der Aufbau folgt allein der Beschreibung (E.2.2: SART 22 mit dem „anerkannten
+Betrag" und Ablehnungsgrund, SART 24 mit neu gerechneten Summen und Status).
+**Ein echter Retourdatenträger eines Trägers lag bei der Entwicklung nicht
+vor**; Korrektursätze des Trägers (41/60/62/64), Pauschalen (85) und Hinweise
+bildet die Hilfe nicht nach. Zugeordnet wird eine Rückmeldung über den Satzkopf
+(Vertragspartnernummer, Jahr, Zeitraum), die Rechnungsnummer des Summensatzes
+und je Fall über Belegnummer (BSNR) und Rechnungsnummer des Transportes.
+
 **Golden-Test.** Das „Praxisbezogene Muster-Abrechnungsbeispiel" (E.3, Seite
 51) steht im PDF nur als Bild. Es ist zeichengenau abgeschrieben
 (`dkt-beispiele.test.ts`) und wird vollständig gelesen. Der Satzbau erzeugt es

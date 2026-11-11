@@ -425,7 +425,7 @@ function ortsangabe(o: DktOrtsangabe, feld: string): string {
  * Verordners auf zehn Stellen („LANDESKRAN"). Andere Felder kürzt dieser Code
  * nie.
  */
-function gekuerzt(text: string, laenge: number): string {
+export function gekuerzt(text: string, laenge: number): string {
   return text.trim().slice(0, laenge);
 }
 
@@ -456,7 +456,7 @@ function pruefeIban(iban: string): void {
  * Festlegung des Betreibers, keine Vorgabe des Dokuments — sollte ein Träger
  * anders rechnen, meldet er Ablehnungsgrund 33 „USt. falsch" (D.1).
  */
-function umsatzsteuer(nettoCent: number, prozent: number): number {
+export function umsatzsteuer(nettoCent: number, prozent: number): number {
   return Math.floor((nettoCent * prozent + 50) / 100);
 }
 
