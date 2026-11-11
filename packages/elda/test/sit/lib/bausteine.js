@@ -154,18 +154,23 @@ function mbgmPaket(
  *   `erstelleLohnzettelBestand`
  * @param a.erstellt Erstellungszeitpunkt (Vorlauf, DTUE/ZTUE); ohne Angabe der
  *   simulierte Tag des Fensters
+ * @param a.pruefen false nur für Negativtests: der Lohnzettel geht auch mit
+ *   eigenen Befunden (Status N) hinaus; deren Codes stehen dann in `eigeneBefunde`.
  */
-function lohnzettel(ctx, { fall, dg, traeger, uebermittlung, erstellt }) {
+function lohnzettel(ctx, { fall, dg, traeger, uebermittlung, erstellt, pruefen = true }) {
   const { versicherungstraeger: _vstr, ...opt } = ctx.bestandOptionen({ dg, traeger, erstellt });
   const saetze = ctx.elda.lohnzettelSaetze(uebermittlung, opt.erstellt);
   const befunde = ctx.elda
     .pruefeLohnzettel(saetze, uebermittlung.version, { heute: opt.erstellt })
     .filter((b) => b.status.startsWith('N'));
-  if (befunde.length > 0) throw new Error(`L16 ${fall} hat Befunde mit Status N: ${JSON.stringify(befunde)}`);
+  if (pruefen && befunde.length > 0) {
+    throw new Error(`L16 ${fall} hat Befunde mit Status N: ${JSON.stringify(befunde)}`);
+  }
   return {
     inhalt: ctx.elda.erstelleLohnzettelBestand(uebermittlung, opt),
     dateiName: ctx.dateiName(fall),
     referenzwerte: uebermittlung.lohnzettel.map((lz) => lz.felder.REFN),
+    ...(pruefen ? {} : { eigeneBefunde: befunde.map((b) => b.code) }),
   };
 }
 

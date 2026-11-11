@@ -286,7 +286,7 @@ const IM_FENSTER_KW46 = {
 };
 // V72–V83 mit: M100/M101 rechnen mit kasseneck, das nur das Parameterwerk 2026 kennt – die
 // Anmeldungen und Abmeldungen, auf denen sie aufbauen, müssen in derselben (KW46-)Woche liegen.
-const istKw46 = (id) => /^(L2\d|L3[0-3]|Q[67]\d|M9[89]|M1(0\d|1\d|2\d|3[0-3])|V7[2-9]|V8[0-3])$/.test(id);
+const istKw46 = (id) => /^(L2\d|L3\d|L4[0-4]|Q[67]\d|M9[89]|M1(0\d|1\d|2\d|3[0-3])|V7[2-9]|V8[0-3])$/.test(id);
 /** Lohnzettel von kasseneck mit Geschlecht (KW46). */
 const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28', 'L31'];
 const zeitpunkt = (id, fenster) =>
@@ -929,6 +929,42 @@ test('L27–L29: UEL in KZ 220, AVAB mit Kinderzahl, zwei Geschlechter; S15/S16:
   const vs = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[1];
   assert.equal(feld(vs('S15'), 553, 1), '4', 'S15: offen');
   assert.equal(feld(vs('S16'), 553, 1), '6', 'S16: inter');
+});
+
+test('L34/L35: Pendlerpauschale in BPEN und KZ 243, steuerfreie Überstundenzuschläge in KZ 215 und SB682', () => {
+  if (!GEBAUT.has('L34')) return;
+  const l1 = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[2];
+  const zahl = (id, pos) => Number(feld(l1(id), pos, 10));
+  // Klein, 20–40 km: 58 € im Monat, Jänner bis Juni.
+  assert.equal(zahl('L34', 397), 34_800, 'L34: BPEN');
+  assert.equal(zahl('L34', 441), 34_800, 'L34: KZ 243 = Pendlerpauschale');
+  assert.equal(zahl('L34', 757), 0, 'L34: kein Pendlereuro (BPEND 0)');
+  assert.equal(zahl('L34', 309), 0, 'L34: KZ 215 leer');
+  // F6401: KZ 245 = 210 − 215 − 220 − 230 − 243.
+  for (const id of ['L34', 'L35']) {
+    assert.equal(
+      zahl(id, 452),
+      zahl(id, 298) - zahl(id, 309) - zahl(id, 320) - zahl(id, 364) - zahl(id, 441),
+      `${id}: F6401`,
+    );
+  }
+  assert.ok(zahl('L35', 309) > 0, 'L35: KZ 215');
+  assert.equal(zahl('L35', 1090), zahl('L35', 309), 'L35: SB682 = KZ 215');
+  assert.equal(zahl('L35', 397), 0, 'L35: keine Pendlerpauschale');
+  assert.equal(feld(l1('L35'), 120, 8), '01073112', 'L35: 01.07.–31.12.');
+  // L43: derselbe Satz wie L34, nur BPEND (Feld 132) gesetzt.
+  assert.equal(zahl('L43', 757), 9_000, 'L43: Pendlereuro 90 €');
+  assert.equal(feld(l1('L43'), 756, 1), '+', 'L43: Vorzeichen');
+  assert.equal(l1('L43').slice(0, 65), l1('L34').slice(0, 65), 'L43: Kopf wie L34');
+  assert.equal(l1('L43').slice(130, 755), l1('L34').slice(130, 755), 'L43: Beträge wie L34');
+});
+
+test('L36–L42: Rechenregeln des L16 – genau die eine Regel verletzt, die der Fall nennt', () => {
+  for (const f of KATALOG.filter((x) => /^L(3[6-9]|4[0-2])$/.test(x.id))) {
+    assert.deepEqual(GEBAUT.get(f.id).ergebnis.eigeneBefunde, f.eigeneBefunde, `${f.id}: eigene Befunde (Status N)`);
+  }  const l1 = (id) => saetze(GEBAUT.get(id).ergebnis.inhalt)[2];
+  assert.equal(feld(l1('L44'), 66, 30), feld(l1('L41'), 66, 30), 'L44: Referenznummer von L41');
+  assert.equal(feld(l1('L44'), 656, 1), 'K', 'L44: Berichtigung');
 });
 
 test('M98/M99: Höchstbeitragsgrundlage – SV bei 6.930 € gedeckelt, BV erst ab März vom vollen Entgelt', () => {
