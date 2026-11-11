@@ -10,11 +10,17 @@
 // Clearing Mi nm, ob die ÖGK den Inhalt prüft – ohne dass eine echte mBGM desselben Monats dazwischenfunkt.
 //
 //   M118 02/2026  T01 mit 39,00 % statt 39,05 % (Betrag passend zum falschen Satz)
-//   M119 03/2026  Beschäftigtengruppe B999 (gibt es nicht)
+//   M119 03/2026  Beschäftigtengruppe B999 statt B002 – laut SIT-Protokoll „Betriebliche Vorsorge ohne SV-Pflicht“,
+//                 also eine reine BV-Gruppe mit SV-Verrechnung (AB/T01)
 //   M120 04/2026  A01 −0,95 % auf 6.930 € – AV-Minderung, obwohl das Entgelt weit über der Staffel liegt
 //   M121 04/2027  laufender Monat: Paket am 01.04.2027 für 04/2027 (Lohnlauf vor Monatsende)
 //   M122 05/2027  künftiger Monat
 //   M123 07/2026  dieselbe Person zweimal im selben Paket
+//   M124 08/2026  Beschäftigtengruppe B000
+//   M125 09/2026  Beschäftigtengruppe X001 (Aufbau falsch: kein „B“ vorn)
+//
+// Das Protokoll (mbd) nennt zu jeder Meldung die Beschäftigtengruppe im Klartext; M118–M123 kamen alle formal
+// „übernommen“ – die Einzelmeldung prüft ELDA beim Empfang nicht inhaltlich.
 
 const { mbgmPaket, setzeFeld } = require('../lib/bausteine');
 const { FELDER_PAKET } = require('../../../dist/felder-e32.js');
@@ -98,10 +104,12 @@ module.exports = [
   }),
   fall({
     id: 'M119',
-    titel: 'mBGM-Negativ 03/2026 B/15: Beschäftigtengruppe B999 (unbekannt)',
-    zweck: 'Eine Beschäftigtengruppe, die es im Tarifsystem nicht gibt. Formaler Abweis mit welchem Code?',
+    titel: 'mBGM-Negativ 03/2026 B/15: Beschäftigtengruppe B999 („BV ohne SV-Pflicht“) mit SV-Verrechnung',
+    zweck:
+      'Gedacht als unbekannte Gruppe – das SIT-Protokoll nennt B999 aber „Betriebliche Vorsorge ohne SV-Pflicht“. ' +
+      'Damit: reine BV-Gruppe mit AB/T01. Meldet die ÖGK die Kombination (BW1838)?',
     quelle: QUELLE,
-    erwartung: 'nicht übernommen, F-Code zur Beschäftigtengruppe',
+    erwartung: 'formal übernommen (Protokoll: „Betriebliche Vorsorge ohne SV-Pflicht“); Clearing Mi nm BW1838?',
     baue: (ctx) =>
       paket(ctx, 'M119', 3, {
         abwandlung: (e) => ({ ...e, tarifbloecke: e.tarifbloecke.map((t) => ({ ...t, beschaeftigtengruppe: 'B999' })) }),
@@ -154,4 +162,20 @@ module.exports = [
     erwartung: 'offen: nicht/teilweise übernommen mit F-Code, oder Clearing Mi nm',
     baue: (ctx) => paket(ctx, 'M123', 7, { doppelt: true }),
   }),
+  ...[
+    ['M124', 8, 'B000', 'eine Nummer, die es im Tarifsystem vermutlich nicht gibt'],
+    ['M125', 9, 'X001', 'ein Code ohne „B“ vorn – falscher Aufbau'],
+  ].map(([id, monat, gruppe, was]) =>
+    fall({
+      id,
+      titel: `mBGM-Negativ ${String(monat).padStart(2, '0')}/2026 B/15: Beschäftigtengruppe ${gruppe}`,
+      zweck: `Nach M119 (B999 gibt es): ${was}. Weist ELDA ab, oder nennt das Protokoll eine Gruppe?`,
+      quelle: QUELLE,
+      erwartung: 'offen: nicht übernommen mit F-Code, oder übernommen und Clearing Mi nm',
+      baue: (ctx) =>
+        paket(ctx, id, monat, {
+          abwandlung: (e) => ({ ...e, tarifbloecke: e.tarifbloecke.map((t) => ({ ...t, beschaeftigtengruppe: gruppe })) }),
+        }),
+    }),
+  ),
 ];
