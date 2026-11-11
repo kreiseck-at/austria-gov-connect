@@ -216,7 +216,7 @@ export interface DktFall {
     vpnr: string;
     /** ZUNUW (D.67, 10 Stellen). */
     familienname?: string;
-    /** FACHU (D.25): „zu belegen, wenn VPNUW keine Sammelnummer ist". */
+    /** FACHU (D.25): „zu belegen, wenn VPNUW keine Sammelnummer ist". Katalog: `FACHGEBIET`. */
     fachgebiet?: string;
   };
   /** UEDAT, Datum des Antrages für Transport (D.16). */

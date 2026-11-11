@@ -1821,6 +1821,12 @@ nennt dann unter `gekuerzt`, was im Satz landet (F.7.1: „werden diese im
 Datensatz der Satzart 01 abgeschnitten angegeben"). Alle anderen Felder werden
 bei Überlänge abgewiesen.
 
+**Fachgebiet des Verordners.** Für FACHU nennt die DKT nur „2 Stellen
+numerisch" (D.25) und keine Codeliste. `FACHGEBIET` führt den Katalog aus der
+Organisationsbeschreibung DVP des Dachverbands (Version 3.9, Stand 06/2026,
+D.33) — für Auswahllisten; der Satzbau prüft FACHU weiter nur auf zwei Ziffern,
+weil die DKT nicht ausdrücklich auf diese Liste verweist.
+
 **Testhilfe für Rückmeldungen.** `erstelleDktTestRuecksendung(gesendet,
 ergebnisse)` baut aus einer gesendeten Abrechnung einen Retourdatenträger (BEST
 `TR`) mit wählbarem Ergebnis je Belegnummer — für Tests, die eine Rückmeldung
