@@ -47,6 +47,7 @@ const SART = {
   Q69: 'M4',
   Q70: 'M3',
   Q71: 'M4',
+  Q72: 'M6',
   Q65: 'M3',
   Q66: 'M4',
   Q64: 'M3',
@@ -174,6 +175,7 @@ const VSTR = {
   Q69: '14',
   Q70: '15',
   Q71: '15',
+  Q72: '15',
   Q62: '15',
   Q63: '15',
   Q61: '15',
@@ -284,7 +286,7 @@ const IM_FENSTER_KW46 = {
 };
 // V72–V83 mit: M100/M101 rechnen mit kasseneck, das nur das Parameterwerk 2026 kennt – die
 // Anmeldungen und Abmeldungen, auf denen sie aufbauen, müssen in derselben (KW46-)Woche liegen.
-const istKw46 = (id) => /^(L2\d|L3[0-3]|Q6\d|M9[89]|M1(0\d|1\d|2\d|3[0-2])|V7[2-9]|V8[0-3])$/.test(id);
+const istKw46 = (id) => /^(L2\d|L3[0-3]|Q[67]\d|M9[89]|M1(0\d|1\d|2\d|3[0-3])|V7[2-9]|V8[0-3])$/.test(id);
 /** Lohnzettel von kasseneck mit Geschlecht (KW46). */
 const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28', 'L31'];
 const zeitpunkt = (id, fenster) =>

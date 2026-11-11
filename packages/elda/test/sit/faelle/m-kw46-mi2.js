@@ -11,11 +11,13 @@
 //                      Grenze, aber ohne Änderungsmeldung
 //   M131 B/15 08/2026  reserve_1 mit 9.000 €, BV-Satz 1,50 % statt 1,53 %
 //   M132 B/15 05/2026  freier_dn (Q67): Storno einer mBGM, die es nie gab, und Neumeldung im selben Paket
+//   Q72 → M133 B/15 04/2026  Gegenprobe zu M130, der richtige Weg: reserve_3 (Q63, geringfügig ab 03/2026) per
+//                      Änderungsmeldung (M6) ab 01.04. voll versichert, dann die mBGM mit 900 € voll
 //
 // Bisher belegt (mBGM gesendet): reserve_1 02, 03 (M102/M103), 06 (M116); reserve_2 02, 03 (M104/M105);
 // angestellte A/15 03 (M106); freier_dn 01–04, 06–09, 11, 12 und 04/05 2027.
 
-const { mbgmPaket } = require('../lib/bausteine');
+const { mbgmPaket, meldung } = require('../lib/bausteine');
 
 const fall = (mehr) => ({
   gefahr: null,
@@ -189,6 +191,65 @@ module.exports = [
             referenzUrspruenglicheMeldung: ctx.referenzwert('M132-NIE'),
             versicherungsnummer: ctx.rolle('freier_dn').vsnr,
             summeCent: SUMME_9000_MIT_BV,
+          },
+        ],
+      });
+    },
+  }),
+  fall({
+    id: 'Q72',
+    titel: 'Änderungsmeldung reserve_3 auf B/15: ab 01.04.2026 voll versichert (GERF N) (M6, VWAZ in Grundstellung)',
+    zweck:
+      'Der richtige Weg, wenn eine Geringfügige über die Grenze kommt: Änderungsmeldung mit dem Tag des Wechsels, ' +
+      'danach die volle mBGM (M133). Gegenstück zu M130 ohne Änderungsmeldung.',
+    quelle: 'E.29.2 (M6: BBER, GERF, FRDV); § 5 Abs 2 ASVG',
+    erwartung: 'übernommen',
+    braucht: undefined,
+    abhaengig: ['Q63'],
+    rang: 12,
+    baue: (ctx) =>
+      meldung(ctx, {
+        fall: 'Q72',
+        art: 'aenderungsmeldung',
+        rolle: 'reserve_3',
+        dg: 'B',
+        traeger: '15',
+        felder: {
+          // Wechsel am Ersten des Monats nach dem Eintritt (Q63: Eintritt einen Monat vor seinem Fenster).
+          ADAT: ctx.ttmmjjjj(eintrittVon(ctx, 'Q63', 0)),
+          BBER: '01',
+          GERF: 'N',
+          FRDV: 'N',
+        },
+      }),
+  }),
+  fall({
+    id: 'M133',
+    titel: 'mBGM 04/2026 B/15 über kasseneck: reserve_3 nach der Änderungsmeldung Q72 voll versichert mit 900 €',
+    zweck: 'Gegenprobe zu M130: Nach der Änderungsmeldung sollte die volle mBGM ohne Clearing durchgehen.',
+    quelle: `${QUELLE}; § 5 Abs 2 ASVG`,
+    erwartung: 'übernommen; Clearing Mi nm ohne Fall',
+    abhaengig: ['Q63', 'Q72'],
+    baue: (ctx) => {
+      const eintritt = eintrittVon(ctx, 'Q63', 1);
+      return mbgmPaket(ctx, {
+        fall: 'M133',
+        dg: 'B',
+        traeger: '15',
+        monat: eintrittVon(ctx, 'Q63', 0).slice(0, 7),
+        bundesland: 'oberoesterreich',
+        beschaeftigte: [
+          {
+            rolle: 'reserve_3',
+            mitarbeiter: {
+              dienstnehmerGruppe: 'arbeiter',
+              beschaeftigungsart: 'parttime',
+              eintritt,
+              austritt: null,
+              wochenstunden: 10,
+              kvBasisStunden: 40,
+              grossSalaryCents: 90_000,
+            },
           },
         ],
       });
