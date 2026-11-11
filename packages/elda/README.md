@@ -1794,8 +1794,9 @@ const zurueck = liesDktBestand(datei); // ebenso ein abgeholter Retourdatenträg
 
 Gesendet wird über denselben Transferweg wie die übrigen Meldungen
 (`elda.senden({ dateiName, inhalt: datei })`, Seriennummer des Betriebs; so von
-ELDA bestätigt). Was der Träger zurückschickt, holt `empfangen` ab;
-`liesDktBestand` liest es.
+ELDA bestätigt und am Kundentest gelaufen). Zuerst kommt das
+Übernahmeprotokoll von ELDA als Text (`mb_<Protokollnummer>`). Was der Träger
+zurückschickt, holt `empfangen` ebenfalls ab; `liesDktBestand` liest es.
 
 **Golden-Test.** Das „Praxisbezogene Muster-Abrechnungsbeispiel" (E.3, Seite
 51) steht im PDF nur als Bild. Es ist zeichengenau abgeschrieben
@@ -1878,9 +1879,16 @@ Jahrhundert steht nicht im Satz.
    nicht erzwungen.
 9. **Skonto, Sammelabrechnungen** mehrerer Leistungserbringer, **Wochen-,
    Quartals- und Jahreszeiträume** — nicht gebaut.
-10. **Satztrenner.** CRLF wie bei den übrigen ELDA-Beständen; für Projekt `TK`
-    noch nicht gegen ELDA gelaufen. Laut ELDA lassen sich Bestände schon vor
-    der Freigabe der Software an die Kundentestumgebung übertragen.
+10. *(geklärt)* **Satztrenner und Dateiname.** Ein Testbestand (BEST `T1`) ist
+    am 11.11.2026 an die ELDA-Kundentestumgebung gegangen: Sätze durch CRLF
+    getrennt, ohne Trenner nach dem letzten, Dateiname `dkt.dat` — Status `000`.
+    Das Übernahmeprotokoll (`mb_<Protokollnummer>`) nennt Vertragspartnernummer,
+    Fachgruppe, Versicherungsträger und Abrechnungszeitraum aus der Datei und
+    schließt mit „Der Erhalt dieser Meldung wird bestaetigt. Die inhaltliche
+    Pruefung erfolgt zu einem spaeteren Zeitpunkt." ELDA prüft also den Rahmen;
+    Fälle, Beträge und Codes prüft erst der Träger. Laut ELDA lassen sich
+    Bestände schon vor der Freigabe der Software an die Kundentestumgebung
+    übertragen.
 
 ### Taxitarif der Krankenbeförderung (ÖGK-Gesamtvertrag)
 
