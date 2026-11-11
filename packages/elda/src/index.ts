@@ -267,6 +267,7 @@ export {
   DIAKZ,
   EFORM,
   EGESL,
+  FACHGEBIET,
   FART,
   GRU,
   KAT,

@@ -217,6 +217,100 @@ export const TART = {
   '99': 'sonstiger Transport (Begründungsblock notwendig)',
 } as const;
 
+/**
+ * Fachgebiete für FACHU, das „Fachgebiet des anordnenden Arztes/Stelle" (D.25).
+ *
+ * Die DKT nennt für FACHU nur „2 Stellen numerisch" und führt selbst keine
+ * Codeliste. Der Katalog stammt aus der Organisationsbeschreibung DVP
+ * (Datenaustausch mit Vertragspartner) des Dachverbands, Version 3.9, Stand
+ * 06/2026, Kapitel D.33 „FACHL, FACHU, FACHV – Fachgebiet", Seiten 46–48 — dort
+ * ist FACHU das „Fachgebiet des überweisenden Vertragspartners". Das Muster E.3
+ * der DKT trägt beim Verordner den Code `85`, der in dieser Liste steht. Weil
+ * die DKT nicht ausdrücklich auf die Liste verweist, prüft der Satzbau FACHU
+ * weiterhin nur auf zwei Ziffern; der Katalog ist für Auswahllisten gedacht.
+ *
+ * Fußnote der Quelle zu 81, 88 und 89: „ab 1. Jänner 2018 flächendeckend gültig".
+ */
+export const FACHGEBIET = {
+  '01': 'Allgemein-/Allgemein- und Familienmedizin',
+  '02': 'Anästhesiologie und Intensivmedizin',
+  '03': 'Augenheilkunde und Optometrie',
+  '04': 'Chirurgie',
+  '05': 'Haut- und Geschlechtskrankheiten',
+  '06': 'Frauenheilkunde und Geburtshilfe',
+  '07': 'Innere Medizin',
+  '08': 'Kinder- und Jugendheilkunde',
+  '09': 'Hals-, Nasen- und Ohrenheilkunde',
+  '10': 'Lungenkrankheiten',
+  '11': 'Neurologie und Psychiatrie/Psychiatrie und Neurologie',
+  '12': 'Orthopädie und orthopädische Chirurgie',
+  '13': 'Physikalische Medizin',
+  '14': 'Radiologie',
+  '15': 'Unfallchirurgie',
+  '16': 'Urologie',
+  '17': 'Zahn-, Mund- und Kieferheilkunde',
+  '18': 'Neurochirurgie',
+  '19': 'Neurologie',
+  '20': 'Psychiatrie',
+  '21': 'Plastische Chirurgie',
+  '22': 'Kinder- und Jugendchirurgie',
+  '23': 'Mund-, Kiefer- und Gesichtschirurgie',
+  '24': 'Nuklearmedizin',
+  '26': 'Strahlentherapie – Radioonkologie',
+  '27': 'Zahnmedizin',
+  '28': 'Blutgruppenserologie und Transfusionsmedizin',
+  '29': 'Immunologie',
+  '30': 'Kieferorthopädie',
+  '31': 'Innere Medizin und Kardiologie',
+  '32': 'Kinder- und Jugendpsychiatrie',
+  '33': 'Histologie und Embryologie',
+  '34': 'Medizinische Biologie',
+  '35': 'Virologie',
+  '36': 'Gruppenpraxis',
+  '37': 'Arbeits- und Betriebsmedizin',
+  '38': 'Pharmakologie und Toxikologie',
+  '39': 'Medizinische Genetik',
+  '44': 'Innere Medizin und Pneumologie',
+  '45': 'Orthopädie und Traumatologie',
+  '49':
+    'Sonstige, nicht kurative Leistungserbringung: Anatomie, Medizinische Biophysik, Medizinische ' +
+    'Leistungsphysiologie, Neurobiologie, Neuropathologie, Physiologie und Pathophysiologie, Sozialmedizin, ' +
+    'Spezifische Prophylaxe und Tropenhygiene, Tumorbiologie, für Begutachtungen',
+  '50': 'Medizinische und Chemische Labordiagnostik',
+  '51': 'Labor, EEG',
+  '52': 'Labor, zytodiagnostisch',
+  '53': 'Pathologie und Histologie',
+  '55': 'Hygiene und Mikrobiologie bzw. Mikrobiologisch-serologische Labordiagnostik',
+  '56': 'Diplomierte Kindergesundheits- und Krankenpflege',
+  '59': 'Hausapotheke',
+  '62': 'Dentist: innen',
+  '63': 'Physiotherapie',
+  '64': 'Heilmassage',
+  '66': 'Logopädie',
+  '70': 'Hebamme',
+  '71': 'Diplomiere Gesundheits- und Krankenpflege',
+  '72': 'Psychotherapie',
+  '73': 'Klinische Psychologie',
+  '75': 'Ergotherapie',
+  '80': 'Bettenführende Krankenanstalten (ausgenommen stationäre Rehabilitation)',
+  '81': 'Ambulanzen bettenführender Krankenanstalten',
+  '84':
+    'CT, MR und sonstige bildgebende technische Leistungen (z.B. Radiologie, Knochendichte und ' +
+    'nuklearmedizinische Leistungen)',
+  '85': 'Selbständige Ambulatorien (soweit sie nicht den Fachgebieten 84, 86, 89, 91 und 96 zuzuordnen sind)',
+  '86': 'Selbständiges Ambulatorium für Zahn-, Mund- und Kieferheilkunde',
+  '87': 'Pflegeheim, Pensionistenheim',
+  '88': 'Stationäre Rehabilitationseinrichtungen',
+  '89': 'Ambulante Rehabilitationseinrichtungen',
+  '91': 'Selbständiges Ambulatorium für physikalische Medizin',
+  '92': 'Hauskrankenpflegeorganisation',
+  '96': 'Selbständiges Ambulatorium für Kieferorthopädie',
+  '99':
+    'Sonstige Leistungserbringung, soweit sie nicht den Fachgebieten 40-43, 50-91 zuzuordnen sind, z.B.: ' +
+    'Universitätsinstitut (sofern nicht als Teil einer Krankenanstalt), Bundesstaatliche Untersuchungsanstalt, ' +
+    'Sonstige Unternehmen (Handelsunternehmen, Frisöre und Perückenherstellung, etc.)',
+} as const;
+
 /** Unterteilung Fachgebiet UFACHL (D.55, Seite 38). */
 export const UFACHL = {
   '49': 'Gemeinde Wien',

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { erstelleDktAbrechnung, type DktAbrechnung, type DktFall } from './dkt-abrechnung';
 import { liesDktBestand } from './dkt-lesen';
+import { FACHGEBIET } from './dkt-codes';
 import { DKT_EINGABEFELDER, erstelleDktTestRuecksendung, pruefeDktEingabe } from './dkt-pruefhilfen';
 
 // Erfundene Testdaten; Prüfziffern wie in dkt-abrechnung.test.ts.
@@ -174,4 +175,12 @@ test('erstelleDktTestRuecksendung weist Unpassendes ab', () => {
       }),
     /unter dem verrechneten/,
   );
+});
+
+test('FACHGEBIET: Katalog aus DVP D.33 für FACHU', () => {
+  assert.equal(FACHGEBIET['01'], 'Allgemein-/Allgemein- und Familienmedizin');
+  assert.equal(FACHGEBIET['81'], 'Ambulanzen bettenführender Krankenanstalten');
+  assert.ok('85' in FACHGEBIET); // Code des Verordners im Muster E.3
+  assert.equal(Object.keys(FACHGEBIET).length, 69);
+  for (const code of Object.keys(FACHGEBIET)) assert.match(code, /^\d{2}$/);
 });
