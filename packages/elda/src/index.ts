@@ -279,6 +279,7 @@ export {
   UIDV,
   VERSICHERUNGSTRAEGER,
   VERSION_DKT,
+  VSTRU_ELDA,
   ZKR,
   type AblehnungsGruppe,
   type Bundesland,

@@ -26,6 +26,7 @@ import {
   type DktFeld,
 } from './dkt-felder';
 import { ABLG, ABST, BEST_DKT, type AblehnungsGruppe } from './dkt-codes';
+import { vonIso885915 } from './zeichensatz';
 
 /**
  * Liest einen DKT-Datenbestand — die eigene Abrechnung (BEST `TK`/`T1`, Abfolge
@@ -222,11 +223,11 @@ function ablehnung(code: string | undefined): DktAblehnung | undefined {
 
 /**
  * Zerlegt die Datei in Sätze. Getrennt durch CRLF oder LF; ohne Trenner in
- * Stücke zu 128 Zeichen. Gelesen wird als ISO-8859-1, damit ein Byte ein Zeichen
- * bleibt und die Positionen stimmen.
+ * Stücke zu 128 Zeichen. Gelesen wird als ISO-8859-15 (Auskunft ELDA,
+ * 11.11.2026): ein Byte ist ein Zeichen, die Positionen stimmen.
  */
 function saetze(inhalt: Buffer | string): string[] {
-  const text = typeof inhalt === 'string' ? inhalt : inhalt.toString('latin1');
+  const text = typeof inhalt === 'string' ? inhalt : vonIso885915(inhalt);
   let zeilen: string[];
   if (/[\r\n]/.test(text)) {
     zeilen = text.split(/\r?\n/);

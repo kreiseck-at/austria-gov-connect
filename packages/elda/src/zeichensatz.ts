@@ -78,9 +78,12 @@ const VORRAT_UNTERNEHMEN: ReadonlySet<number> = new Set([
  * beinhalten, dürfen keine diakritischen Zeichen verwendet werden" (Kapitel F.1,
  * Seite 53). Welche 8-Bit-Codetabelle gemeint ist, steht nirgends.
  *
- * Zugelassen sind deshalb nur die druckbaren Zeichen 32–126: Sie sind in jeder
- * 8-Bit-Erweiterung von ASCII dieselben, eine falsch geratene Codetabelle kann
- * sie nicht verfälschen. Was darüber liegt, ist bis zur Klärung abzuweisen.
+ * Der ELDA Service Support nennt sie (Auskunft vom 11.11.2026): ISO 8859-15.
+ * Freitextfelder der DKT nutzen deshalb den vollen Zeichensatz (Klasse `frei`).
+ *
+ * Diese Klasse bleibt für Adressen, Firmennamen und Kennungen: druckbare
+ * Zeichen 32–126, also ohne diakritische Zeichen, wie F.1 es für Adressen und
+ * Namen verlangt.
  */
 const VORRAT_ASCII: ReadonlySet<number> = new Set(bereich(32, 126));
 
@@ -145,6 +148,14 @@ export function pruefeVorrat(text: string, klasse: Feldklasse, feld: string): vo
       );
     }
   }
+}
+
+/** Dekodiert ISO-8859-15 — die Umkehrung von {@link nachIso885915}. */
+export function vonIso885915(bytes: Buffer): string {
+  const rueck = new Map([...ABWEICHUNGEN].map(([zeichen, code]) => [code, zeichen]));
+  let text = '';
+  for (const b of bytes) text += rueck.get(b) ?? String.fromCharCode(b);
+  return text;
 }
 
 /**

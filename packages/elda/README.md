@@ -1760,7 +1760,6 @@ const datei = erstelleDktAbrechnung({
   traeger: '17', // VSTR: ÖGK-S (D.62)
   abrechnungsstelle: '17', // VSTRA
   bundeslandAbrechnungsstelle: '7', // BLNDA (D.15)
-  datenuebernehmer: '14', // VSTRU — so im Muster E.3, siehe offene Punkte
   datentraegernummer: 7, // DTNR, laufend je Sender und Träger
   erstellt: new Date(),
   testdaten: true, // BEST T1
@@ -1832,8 +1831,8 @@ dem Abrechnungszeitraum (D.4), `AUT 2500` (D.38), Pauschale über 999,99 €
 - UIDV aus der Tabelle in D.56; UID zwingend, sobald Umsatzsteuer verrechnet
   wird (D.56); IBAN als SART 39 „IBAN:…" nach den Summensätzen, ab 2026
   zwingend (F.12), mit Prüfsumme nach ISO 13616.
-- Zeichenvorrat: nur druckbares ASCII (A.3 „8-Bit ASCII"), Namen nur Buchstaben
-  (F.1); Namen in SART 01 werden auf Feldlänge gekürzt (F.7.1, Muster E.3),
+- Zeichensatz ISO 8859-15 (Auskunft ELDA); Namen nur Buchstaben, Adressen und
+  Firmennamen ohne diakritische Zeichen (F.1), Freitext im vollen Zeichensatz; Namen in SART 01 werden auf Feldlänge gekürzt (F.7.1, Muster E.3),
   alle anderen Felder nie.
 - Aus den Schreiben der ÖGK an den Fachverband (16.12.2024) und der
   Klarstellung des Fachverbands zu Mehrfachtransporten (ab 1.6.2025):
@@ -1859,13 +1858,14 @@ Jahrhundert steht nicht im Satz.
    rechnen, zeigt erst ein Test (Ablehnungsgrund 33 „USt. falsch").
 2. **PLZL (SART 06).** D.38 verlangt „rechtsbündig mit führenden blank", das
    Muster E.3 schreibt linksbündig. Das Paket folgt dem Text.
-3. **Zeichensatz.** „8-Bit ASCII" (A.3) nennt keine Codetabelle; Namen und
-   Adressen ohne diakritische Zeichen (F.1). Ob Bindestrich, Apostroph und
-   Punkt in Namen (Typ `a`) zulässig sind und wie EKVK-Namen mit diakritischen
-   Zeichen (Karte nach EN 1387) zu schreiben sind, ist offen — beides wird
-   abgewiesen.
-4. **VSTRU.** Der datenübernehmende Träger bei ELDA ist nur im Muster belegt
-   (`14`, ÖGK-O); deshalb eine Eingabe.
+3. **Namen.** Namen und Adressen sind ohne diakritische Zeichen zu schreiben
+   (F.1). Ob Bindestrich, Apostroph und Punkt in Namen (Typ `a`) zulässig sind
+   und wie EKVK-Namen mit diakritischen Zeichen (Karte nach EN 1387) zu
+   schreiben sind, ist offen — beides wird abgewiesen.
+4. *(geklärt)* **Zeichensatz und VSTRU.** Auskunft des ELDA Service Support vom
+   11.11.2026: DKT-Bestände in ISO 8859-15, VSTRU immer `14`. Freitext
+   (Begründung, Textsatz, Diagnosetext) darf damit Umlaute tragen; das Paket
+   setzt VSTRU selbst.
 5. **Negative Korrekturen** durch den Vertragspartner (VORZ 1, D.65): wie die
    Summensätze dann aussehen, sagt Kapitel E/F nicht — nicht gebaut.
 6. **Textformat bei „MF"** (Trennzeichen, Reihenfolge) steht nirgends; der
@@ -1879,8 +1879,8 @@ Jahrhundert steht nicht im Satz.
 9. **Skonto, Sammelabrechnungen** mehrerer Leistungserbringer, **Wochen-,
    Quartals- und Jahreszeiträume** — nicht gebaut.
 10. **Satztrenner.** CRLF wie bei den übrigen ELDA-Beständen; für Projekt `TK`
-    noch nicht gegen ELDA gelaufen. Ebenso offen: wie ELDA Bestand `T1`
-    behandelt, solange die Software nicht freigegeben ist.
+    noch nicht gegen ELDA gelaufen. Laut ELDA lassen sich Bestände schon vor
+    der Freigabe der Software an die Kundentestumgebung übertragen.
 
 ### Taxitarif der Krankenbeförderung (ÖGK-Gesamtvertrag)
 

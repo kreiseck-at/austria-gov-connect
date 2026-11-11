@@ -156,7 +156,6 @@ const E3_EINGABE: DktAbrechnung = {
   traeger: '18',
   abrechnungsstelle: '18',
   bundeslandAbrechnungsstelle: '8',
-  datenuebernehmer: '14',
   datentraegernummer: 1,
   // 03.02.2024 10:15:30 Wiener Ortszeit (MEZ, UTC+1)
   erstellt: new Date('2024-02-03T09:15:30Z'),
