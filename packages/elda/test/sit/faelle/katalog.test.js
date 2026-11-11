@@ -276,7 +276,7 @@ const IM_FENSTER_KW46 = {
 };
 // V72–V83 mit: M100/M101 rechnen mit kasseneck, das nur das Parameterwerk 2026 kennt – die
 // Anmeldungen und Abmeldungen, auf denen sie aufbauen, müssen in derselben (KW46-)Woche liegen.
-const istKw46 = (id) => /^(L2\d|L3[0-3]|Q6\d|M9[89]|M1(0\d|1[0-3])|V7[2-9]|V8[0-3])$/.test(id);
+const istKw46 = (id) => /^(L2\d|L3[0-3]|Q6\d|M9[89]|M1(0\d|1[0-4])|V7[2-9]|V8[0-3])$/.test(id);
 /** Lohnzettel von kasseneck mit Geschlecht (KW46). */
 const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28', 'L31'];
 const zeitpunkt = (id, fenster) =>
@@ -1064,6 +1064,19 @@ test('M110–M113: Höchstbeitragsgrundlage der Sonderzahlungen über kasseneck,
   ]);
   // Deckel ausgeschöpft: keine SZ-Basis mehr, BV auf 9.000 € + 2.000 €.
   assert.deepEqual(kern('M113'), [kopf, ...laufend, 'BS BV00001100000', 'V1 V01+001530+00000016830']);
+  // Gegenprobe zur Dienstgeberabgabe: beide Geringfügige mit BV, aber ohne Z01.
+  assert.deepEqual(kern('M114'), [
+    'T1 B010               01',
+    'BS AB00000050000',
+    'V1 T01+001100+00000000550',
+    'BS BV00000050000',
+    'V1 V01+001530+00000000765',
+    'T1 B010               01',
+    'BS AB00000040000',
+    'V1 T01+001100+00000000440',
+    'BS BV00000040000',
+    'V1 V01+001530+00000000612',
+  ]);
 });
 
 test('L32/L33: Jahreslohnzettel 2026 von kasseneck – 01.01.–31.12., Sonderzahlungen in ihren Monaten', () => {
