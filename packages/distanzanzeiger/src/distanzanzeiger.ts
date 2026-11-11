@@ -1,4 +1,4 @@
-import { EldaError, EldaProtocolError } from './errors';
+import { DistanzanzeigerError, DistanzanzeigerProtokollError } from './errors';
 
 /**
  * Client für den Distanzanzeiger der österreichischen Sozialversicherung —
@@ -54,7 +54,36 @@ export interface DistanzStation {
   meter: number;
   /** Auslandsanteil der Teilstrecke in Metern. */
   meterAusland: number;
+  /** Der Standort der Anfrage, auf den der Server mit dieser Station geantwortet hat. */
+  angefragt: Readonly<Record<DistanzFeld, string>>;
+  /**
+   * Felder, die in der Anfrage leer waren und die der Server selbst belegt hat.
+   *
+   * Der Server löst ungenaue Angaben auf, ohne es eigens zu melden: Auf „st.
+   * pölten" mit Hausnummer 1, aber ohne Straße, kam am 11.11.2026 keine
+   * Trefferliste, sondern eine Distanz ab „Am Bischofteich 1" — die
+   * Dokumentation zeigt für dieselbe Anfrage noch 19 mögliche Adressen. Wer nur
+   * die Kilometer übernimmt, rechnet dann eine Strecke ab, die niemand gewählt
+   * hat. `ergaenzt` nennt deshalb, was der Server hinzugefügt hat; ob das
+   * bestätigt werden muss, entscheidet der Aufrufer.
+   *
+   * Nicht verglichen werden Felder, die in der Anfrage belegt waren: Der Server
+   * schreibt sie um („st. pölten" → „Sankt Pölten", „mariazeller str" →
+   * „Mariazeller Straße"), und ob eine andere Schreibweise dieselbe Adresse
+   * meint, lässt sich hier nicht entscheiden. Beide Fassungen stehen in
+   * `angefragt` und in der Station.
+   */
+  ergaenzt: DistanzFeld[];
+  /**
+   * Die Station trägt eine siebenstellige Sonder-OKZ („Krankenhäuser etc.",
+   * Seite 4) — der Server hat eine Einrichtung erkannt, etwa „kh stockerau".
+   * Straße und Hausnummer sind dann die der Einrichtung.
+   */
+  einrichtung: boolean;
 }
+
+/** Die Adressfelder eines Standorts. */
+export type DistanzFeld = 'plz' | 'ort' | 'okz' | 'str' | 'hnr';
 
 /** Ein Treffer der Adresssuche bei mehrdeutiger Zuordnung (Seiten 8–9). */
 export interface DistanzTreffer {
@@ -143,9 +172,9 @@ export interface Distanzanzeiger {
    * mitgegeben werden", Seite 3). Genau eine Anfrage an den Server; bei einem
    * Fehler wird nicht wiederholt.
    *
-   * @throws EldaError bei ungültiger Eingabe, verweigertem Zugriff, Zeitlimit
+   * @throws DistanzanzeigerError bei ungültiger Eingabe, verweigertem Zugriff, Zeitlimit
    * oder Netzwerkfehler.
-   * @throws EldaProtocolError wenn die Antwort nicht der Dokumentation entspricht.
+   * @throws DistanzanzeigerProtokollError wenn die Antwort nicht der Dokumentation entspricht.
    */
   abfragen(orte: readonly DistanzOrt[]): Promise<DistanzErgebnis>;
 }
@@ -181,7 +210,7 @@ const ZEITLIMIT_MS = 20_000;
  */
 export function ganzeKilometer(meter: number): number {
   if (!Number.isSafeInteger(meter) || meter < 0) {
-    throw new EldaError('Distanzanzeiger: Meter müssen eine nicht negative ganze Zahl sein.');
+    throw new DistanzanzeigerError('Distanzanzeiger: Meter müssen eine nicht negative ganze Zahl sein.');
   }
   return Math.floor((meter + 500) / 1000);
 }
@@ -189,7 +218,7 @@ export function ganzeKilometer(meter: number): number {
 /** Kilometerwert der Antwort (Typ „double", Seite 8) in ganze Meter. */
 function inMeter(wert: unknown, feld: string, roh: unknown): number {
   if (typeof wert !== 'number' || !Number.isFinite(wert) || wert < 0) {
-    throw new EldaProtocolError(`Distanzanzeiger: ${feld} ist keine nicht negative Zahl.`, roh);
+    throw new DistanzanzeigerProtokollError(`Distanzanzeiger: ${feld} ist keine nicht negative Zahl.`, roh);
   }
   return Math.round(wert * 1000);
 }
@@ -202,10 +231,12 @@ function istObjekt(wert: unknown): wert is Record<string, unknown> {
   return typeof wert === 'object' && wert !== null && !Array.isArray(wert);
 }
 
+const FELDER: readonly DistanzFeld[] = ['plz', 'ort', 'okz', 'str', 'hnr'];
+
 /** Anfragekörper: je Ort alle fünf Felder, leere als `""` — wie im Beispiel der Dokumentation (Seite 3). */
-function anfrage(orte: readonly DistanzOrt[]): Record<string, string>[] {
+function anfrage(orte: readonly DistanzOrt[]): Record<DistanzFeld, string>[] {
   if (orte.length < 2) {
-    throw new EldaError('Distanzanzeiger: Mindestens zwei Standorte sind notwendig.');
+    throw new DistanzanzeigerError('Distanzanzeiger: Mindestens zwei Standorte sind notwendig.');
   }
   return orte.map((o, i) => {
     const zeile = {
@@ -216,18 +247,21 @@ function anfrage(orte: readonly DistanzOrt[]): Record<string, string>[] {
       hnr: (o.hnr ?? '').trim(),
     };
     if (zeile.plz === '' && zeile.ort === '' && zeile.okz === '') {
-      throw new EldaError(`Distanzanzeiger: Standort ${i + 1} braucht Postleitzahl, Ort oder Ortskennzahl.`);
+      throw new DistanzanzeigerError(
+        `Distanzanzeiger: Standort ${i + 1} braucht Postleitzahl, Ort oder Ortskennzahl.`,
+      );
     }
     return zeile;
   });
 }
 
-function liesAntwort(roh: unknown): DistanzErgebnis {
-  if (!istObjekt(roh)) throw new EldaProtocolError('Distanzanzeiger: Antwort ist kein JSON-Objekt.', roh);
+function liesAntwort(roh: unknown, gefragt: readonly Record<DistanzFeld, string>[]): DistanzErgebnis {
+  if (!istObjekt(roh))
+    throw new DistanzanzeigerProtokollError('Distanzanzeiger: Antwort ist kein JSON-Objekt.', roh);
   if (roh['success'] !== true) {
     // Seite 6: ohne gültigen Key `{"success":false,"message":"no access"}`.
     const meldung = text(roh['message']);
-    throw new EldaError(
+    throw new DistanzanzeigerError(
       meldung === 'no access'
         ? 'Distanzanzeiger: Zugriff verweigert („no access") — API-Key fehlt, ist falsch oder gesperrt.'
         : `Distanzanzeiger: Anfrage nicht erfolgreich${meldung === '' ? '' : ` („${meldung}")`}.`,
@@ -235,28 +269,44 @@ function liesAntwort(roh: unknown): DistanzErgebnis {
   }
   const basis = { hinweis: text(roh['notes']), version: text(roh['version']) };
   const data = roh['data'];
-  if (!istObjekt(data)) throw new EldaProtocolError('Distanzanzeiger: Antwort ohne `data`.', roh);
+  if (!istObjekt(data)) throw new DistanzanzeigerProtokollError('Distanzanzeiger: Antwort ohne `data`.', roh);
 
   const distance = data['distance'];
   if (istObjekt(distance)) {
     const orte = distance['ort'];
     if (!Array.isArray(orte) || orte.length < 2) {
-      throw new EldaProtocolError(
+      throw new DistanzanzeigerProtokollError(
         'Distanzanzeiger: `data.distance.ort` fehlt oder hat weniger als zwei Orte.',
         roh,
       );
     }
+    // Die Antwort führt die Orte in der Reihenfolge der Anfrage (Beispiel Seiten
+    // 3 und 5). Stimmt die Anzahl nicht, lässt sich keine Station zuordnen.
+    if (orte.length !== gefragt.length) {
+      throw new DistanzanzeigerProtokollError(
+        `Distanzanzeiger: ${gefragt.length} Standorte angefragt, ${orte.length} Orte in der Antwort.`,
+        roh,
+      );
+    }
     const stationen = orte.map((o, i): DistanzStation => {
-      if (!istObjekt(o)) throw new EldaProtocolError(`Distanzanzeiger: Ort ${i + 1} ist kein Objekt.`, roh);
-      return {
+      if (!istObjekt(o))
+        throw new DistanzanzeigerProtokollError(`Distanzanzeiger: Ort ${i + 1} ist kein Objekt.`, roh);
+      const angefragt = gefragt[i]!;
+      const adresse = {
         okz: text(o['okz']),
         plz: text(o['plz']),
         ort: text(o['ort']),
         str: text(o['str']),
         hnr: text(o['hnr']),
+      };
+      return {
+        ...adresse,
         id: text(o['id']),
         meter: inMeter(o['distance'], `distance des Ortes ${i + 1}`, roh),
         meterAusland: inMeter(o['distance_ausland'], `distance_ausland des Ortes ${i + 1}`, roh),
+        angefragt,
+        ergaenzt: FELDER.filter((f) => angefragt[f] === '' && adresse[f].trim() !== ''),
+        einrichtung: /^\d{7}$/.test(adresse.okz),
       };
     });
     const meter = inMeter(data['total'], 'total', roh);
@@ -268,7 +318,7 @@ function liesAntwort(roh: unknown): DistanzErgebnis {
     const suchen = geomarketing.map((g, i): DistanzSuche => {
       const geocoder = istObjekt(g) ? g['geocoder'] : undefined;
       if (!istObjekt(geocoder)) {
-        throw new EldaProtocolError(
+        throw new DistanzanzeigerProtokollError(
           `Distanzanzeiger: Eintrag ${i + 1} in \`geomarketing\` ohne \`geocoder\`.`,
           roh,
         );
@@ -300,19 +350,24 @@ function liesAntwort(roh: unknown): DistanzErgebnis {
     });
     return { ...basis, art: 'mehrdeutig', suchen };
   }
-  throw new EldaProtocolError('Distanzanzeiger: `data` enthält weder `distance` noch `geomarketing`.', roh);
+  throw new DistanzanzeigerProtokollError(
+    'Distanzanzeiger: `data` enthält weder `distance` noch `geomarketing`.',
+    roh,
+  );
 }
 
 /** Baut den Client. Prüft die Konfiguration sofort. */
 export function createDistanzanzeiger(config: DistanzanzeigerConfig): Distanzanzeiger {
   if (!/^https:\/\//.test(config.endpunkt)) {
-    throw new EldaError('Distanzanzeiger: Der Endpunkt muss mit https:// beginnen.');
+    throw new DistanzanzeigerError('Distanzanzeiger: Der Endpunkt muss mit https:// beginnen.');
   }
-  if (config.apiKey.trim() === '') throw new EldaError('Distanzanzeiger: API-Key fehlt.');
+  if (config.apiKey.trim() === '') throw new DistanzanzeigerError('Distanzanzeiger: API-Key fehlt.');
   const abstand = config.mindestabstandMs ?? MINDESTABSTAND_MS;
   const zeitlimit = config.zeitlimitMs ?? ZEITLIMIT_MS;
   if (!Number.isSafeInteger(abstand) || abstand < 0 || !Number.isSafeInteger(zeitlimit) || zeitlimit < 1) {
-    throw new EldaError('Distanzanzeiger: Mindestabstand und Zeitlimit müssen ganze Millisekunden sein.');
+    throw new DistanzanzeigerError(
+      'Distanzanzeiger: Mindestabstand und Zeitlimit müssen ganze Millisekunden sein.',
+    );
   }
   const holen = config.fetch ?? fetch;
 
@@ -321,7 +376,7 @@ export function createDistanzanzeiger(config: DistanzanzeigerConfig): Distanzanz
   let schlange: Promise<unknown> = Promise.resolve();
   let letztesEnde = 0;
 
-  async function eineAnfrage(koerper: string): Promise<DistanzErgebnis> {
+  async function eineAnfrage(gefragt: readonly Record<DistanzFeld, string>[]): Promise<DistanzErgebnis> {
     const warten = letztesEnde + abstand - Date.now();
     if (letztesEnde > 0 && warten > 0) await new Promise((r) => setTimeout(r, warten));
     try {
@@ -334,12 +389,12 @@ export function createDistanzanzeiger(config: DistanzanzeigerConfig): Distanzanz
             'Content-Type': 'application/json',
             Accept: 'application/json',
           },
-          body: koerper,
+          body: JSON.stringify(gefragt),
           signal: AbortSignal.timeout(zeitlimit),
         });
       } catch (ursache) {
         const zeit = ursache instanceof Error && ursache.name === 'TimeoutError';
-        throw new EldaError(
+        throw new DistanzanzeigerError(
           zeit
             ? `Distanzanzeiger: keine Antwort innerhalb von ${zeitlimit} ms.`
             : 'Distanzanzeiger: Der Server war nicht erreichbar.',
@@ -351,7 +406,7 @@ export function createDistanzanzeiger(config: DistanzanzeigerConfig): Distanzanz
       try {
         roh = JSON.parse(rohtext);
       } catch {
-        throw new EldaProtocolError(
+        throw new DistanzanzeigerProtokollError(
           `Distanzanzeiger: Antwort (HTTP ${antwort.status}) ist kein JSON.`,
           rohtext.slice(0, 2000),
         );
@@ -359,9 +414,9 @@ export function createDistanzanzeiger(config: DistanzanzeigerConfig): Distanzanz
       // Die Dokumentation zeigt auch die Ablehnung mit „Statuscode: 200 OK"; der
       // Testserver antwortet darauf mit 401. Maßgeblich ist deshalb der Körper.
       if (!antwort.ok && !(istObjekt(roh) && roh['success'] === false)) {
-        throw new EldaProtocolError(`Distanzanzeiger: HTTP ${antwort.status}.`, roh);
+        throw new DistanzanzeigerProtokollError(`Distanzanzeiger: HTTP ${antwort.status}.`, roh);
       }
-      return liesAntwort(roh);
+      return liesAntwort(roh, gefragt);
     } finally {
       letztesEnde = Date.now();
     }
@@ -369,13 +424,13 @@ export function createDistanzanzeiger(config: DistanzanzeigerConfig): Distanzanz
 
   return {
     abfragen(orte): Promise<DistanzErgebnis> {
-      let koerper: string;
+      let gefragt: Record<DistanzFeld, string>[];
       try {
-        koerper = JSON.stringify(anfrage(orte));
+        gefragt = anfrage(orte);
       } catch (e) {
         return Promise.reject(e);
       }
-      const ergebnis = schlange.then(() => eineAnfrage(koerper));
+      const ergebnis = schlange.then(() => eineAnfrage(gefragt));
       schlange = ergebnis.catch(() => undefined);
       return ergebnis;
     },

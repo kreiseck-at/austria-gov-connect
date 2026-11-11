@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDistanzanzeiger, ganzeKilometer, type DistanzOrt } from './distanzanzeiger';
-import { EldaError, EldaProtocolError } from './errors';
+import { DistanzanzeigerError, DistanzanzeigerProtokollError } from './errors';
 
 // Die Beispiele stammen aus der „Schnittstellendokumentation Distanzanzeiger",
 // Version 1.32.710, Stand April 2026. Kein Test spricht mit dem Server; der Key
@@ -116,6 +116,24 @@ const ANTWORT_MEHRDEUTIG = {
   },
 };
 
+// Antwort des Servers vom 11.11.2026 auf „st. pölten, Hausnummer 1" (ohne Straße)
+// → „melk, kh": statt der Trefferliste aus der Dokumentation eine Distanz ab einer
+// vom Server gewählten Adresse.
+const ANTWORT_ERGAENZT = {
+  success: true,
+  notes: '',
+  version: '1.33.0 Datenstand: 10/26',
+  data: {
+    distance: {
+      ort: [
+        station('3158', '3100', 'Sankt Pölten', 'Am Bischofteich', '1', 'N2803E4738', 0),
+        station('3000017', '3390', 'KH Melk', 'Krankenhausstraße', '11 Verwaltung', 'N2804E4717', 26.5),
+      ],
+    },
+    total: 26.5,
+  },
+};
+
 interface Aufruf {
   url: string;
   init: RequestInit;
@@ -151,8 +169,8 @@ test('Gesamtvertrag § 9 Abs. 5: bis 499 m abrunden, darüber aufrunden', () => 
   assert.equal(ganzeKilometer(12_499), 12);
   assert.equal(ganzeKilometer(12_500), 13);
   assert.equal(ganzeKilometer(190_200), 190);
-  assert.throws(() => ganzeKilometer(-1), EldaError);
-  assert.throws(() => ganzeKilometer(12.5), EldaError);
+  assert.throws(() => ganzeKilometer(-1), DistanzanzeigerError);
+  assert.throws(() => ganzeKilometer(12.5), DistanzanzeigerError);
 });
 
 test('Anfrage wie in der Dokumentation: POST, Bearer-Key, alle fünf Felder je Ort', async () => {
@@ -230,7 +248,7 @@ test('„no access": verständlicher Fehler, ohne den Key zu nennen — bei HTTP
   for (const status of [200, 401]) {
     const a = attrappe([json({ success: false, message: 'no access' }, status)]);
     await assert.rejects(client(a).abfragen(ORTE), (e: unknown) => {
-      assert.ok(e instanceof EldaError);
+      assert.ok(e instanceof DistanzanzeigerError);
       assert.match(e.message, /no access/);
       assert.ok(!e.message.includes(KEY));
       return true;
@@ -247,7 +265,7 @@ test('Unbrauchbare Antworten werfen einen Protokollfehler', async () => {
     json({ fehler: 'intern' }, 500),
   ];
   for (const f of faelle) {
-    await assert.rejects(client(attrappe([f])).abfragen(ORTE), EldaProtocolError);
+    await assert.rejects(client(attrappe([f])).abfragen(ORTE), DistanzanzeigerProtokollError);
   }
 });
 
@@ -259,8 +277,9 @@ test('Eingabe: mindestens zwei Standorte, jeder mit Postleitzahl, Ort oder Ortsk
     /Standort 2/,
   );
   assert.equal(a.aufrufe.length, 0);
-  await client(a).abfragen([{ okz: '4740' }, { okz: 'N2827E4779' }]);
-  assert.equal(a.aufrufe.length, 1);
+  const zwei = attrappe([json(ANTWORT_ERGAENZT)]);
+  await client(zwei).abfragen([{ okz: '3158' }, { okz: 'N2804E4717' }]);
+  assert.equal(zwei.aufrufe.length, 1);
 });
 
 test('Ein Fehler wird nicht wiederholt: genau eine Anfrage je Aufruf', async () => {
@@ -304,4 +323,48 @@ test('Konfiguration: https-Endpunkt und Key sind Pflicht', () => {
     () => createDistanzanzeiger({ endpunkt: ENDPUNKT, apiKey: KEY, mindestabstandMs: -1 }),
     /Millisekunden/,
   );
+});
+
+test('Vom Server ergänzte Adressfelder werden je Station ausgewiesen', async () => {
+  const e = await client(attrappe([json(ANTWORT_ERGAENZT)])).abfragen([
+    { ort: 'st. pölten', hnr: '1' },
+    { ort: 'melk, kh' },
+  ]);
+  assert.equal(e.art, 'distanz');
+  if (e.art !== 'distanz') return;
+  const [start, ziel] = e.stationen;
+  // Die Straße war nicht angefragt — der Server hat sie gewählt.
+  assert.deepEqual(start!.angefragt, { plz: '', ort: 'st. pölten', okz: '', str: '', hnr: '1' });
+  assert.deepEqual(start!.ergaenzt, ['plz', 'okz', 'str']);
+  assert.equal(start!.str, 'Am Bischofteich');
+  assert.equal(start!.einrichtung, false);
+  // Eine erkannte Einrichtung (siebenstellige Sonder-OKZ) bringt ihre Adresse mit.
+  assert.deepEqual(ziel!.ergaenzt, ['plz', 'okz', 'str', 'hnr']);
+  assert.equal(ziel!.einrichtung, true);
+  assert.equal(e.kilometer, 27);
+});
+
+test('Vollständig angefragte Adresse: nur Kennzahlen sind ergänzt, umgeschriebene Felder zählen nicht', async () => {
+  const e = await client(attrappe([json(ANTWORT_DISTANZ)])).abfragen(ORTE);
+  if (e.art !== 'distanz') return assert.fail('Distanz erwartet');
+  // „st. pölten, Keimstraße 1" → „Sankt Pölten, Keimstraße 1": Ort umgeschrieben, nichts hinzugefügt außer PLZ und OKZ.
+  assert.deepEqual(e.stationen[0]!.ergaenzt, ['plz', 'okz']);
+  // „3100 st. pölten, mariazeller str 79": nur die OKZ kommt dazu.
+  assert.deepEqual(e.stationen[3]!.ergaenzt, ['okz']);
+  assert.equal(e.stationen[3]!.angefragt.str, 'mariazeller str');
+  assert.equal(e.stationen[3]!.str, 'Mariazeller Straße');
+});
+
+test('Antwort mit anderer Anzahl von Orten als angefragt ist ein Protokollfehler', async () => {
+  const a = attrappe([json(ANTWORT_ERGAENZT)]);
+  await assert.rejects(client(a).abfragen(ORTE), /4 Standorte angefragt, 2 Orte/);
+});
+
+test('Protokollfehler trägt die rohe Antwort', async () => {
+  const a = attrappe([json({ success: true, data: {} })]);
+  await assert.rejects(client(a).abfragen(ORTE), (e: unknown) => {
+    assert.ok(e instanceof DistanzanzeigerProtokollError);
+    assert.deepEqual(e.antwort, { success: true, data: {} });
+    return true;
+  });
 });
