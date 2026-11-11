@@ -116,10 +116,9 @@ export type DistanzErgebnis =
 /** Konfiguration des Clients. */
 export interface DistanzanzeigerConfig {
   /**
-   * Adresse der Schnittstelle. Die Dokumentation nennt keinen Test-Endpunkt
-   * und für den Echtbetrieb eine andere Adresse als die Zugangsmitteilung der
-   * ÖGK; deshalb gibt es keine Voreinstellung, sondern
-   * {@link DISTANZANZEIGER_ENDPUNKTE}.
+   * Adresse der Schnittstelle, siehe {@link DISTANZANZEIGER_ENDPUNKTE}. Bewusst
+   * ohne Voreinstellung: Ob gegen Test oder Echtbetrieb gefragt wird, soll an
+   * der Aufrufstelle stehen.
    */
   endpunkt: string;
   /** API-Key. Erscheint in keiner Fehlermeldung. */
@@ -152,10 +151,15 @@ export interface Distanzanzeiger {
 }
 
 /**
- * Adressen der Schnittstelle. Echtbetrieb und Test laut Zugangsmitteilung der
- * ÖGK; der Test-Endpunkt antwortet ohne Key mit `{"success":false,"message":"no
- * access"}` (geprüft am 11.11.2026). Die Dokumentation (Seite 3) druckt für den
- * Echtbetrieb `https://distanzanzeiger.gesundheitskasse.at/api/v1`.
+ * Adressen der Schnittstelle laut Zugangsmitteilung der ÖGK zur
+ * Distanzanzeiger-Schnittstelle vom 11.11.2026 („API Endpoint"). Dieselben
+ * Server sind auch unter `distanzanzeiger.oegk.at` bzw.
+ * `test.distanzanzeiger.oegk.at` erreichbar („beide URLs führen zum selben
+ * Server"). Die Mitteilung ist neuer als die Dokumentation, die auf Seite 3
+ * noch `https://distanzanzeiger.gesundheitskasse.at/api/v1` druckt.
+ *
+ * Der Test-Endpunkt antwortet ohne Key mit `{"success":false,"message":"no
+ * access"}` (geprüft am 11.11.2026).
  */
 export const DISTANZANZEIGER_ENDPUNKTE = {
   produktion: 'https://distanzanzeiger.sozialversicherung.at/api/v1/index.php',

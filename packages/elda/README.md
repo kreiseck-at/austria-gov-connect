@@ -1922,13 +1922,13 @@ if (e.art === 'distanz') {
   `okz`) stellt der Aufrufer.
 - **Der Key** steht in keiner Fehlermeldung. Die Tests laufen gegen eine
   Attrappe und sprechen nie mit dem Server.
-- **Offen:** Die Dokumentation druckt für den Echtbetrieb eine andere Adresse
-  (`distanzanzeiger.gesundheitskasse.at/api/v1`) als die Zugangsmitteilung der
-  ÖGK (`distanzanzeiger.sozialversicherung.at/api/v1/index.php`); der Endpunkt
-  ist deshalb Pflichtangabe. Die Ablehnung ohne Key kommt laut Dokumentation
-  mit HTTP 200, am Testserver mit 401 — der Client liest den Körper. Ein
-  Anfragelimit nennt die Dokumentation nicht. Mit einem Key ist der Client noch
-  nicht gelaufen.
+- **Endpunkte** (`DISTANZANZEIGER_ENDPUNKTE.test` und `.produktion`) stammen
+  aus der Zugangsmitteilung der ÖGK vom 11.11.2026; die ältere Dokumentation
+  druckt noch `distanzanzeiger.gesundheitskasse.at/api/v1`. Der Endpunkt ist
+  Pflichtangabe, damit Test und Echtbetrieb an der Aufrufstelle sichtbar sind.
+- **Offen:** Die Ablehnung ohne Key kommt laut Dokumentation mit HTTP 200, am
+  Testserver mit 401 — der Client liest den Körper. Ein Anfragelimit nennt die
+  Dokumentation nicht. Mit einem Key ist der Client noch nicht gelaufen.
 
 ### Zeitstempel im Bestand: Wiener Ortszeit
 
