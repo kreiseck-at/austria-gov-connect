@@ -12,6 +12,7 @@ const path = require('node:path');
 const elda = require('../../../dist/index.js');
 const { baueEldaEnvelope } = require('../../../dist/envelope.js');
 const { FELDER_E29 } = require('../../../dist/felder-e29.js');
+const { FELDER_L1 } = require('../../../dist/felder-e14.js');
 const { ladeKatalog } = require('../lib/katalog');
 const { ladeTestdaten } = require('../lib/testdaten');
 const { erstelleAblage } = require('../lib/ablage');
@@ -275,7 +276,7 @@ const IM_FENSTER_KW46 = {
 };
 // V72–V83 mit: M100/M101 rechnen mit kasseneck, das nur das Parameterwerk 2026 kennt – die
 // Anmeldungen und Abmeldungen, auf denen sie aufbauen, müssen in derselben (KW46-)Woche liegen.
-const istKw46 = (id) => /^(L2\d|L3[01]|Q6\d|M9[89]|M1(0\d|1[0-3])|V7[2-9]|V8[0-3])$/.test(id);
+const istKw46 = (id) => /^(L2\d|L3[0-3]|Q6\d|M9[89]|M1(0\d|1[0-3])|V7[2-9]|V8[0-3])$/.test(id);
 /** Lohnzettel von kasseneck mit Geschlecht (KW46). */
 const L16_KASSENECK_KW46 = ['L20', 'L21', 'L22', 'L23', 'L24', 'L25', 'L26', 'L27', 'L28', 'L31'];
 const zeitpunkt = (id, fenster) =>
@@ -1063,6 +1064,29 @@ test('M110–M113: Höchstbeitragsgrundlage der Sonderzahlungen über kasseneck,
   ]);
   // Deckel ausgeschöpft: keine SZ-Basis mehr, BV auf 9.000 € + 2.000 €.
   assert.deepEqual(kern('M113'), [kopf, ...laufend, 'BS BV00001100000', 'V1 V01+001530+00000016830']);
+});
+
+test('L32/L33: Jahreslohnzettel 2026 von kasseneck – 01.01.–31.12., Sonderzahlungen in ihren Monaten', () => {
+  if (!GEBAUT.has('L32')) return;
+  const ist = {};
+  for (const id of ['L32', 'L33']) {
+    const l1 = saetze(GEBAUT.get(id).ergebnis.inhalt).find((x) => x.startsWith('L1'));
+    const w = (n) => {
+      const f = FELDER_L1['28'].find((x) => x.name === n);
+      return l1.slice(f.pos - 1, f.pos - 1 + f.laenge);
+    };
+    ist[id] = ['BELZ', 'ENLZ', 'B210', 'B220', 'B225', 'B230', 'B245'].map((n) => `${n}=${w(n)}`).join(' ');
+  }
+  // 14 × 3.000 €, SZ ganz im Sechstel; SV auf die SZ 17,07 %, laufend 18,07 %.
+  assert.equal(
+    ist.L32,
+    'BELZ=0101 ENLZ=3112 B210=0004200000 B220=0000600000 B225=0000102420 B230=0000650520 B245=0002949480',
+  );
+  // 14 × 9.000 €: SV-SZ nur auf 13.860 € (KZ 225), laufend nur auf 12 × 6.930 € (KZ 230).
+  assert.equal(
+    ist.L33,
+    'BELZ=0101 ENLZ=3112 B210=0012600000 B220=0001800000 B225=0000236590 B230=0001502700 B245=0009297300',
+  );
 });
 
 test('T16/T17: die jüngste abgeholte Rücksendung, die alt genug ist; L31: KZ 220 nur bis zum Jahressechstel', () => {
