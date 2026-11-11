@@ -20,7 +20,10 @@ E.31), die **Familienhospizkarenz/Pflegekarenz** (Kapitel E.12, Bestand `FH`),
 die **Schwerarbeitsmeldung** (Kapitel E.22, Bestand `SM`), der **Antrag auf
 zwischenstaatliche Bescheinigung** (Entsendung, PD A1; Kapitel E.27, Bestand
 `ES`) und der **Lohnzettel Finanz** (L16, Kapitel E.13/E.14, Bestand `LF`)
-samt den Regeln des Prüfkatalogs L16.
+samt den Regeln des Prüfkatalogs L16. Seit 0.18.0 außerdem die
+**Abrechnung von Krankentransporten** nach der eigenen Organisationsbeschreibung
+DKT 2.2 (Fachgebiet 65, Projekt `TK`) — Datei bauen und Retourdatenträger lesen,
+siehe „Krankentransport-Abrechnung (DKT)".
 
 ## Reifegrad
 
@@ -120,6 +123,7 @@ unterschiedlich weit belegt:
 | Familienhospizkarenz/Pflegekarenz (E.12), Schwerarbeitsmeldung (E.22) | `FH`, `SM` | SIT-Plattform, Oktober 2026 (Meldung und Storno) |
 | Antrag auf zwischenstaatliche Bescheinigung (E.27) | `ES` | SIT-Plattform, Oktober 2026 (E1–E5, EA, Storno) |
 | Lohnzettel Finanz (E.13/E.14) | `LF` | SIT-Plattform, Oktober 2026 |
+| Krankentransport-Abrechnung (DKT 2.2, eigenes Dokument) | Projekt `TK`, Bestand `TK`/`T1` | nie gesendet |
 
 Was nicht gelaufen ist, stützt sich auf die Feldtabellen, Pflichtmatrizen und
 Prüfkataloge — und, wo das Dokument welche abdruckt, auf dessen Beispiele. Bei
@@ -1739,6 +1743,193 @@ Für Version 29 gibt es noch keinen Katalog — `pruefeLohnzettel` lehnt sie ab.
 - **Die Codes kommen ohne „F"**: `1706`, `9991`, `7003`. `l16Regel(code)` sucht
   die Katalogzeile auch zu diesem Rohcode (`l16Regel('1706')` = Zeile `F1706`).
 
+### Krankentransport-Abrechnung (DKT)
+
+Taxi- und Rettungsunternehmen rechnen Krankentransporte mit ÖGK, BVAEB, SVS,
+KFA und AUVA monatlich als Datei ab. Grundlage ist nicht die DM-Org, sondern
+die **Organisationsbeschreibung „Datenaustausch Krankentransporte (DKT)",
+Version 2.2, Stand 20.06.2025** des Dachverbands (Fachgebiet 65). Sie hat eigene
+Satzarten zu je **128 Zeichen**, einen eigenen Vorlauf- und Schlusssatz für
+ELDA, das Projekt `TK` und die Bestände `TK` (echt), `T1` (Test) und `TR`
+(Rückmeldung).
+
+```ts
+import { erstelleDktAbrechnung, liesDktBestand } from '@kreiseck/elda';
+
+const datei = erstelleDktAbrechnung({
+  traeger: '17', // VSTR: ÖGK-S (D.62)
+  abrechnungsstelle: '17', // VSTRA
+  bundeslandAbrechnungsstelle: '7', // BLNDA (D.15)
+  datenuebernehmer: '14', // VSTRU — so im Muster E.3, siehe offene Punkte
+  datentraegernummer: 7, // DTNR, laufend je Sender und Träger
+  erstellt: new Date(),
+  testdaten: true, // BEST T1
+  uebermittler: { name: 'Max Hollerer GmbH', staat: 'AUT', plz: '5020', vpnr: '123450' },
+  vertragspartner: { vpnr: '123450', adresscode: 1, bundesland: '7', fachgebietUnterteilung: '57', uid: 'ATU12345675' },
+  abrechnungsjahr: 2026,
+  abrechnungsmonat: 10,
+  abrechnungsart: 'normal',
+  rechnungsnummer: 'R2026-0042',
+  rechnungsdatum: '2026-11-03',
+  iban: 'AT611904300234573201',
+  faelle: [
+    {
+      versicherter: { traeger: '17', familienname: 'Weinzierl', vorname: 'Mirela', vsnr: '1237010180' },
+      belegnummer: 1,
+      verordner: { vpnr: '600033', familienname: 'Grabner', fachgebiet: '01' },
+      antragsdatum: '2026-10-01',
+      transport: {
+        datum: '2026-10-14', beginn: '07:30', ankunft: '08:05', ende: '08:10',
+        von: { staat: 'AUT', plz: '5020' }, nach: { vpnr: '543210' },
+        grund: '26', art: '03', fahrzeug: '05', zeitkritisch: false, befoerderung: '1',
+      },
+      rechnungsnummer: 'T2026-0815',
+      leistungen: [{ position: '050', tarifCent: 186, anzahl: 20, ustProzent: 10 }],
+      diagnose: { icd10: [{ code: 'N18', untergliederung1: '5' }] },
+    },
+  ],
+});
+
+const zurueck = liesDktBestand(datei); // ebenso ein abgeholter Retourdatenträger (BEST TR)
+```
+
+Gesendet wird über denselben Transferweg wie die übrigen Meldungen
+(`elda.senden({ dateiName, inhalt: datei })`, Seriennummer des Betriebs; so von
+ELDA bestätigt). Was der Träger zurückschickt, holt `empfangen` ab;
+`liesDktBestand` liest es.
+
+**Golden-Test.** Das „Praxisbezogene Muster-Abrechnungsbeispiel" (E.3, Seite
+51) steht im PDF nur als Bild. Es ist zeichengenau abgeschrieben
+(`dkt-beispiele.test.ts`) und wird vollständig gelesen. Der Satzbau erzeugt es
+Byte für Byte nach — bis auf vier begründete Stellen: ELDAS/ELDAÜ füllt ELDA
+(D.23); UIDV ist heute `ATU74552637` statt der früheren UID der Tiroler
+Gebietskrankenkasse (D.56); auf den Stellen 90–96 der SART 00 steht im Muster
+noch die frühere DVR-Nummer (Feld „RES DVR" der Fassung vom 15.11.2023), heute
+blank (D.42); die VSNR des Musters `1234567890` hat eine falsche Prüfziffer.
+Dazu kommen als Tests die übrigen Beispiele des Dokuments: Prüfziffern der
+Vertragspartnernummer (D.63) und der Versicherungsnummer (D.61), Transport nach
+dem Abrechnungszeitraum (D.4), `AUT 2500` (D.38), Pauschale über 999,99 €
+(F.10.1), UV-Aktenzeichen (D.58) und der Aufbau der ICD-10-Diagnose (D.17).
+
+**Gerechnet und geprüft** wird nur, was in den Quellen steht:
+
+- Abfolge E.2.1: Vorlauf, SART 00, je Fall 01 / 11 / 39 / 02 / 06 / 07 / 20 /
+  21, je USt-Satz eine 23, Textsätze, 99, Schluss; SATNR lückenlos, Zähler in
+  SART 99 und SANZ; mehr Sätze als der Zähler fasst → Abrechnung teilen (F.14).
+- Ein Bestand ist eine Rechnung, ein Vertragspartner, ein Zeitraum, ein Träger
+  (B.3, C.1) — die Eingabe lässt nichts anderes zu; bei der AUVA ein Transport
+  je Bestand (B.3).
+- Beträge in ganzen Cent: BETR = TAR × ANZKM (D.11), SUM, ZSUM = SUM − KOBE,
+  REBE = ZSUM + UBE − KOBEUST (D.41, D.50); Pauschale über 999,99 € als TAR
+  `00000`, ANZKM 1 (F.10.1).
+- Codetabellen aus Kapitel D, Prüfziffern von VPNR, VPNRU, VPNUW und
+  Vertragspartnern in PLZV/PLZN (D.63) und von Versicherungsnummern (D.61).
+- Transport nicht nach dem Abrechnungszeitraum (D.4) und nicht nach dem
+  Erstellungstag (Ablehnungsgrund 42); Transportnummer nur beim Taxi leer
+  (D.53); Transportart 99 nur mit Begründung (D.52); NACA beim NAW-Einsatz
+  (D.32); PLZV/PLZN je Transportart (D.38); FACHU, wenn VPNUW keine
+  Sammelnummer ist (D.25).
+- UIDV aus der Tabelle in D.56; UID zwingend, sobald Umsatzsteuer verrechnet
+  wird (D.56); IBAN als SART 39 „IBAN:…" nach den Summensätzen, ab 2026
+  zwingend (F.12), mit Prüfsumme nach ISO 13616.
+- Zeichenvorrat: nur druckbares ASCII (A.3 „8-Bit ASCII"), Namen nur Buchstaben
+  (F.1); Namen in SART 01 werden auf Feldlänge gekürzt (F.7.1, Muster E.3),
+  alle anderen Felder nie.
+- Aus den Schreiben der ÖGK an den Fachverband (16.12.2024) und der
+  Klarstellung des Fachverbands zu Mehrfachtransporten (ab 1.6.2025):
+  Abrechnungszeitraum nur als Kalendermonat; bei einer Sammelnummer eine
+  Begründung; beim Mehrfachtransport „MF" und die Versicherungsnummern aller
+  Patienten in GRUN oder SART 39; Transporte zweier Kalenderjahre getrennt
+  abrechnen (für die ÖGK; das Schreiben nennt nur 2024/2025, hier
+  verallgemeinert — unschädlich, weil mehrere Abrechnungen je Zeitraum zulässig
+  sind).
+
+**Retourdatenträger.** `liesDktBestand` liest SART 22/24 mit anerkannten
+Beträgen und Ablehnungsgründen (D.1, mit Gruppe und Klartext), die Korrekturen
+des Trägers (41/11/42/60/62 mit Blöcken „A" Abzug und „N" Nachverrechnung),
+deren Summensätze 64 mit Vorzeichen (D.65 — die Beträge kommen vorzeichenrichtig
+zurück), Pauschalsätze 85 und Hinweise. Datumsangaben bleiben `TTMMJJ`: Das
+Jahrhundert steht nicht im Satz.
+
+**Offene Punkte** — ohne Beleg wird nichts davon geraten:
+
+1. **USt-Rundung.** UBE ist die Umsatzsteuer „von SUM" (D.50); eine
+   Rundungsregel nennt die DKT nicht. Das Paket rundet kaufmännisch auf ganze
+   Cent, je Summensatz einmal aus der Nettosumme. Ob die Träger genauso
+   rechnen, zeigt erst ein Test (Ablehnungsgrund 33 „USt. falsch").
+2. **PLZL (SART 06).** D.38 verlangt „rechtsbündig mit führenden blank", das
+   Muster E.3 schreibt linksbündig. Das Paket folgt dem Text.
+3. **Zeichensatz.** „8-Bit ASCII" (A.3) nennt keine Codetabelle; Namen und
+   Adressen ohne diakritische Zeichen (F.1). Ob Bindestrich, Apostroph und
+   Punkt in Namen (Typ `a`) zulässig sind und wie EKVK-Namen mit diakritischen
+   Zeichen (Karte nach EN 1387) zu schreiben sind, ist offen — beides wird
+   abgewiesen.
+4. **VSTRU.** Der datenübernehmende Träger bei ELDA ist nur im Muster belegt
+   (`14`, ÖGK-O); deshalb eine Eingabe.
+5. **Negative Korrekturen** durch den Vertragspartner (VORZ 1, D.65): wie die
+   Summensätze dann aussehen, sagt Kapitel E/F nicht — nicht gebaut.
+6. **Textformat bei „MF"** (Trennzeichen, Reihenfolge) steht nirgends; der
+   Aufrufer schreibt den Text, das Paket prüft nur „MF" und die Nummern.
+7. **Wann SART 07 zwingend ist** (F.7: „ab Versichertenkategorie 28,
+   ausgenommen KAT 29" bei „EU/EWR-Schweiz-Betreuungsfällen", die Tabelle führt
+   aber auch Drittstaaten) — nicht erzwungen.
+8. **ZUNUW** widerspricht sich: D.67 „im Anlassfall zwingend, außer wenn VPNUW
+   eine Sammelnummer ist", F.4 „zwingend, wenn VPNUW eine Sammelnummer ist" —
+   nicht erzwungen.
+9. **Skonto, Sammelabrechnungen** mehrerer Leistungserbringer, **Wochen-,
+   Quartals- und Jahreszeiträume** — nicht gebaut.
+10. **Satztrenner.** CRLF wie bei den übrigen ELDA-Beständen; für Projekt `TK`
+    noch nicht gegen ELDA gelaufen. Ebenso offen: wie ELDA Bestand `T1`
+    behandelt, solange die Software nicht freigegeben ist.
+
+### Distanzanzeiger (Transportkilometer)
+
+Die Kilometer einer Krankenbeförderung kommen nicht aus dem Taxameter, sondern
+aus dem Distanzanzeiger der Sozialversicherung: „Als Grundlage für die
+Ermittlung der Transportkilometer sind die Kilometrierungspunkte nach dem
+Distanzanzeiger der österreichischen Sozialversicherung … heranzuziehen"
+(Gesamtvertrag § 9 Abs. 5). Der Client spricht dessen REST-Schnittstelle
+(Schnittstellendokumentation Version 1.32.710, Stand April 2026).
+
+```ts
+import { createDistanzanzeiger, DISTANZANZEIGER_ENDPUNKTE } from '@kreiseck/elda';
+
+const distanz = createDistanzanzeiger({
+  endpunkt: DISTANZANZEIGER_ENDPUNKTE.test,
+  apiKey: process.env.DISTANZANZEIGER_KEY!,
+});
+
+const e = await distanz.abfragen([
+  { plz: 3100, ort: 'st. pölten', str: 'mariazeller str', hnr: '79' },
+  { ort: 'kh stockerau' },
+]);
+if (e.art === 'distanz') {
+  e.kilometer; // ganze Kilometer: bis 499 m ab-, darüber aufgerundet (§ 9 Abs. 5)
+  e.meter; // Gesamtdistanz laut Server
+} else {
+  e.suchen; // mindestens ein Ort war mehrdeutig — Treffer je Ort zur Auswahl
+}
+```
+
+- **Sparsam mit dem Key.** Ein Aufruf ist genau eine Anfrage. Anfragen laufen
+  nacheinander mit Mindestabstand (`mindestabstandMs`, Voreinstellung eine
+  Sekunde), und nichts wird von selbst wiederholt — auch kein Fehler. Der Key
+  gilt für die ganze Software; eine Sperre träfe alle Betriebe. Abfragen
+  gehören deshalb an die einzelne Fahrt, nicht in eine Schleife über Bestände;
+  das Ergebnis je Fahrt zu speichern ist Sache des Aufrufers.
+- **Mehrdeutige Orte** wählt der Client nicht selbst aus. Er gibt die Treffer
+  zurück; die zweite Anfrage mit der gewählten Adresse (am sichersten über
+  `okz`) stellt der Aufrufer.
+- **Der Key** steht in keiner Fehlermeldung. Die Tests laufen gegen eine
+  Attrappe und sprechen nie mit dem Server.
+- **Endpunkte** (`DISTANZANZEIGER_ENDPUNKTE.test` und `.produktion`) stammen
+  aus der Zugangsmitteilung der ÖGK vom 11.11.2026; die ältere Dokumentation
+  druckt noch `distanzanzeiger.gesundheitskasse.at/api/v1`. Der Endpunkt ist
+  Pflichtangabe, damit Test und Echtbetrieb an der Aufrufstelle sichtbar sind.
+- **Offen:** Die Ablehnung ohne Key kommt laut Dokumentation mit HTTP 200, am
+  Testserver mit 401 — der Client liest den Körper. Ein Anfragelimit nennt die
+  Dokumentation nicht. Mit einem Key ist der Client noch nicht gelaufen.
+
 ### Zeitstempel im Bestand: Wiener Ortszeit
 
 `BestandOptionen.erstellt` ist ein echter Zeitpunkt (typischerweise das
@@ -1800,6 +1991,19 @@ gedacht.
   verwendet."
 - Prüfziffer der Steuernummer: STUZZA, „Finanzamtszahlung in MBS", Version
   7.0.07 vom 12.12.2016, Seite 8 (Verfahren und Beispiel 26–913572–9).
+- Organisationsbeschreibung „Datenaustausch Krankentransporte (DKT)", Version
+  2.2, Stand 20.06.2025, wirksam ab 07/2025 (Dachverband, sozialversicherung.at);
+  zum Vergleich die Fassung vom 15.11.2023. Das PDF enthält Reste der
+  Änderungsverfolgung (alt und neu ineinander, z. B. „GÜLTIG AB: 087/20235");
+  maßgeblich ist jeweils die neue Lesart, belegt durch das Änderungsprotokoll.
+- ÖGK an den Fachverband für die Beförderungsgewerbe mit PKW,
+  „Administrationsvereinfachungen im Bereich Krankenbeförderung & Tarifliste
+  2025" vom 16.12.2024, und „Kostenanteile bei Krankenbeförderungen" vom
+  23.05.2025; WKO-Fachverband, „Krankenbeförderung mit Taxis", Klarstellung
+  „Mehrfachtransporte" (ab 1.6.2025).
+- „Schnittstellendokumentation Distanzanzeiger", Version 1.32.710, Stand April
+  2026 (Testclient des Distanzanzeigers); Gesamtvertragliche Vereinbarung über
+  die Krankenbeförderung mit Taxis (Fachverband/Dachverband), § 9 Abs. 5.
 
 **Seitenangaben.** Gegenüber der 42. Ergänzung hat die 43. Inhalt nur in
 D.5 (10-stellige ÖGK-Beitragskontonummer), D.54 (Verrechnungsgrundlage bei
@@ -1829,7 +2033,8 @@ monatliche Beitragsgrundlagenmeldung (Kapitel E.32), die VSNR-Anforderung
 (Kapitel E.30), die Adresse Versicherter (Kapitel E.31),
 Familienhospizkarenz/Pflegekarenz (Kapitel E.12), die Schwerarbeitsmeldung
 (Kapitel E.22), der Antrag auf zwischenstaatliche Bescheinigung (Kapitel E.27),
-der Lohnzettel Finanz (Kapitel E.13/E.14) und das Lesen der Rücksendungen (Mitteilung, Clearing-Datensatz 2.0). Noch offen — ohne Beleg
+der Lohnzettel Finanz (Kapitel E.13/E.14), das Lesen der Rücksendungen (Mitteilung, Clearing-Datensatz 2.0) und die
+Krankentransport-Abrechnung (DKT 2.2; offene Punkte dort). Noch offen — ohne Beleg
 wird nichts davon geraten:
 
 - **Lohnzettel Finanz:** nach DM-Org und Prüfkatalog gebaut und auf der

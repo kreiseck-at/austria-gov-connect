@@ -52,8 +52,26 @@ export interface Feld {
    * Übermittlungsdatum, `HHMMSS` bei der Uhrzeit sowie `LLLP` und `TTMMJJ` bei
    * den beiden Hälften der Versicherungsnummer dazu; `TTMM` und `JJJJ` trägt er
    * beim Lohnzahlungszeitraum.
+   *
+   * Die Krankentransport-Abrechnung (DKT 2.2) bringt `HHMM` bei den Zeiten des
+   * Transports (D.66), `JJ` beim Abrechnungsjahr (D.6) und `LLLLLP` bei der
+   * Vertragspartnernummer (D.63). Aus `'915'` würde ohne Marker stillschweigend
+   * `'0915'` — auch wenn 19:15 gemeint war und eine Ziffer verloren ging; bei der
+   * Vertragspartnernummer verschöbe die Auffüllung jede Stelle samt Prüfziffer.
    */
-  format?: 'TTMMJJJJ' | 'LLLPTTMMJJ' | 'MMJJJJ' | 'JJJJ' | 'TTMM' | 'JJJJMMTT' | 'HHMMSS' | 'LLLP' | 'TTMMJJ';
+  format?:
+    | 'TTMMJJJJ'
+    | 'LLLPTTMMJJ'
+    | 'MMJJJJ'
+    | 'JJJJ'
+    | 'TTMM'
+    | 'JJJJMMTT'
+    | 'HHMMSS'
+    | 'LLLP'
+    | 'TTMMJJ'
+    | 'HHMM'
+    | 'JJ'
+    | 'LLLLLP';
 }
 
 /** Werte je Feldname. Ein fehlender oder `undefined`-Wert bedeutet Grundstellung. */

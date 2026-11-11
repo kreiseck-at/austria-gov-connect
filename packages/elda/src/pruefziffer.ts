@@ -1,6 +1,6 @@
 /**
- * Prüfziffern von Versicherungsnummer und Steuernummer. Beide Verfahren stehen
- * nicht im DM-Org; die Quellen nennen die Funktionen selbst.
+ * Prüfziffern von Versicherungsnummer, Vertragspartnernummer und Steuernummer.
+ * Die Verfahren stehen nicht im DM-Org; die Quellen nennen die Funktionen selbst.
  */
 
 /**
@@ -20,6 +20,29 @@ export function vsnrPruefzifferGueltig(vsnr: string): boolean {
   const faktoren = [3, 7, 9, 0, 5, 8, 4, 2, 1, 6];
   const rest = faktoren.reduce((summe, f, i) => summe + f * z[i]!, 0) % 11;
   return rest !== 10 && rest === z[3];
+}
+
+/**
+ * Prüfziffer der sechsstelligen Vertragspartnernummer `LLLLLP` nach der
+ * Organisationsbeschreibung DKT 2.2, Kapitel D.63 (Seiten 43–44): Faktoren
+ * 3, 7, 5, 1, 6 für die fünf Stellen der Laufnummer, Rest = Summe der Produkte
+ * mod 11.
+ *
+ * Anders als bei der Versicherungsnummer gibt es zu einer Laufnummer ZWEI
+ * gültige Prüfziffern: „1) Divisionsrest = Prüfziffer, 2) Divisionsrest erhöht
+ * um 5 = Prüfziffer. Ist die daraus resultierende Ziffer größer gleich 10 so ist
+ * die Zehnerstelle zu entfernen." Ein Rest von 10 ergibt „in jedem Fall 5".
+ * Beispiele des Dokuments: Laufnummer 28902 → 289029 und 289024, Laufnummer
+ * 10540 → 105405.
+ */
+export function vpnrPruefzifferGueltig(vpnr: string): boolean {
+  if (!/^\d{6}$/.test(vpnr)) return false;
+  const z = [...vpnr].map(Number);
+  const faktoren = [3, 7, 5, 1, 6];
+  const rest = faktoren.reduce((summe, f, i) => summe + f * z[i]!, 0) % 11;
+  const p = z[5]!;
+  if (rest === 10) return p === 5;
+  return p === rest || p === (rest + 5) % 10;
 }
 
 /**
