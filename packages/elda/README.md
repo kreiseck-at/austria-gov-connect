@@ -1882,6 +1882,54 @@ Jahrhundert steht nicht im Satz.
     noch nicht gegen ELDA gelaufen. Ebenso offen: wie ELDA Bestand `T1`
     behandelt, solange die Software nicht freigegeben ist.
 
+### Taxitarif der Krankenbeförderung (ÖGK-Gesamtvertrag)
+
+Aus den Kilometern einer Fahrt wird die Leistungszeile der Abrechnung — Position,
+Tarif und Anzahl nach der „Tarifliste Krankenbeförderung durch Vertragstaxi,
+gültig ab 01.01.2025" (Gesamtvertrag § 9, Anlage 2):
+
+```ts
+import { taxiEinzelfahrt, taxiMehrfachtransport, alsMehrfachtransportAbzurechnen } from '@kreiseck/elda';
+
+taxiEinzelfahrt({ datum: '2026-10-14', kilometer: 20 });
+// { position: '050', bezeichnung: 'km-Tarif', tarifCent: 186, anzahl: 20, betragCent: 3720 }
+
+taxiEinzelfahrt({ datum: '2026-10-14', kilometer: 5 }); // 054 Mindestpauschale, 10,35 €
+taxiEinzelfahrt({ datum: '2026-10-14', kilometer: 4, ortspauschale: 'Salzburg' }); // 060, 12,42 €
+taxiEinzelfahrt({ datum: '2026-10-14', kilometer: 20, rollstuhl: true }); // 051, 2,14 €/km
+
+taxiMehrfachtransport({ datum: '2026-10-14', kilometer: 30, versicherte: [{}, {}] });
+// erster 050 (100 %), zweiter 052 (50 %), beide über die ganze Strecke
+
+alsMehrfachtransportAbzurechnen(100, [90]); // true — sonst Einzeltransporte
+```
+
+`position`, `tarifCent` und `anzahl` gehen unverändert in `DktLeistung` ein; den
+Umsatzsteuersatz ergänzt der Aufrufer.
+
+- **Je Fahrt in eine Richtung.** Hin- und Rückfahrt sind zwei Aufrufe. Bezahlt
+  werden nur Kilometer mit dem Versicherten an Bord, keine Leerkilometer und
+  keine Wartezeiten (§ 9 Abs. 4 und 7, ÖGK-Informationsblatt).
+- **Kilometer** sind ganze Kilometer laut Distanzanzeiger (§ 9 Abs. 5; siehe
+  `@kreiseck/distanzanzeiger`).
+- **Mindestpauschale** greift, solange Kilometer × km-Tarif darunter liegt.
+- **Ortspauschale** gilt, wenn Ausgangs- und Zielort innerhalb des Stadtgebiets
+  einer Landeshauptstadt liegen (Ortstafel) — das gibt der Aufrufer an. Wien
+  steht ohne Betrag in der Tarifliste.
+- **Mehrfachtransport:** keine Pauschalen; liegt die Summe aller Versicherten
+  unter der Mindestpauschale, wird sie einmal verrechnet (beim ersten
+  Versicherten), die übrigen sind `null`.
+- **Tarifstand nach Fahrtdatum.** Hinterlegt ist 01.01.2025 bis 31.12.2026 (2026
+  ohne Valorisierung, Fachverband-Rundschreiben vom 15.12.2025). Für andere
+  Tage bricht die Rechnung ab — ab 2027 wird wieder valorisiert (§ 9 Abs. 3).
+
+Offen: ab welcher Strecke die Mindestpauschale gilt, nennt keine Quelle
+ausdrücklich (gelesen als Mindestbetrag); bei wem sie im Mehrfachtransport zu
+verrechnen ist; ob SVS, BVAEB und KFA dieselben Positionsnummern verwenden (SVS
+und KFA Wien haben eigene Gesamtverträge). Nicht geprüft wird, dass ein
+Mehrfachtransport nicht teurer sein darf als die Einzeltransporte — dafür wären
+die Einzelstrecken nötig.
+
 ### Zeitstempel im Bestand: Wiener Ortszeit
 
 `BestandOptionen.erstellt` ist ein echter Zeitpunkt (typischerweise das
@@ -1953,6 +2001,10 @@ gedacht.
   2025" vom 16.12.2024, und „Kostenanteile bei Krankenbeförderungen" vom
   23.05.2025; WKO-Fachverband, „Krankenbeförderung mit Taxis", Klarstellung
   „Mehrfachtransporte" (ab 1.6.2025).
+- Gesamtvertragliche Vereinbarung über die Krankenbeförderung mit Taxis, § 9;
+  „Tarifliste Krankenbeförderung durch Vertragstaxi, gültig ab 01.01.2025";
+  Fachverband-Rundschreiben „Krankenbeförderungs-Tarife 2026" vom 15.12.2025;
+  ÖGK-Informationsblatt „Krankenbeförderung ab 01.01.2024" (Stand 27.02.2026).
 
 **Seitenangaben.** Gegenüber der 42. Ergänzung hat die 43. Inhalt nur in
 D.5 (10-stellige ÖGK-Beitragskontonummer), D.54 (Verrechnungsgrundlage bei

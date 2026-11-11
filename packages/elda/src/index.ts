@@ -284,3 +284,12 @@ export {
   type Bundesland,
 } from './dkt-codes';
 export { vpnrPruefzifferGueltig } from './pruefziffer';
+export {
+  taxiEinzelfahrt,
+  taxiMehrfachtransport,
+  alsMehrfachtransportAbzurechnen,
+  type TaxiLeistung,
+  type TaxiEinzelfahrt,
+  type TaxiMehrfachtransport,
+  type Landeshauptstadt,
+} from './dkt-taxitarif';
