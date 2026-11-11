@@ -79,6 +79,19 @@ schreibt sie um („st. pölten" → „Sankt Pölten", „mariazeller str" → 
 Straße"), und ob eine andere Schreibweise dieselbe Adresse meint, lässt sich
 nicht allgemein entscheiden.
 
+## Trefferliste statt Distanz
+
+Ist ein Suchbegriff nach den Adressdaten nicht eindeutig, kommt keine Distanz,
+sondern je angefragtem Ort eine Trefferliste (`art: 'mehrdeutig'`). Laut Auskunft
+der ÖGK (CC Transportwesen, 11.11.2026) ist das der Fall bei einer Postleitzahl
+mit mehreren Orten, einem Ort mit mehreren Postleitzahlen, einer Hausnummer, die
+es nicht gibt, oder einer zu stark abweichenden Schreibweise.
+
+Jeder Treffer trägt eine Übereinstimmung `score` (100 = ident). Ein niedriger
+Wert heißt, dass der Server rät: Auf „Böhmkrchen" (gemeint war Böheimkirchen)
+kamen drei Vorschläge „Baumkirchen" mit `score` 20 — der gemeinte Ort war nicht
+dabei. Treffer sind deshalb Vorschläge zur Auswahl, kein Ergebnis zum Übernehmen.
+
 Am sichersten ist eine Anfrage über die `okz` aus einer früheren Antwort:
 fünfstellig die Ortskennzahl der Statistik Austria, siebenstellig Sonder-OKZ
 (Krankenhäuser etc.), zehnstellig die Rasterzellen-ID `N####E####`.
@@ -90,8 +103,10 @@ Ein Key gilt für die ganze Software. Der Client ist deshalb bewusst zurückhalt
 - **Ein Aufruf ist genau eine Anfrage.** Nichts wird von selbst wiederholt, auch
   kein Fehler.
 - **Anfragen laufen nacheinander** mit Mindestabstand (`mindestabstandMs`,
-  Voreinstellung eine Sekunde). Die Dokumentation nennt kein Limit; der Abstand
-  ist eine Vorsichtsmaßnahme.
+  Voreinstellung eine Sekunde). Die Dokumentation nennt kein Limit; laut ÖGK
+  ist normale Nutzung unbedenklich (Lasttest bis 5.000 Abfragen pro Minute, für
+  alle Nutzer zusammen), Massenabfragen können zur Sperre des Keys führen. Der
+  Abstand ist eine Vorsichtsmaßnahme.
 - **Mehrdeutige Orte** wählt der Client nicht selbst aus und fragt nicht nach.
 
 Abfragen gehören an die einzelne Fahrt, nicht in eine Schleife über Bestände.
@@ -111,13 +126,14 @@ Der API-Key steht in keiner Fehlermeldung.
 
 - Gegen den Echtbetrieb gelaufen am 11.11.2026 (Server-Version „1.33.0
   Datenstand: 10/26"): eindeutige Abfrage, Abfrage mit Zwischenstopps, ungenaue
-  Adresse.
+  Adresse, Trefferliste.
 - Die Tests laufen gegen eine Attrappe mit den Beispielen der Dokumentation und
   den beobachteten Antworten; sie sprechen nie mit dem Server.
 - Offen: Die Ablehnung ohne gültigen Key kommt laut Dokumentation mit HTTP 200,
-  beobachtet wurde 401 — der Client liest den Körper. Wann der Server noch eine
-  Trefferliste statt einer Distanz liefert, ist nicht beobachtet; der Client
-  liest sie nach der Dokumentation.
+  beobachtet wurde 401 — der Client liest den Körper. Dass der Server bei „Ort
+  und Hausnummer ohne Straße" selbst eine Straße wählt, hält die ÖGK für nicht
+  beabsichtigt (Rückfall soll die Ortschaft sein); das Verhalten kann sich
+  ändern.
 
 ## Quellen
 
