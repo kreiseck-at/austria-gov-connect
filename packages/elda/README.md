@@ -2006,13 +2006,13 @@ Umsatzsteuersatz ergänzt der Aufrufer.
   ohne Valorisierung, Fachverband-Rundschreiben vom 15.12.2025). Für andere
   Tage bricht die Rechnung ab.
 
-**Für welche Träger die Liste gilt** (Stand der Quellen: 11.11.2026):
+**Für welche Träger die Liste gilt** (Stand der Quellen: 11.11.2026, SVS 17.11.2026):
 
 | Träger | Grundlage | Stand |
 | --- | --- | --- |
 | ÖGK, alle Länder außer Wien | Vereinbarung vom 12.12.2023, Anlage 2 | Positionen 050–071 hinterlegt |
 | BVAEB, alle Länder außer Wien | dem ÖGK-Vertrag „rückwirkend mit 1.1.2024 österreichweit … beigetreten" (WKO Niederösterreich; Anlage 1 des Vertrags) | dieselbe Liste; der Verzicht auf die Valorisierung 2026 gilt „für alle Krankenversicherungsträger, die dem ÖGK-Gesamtvertrag beigetreten sind" |
-| SVS, alle Länder außer Wien | eigene Vereinbarung vom 17.12.2024, befristet bis 31.12.2026; Anlage 1 „Tarifvereinbarung" | Grundbeträge gleich (1,86 je km, 10,35, 12,42 / 14,49 / 16,56, „exkl. USt."); Rollstuhl und Mehrfachtransport nur als Prozentsatz, **keine Positionsnummern** — nicht belegt, also nicht freigegeben |
+| SVS, alle Länder außer Wien | eigene Vereinbarung vom 17.12.2024, befristet bis 31.12.2026; Anlage 1 „Tarifvereinbarung"; Tarifliste der SVS „Taxi Tarife ab 01.01.2025" | dieselbe Liste: Die Tarifliste der SVS führt 050–071 mit denselben Beträgen, auch für Rollstuhl und Mehrfachtransport; die Positionsnummern sind laut Auskunft der SVS (17.11.2026) „identisch mit denen der ÖGK", 2026 „keine Tariferhöhung". Träger: gewerblich Versicherte VSTR `40` mit der Landesstelle `41`–`49` als VSTRA, bäuerlich Versicherte `50`; BLNDA nach dem Sitz des Vertragspartners |
 | Wien (BVAEB, SVS, KFA) | eigene Tarifblätter der Fachgruppe Wien | nicht hinterlegt |
 
 **Ab 2027.** § 9 Abs. 3 sieht die jährliche Valorisierung „mit dem endgültigen
@@ -2022,8 +2022,8 @@ und Ausgangsbasis nennt der Vertrag nicht, und eine Tarifliste für 2027 war am
 11.11.2026 weder beim Fachverband noch bei den Landes-Fachgruppen
 veröffentlicht. Die Beträge werden deshalb nicht errechnet, sondern aus der
 Liste übernommen, sobald sie vorliegt (das Rundschreiben für 2026 erschien am
-15.12.2025). Die Vereinbarung der SVS endet mit 31.12.2026; eine Verlängerung
-war nicht zu finden.
+15.12.2025). Die Vereinbarung der SVS endet mit 31.12.2026; die Tarife 2027 sind
+laut SVS „derzeit noch in Verhandlung" (17.11.2026).
 
 **Kostenanteil des Versicherten.** Das Taxi hebt nichts ein: „Die Forderung oder
 Entgegennahme von Zuzahlungen … von Versicherten sind aus keinen, wie auch immer
@@ -2035,9 +2035,9 @@ Oberösterreich, Mai 2026). Die SVS verrechnet ihre 20 Prozent ebenfalls selbst.
 „GRU: ‚26' für Dialyse, ‚30' Strahlen-/Chemotherapie" (Schreiben vom
 23.05.2025).
 
-Offen: bei wem die Mindestpauschale im Mehrfachtransport zu verrechnen ist;
-welche Positionsnummern die SVS erwartet; ob BVAEB und SVS den Transportgrund
-wie die ÖGK gekennzeichnet haben wollen. Nicht geprüft wird, dass ein
+Offen: bei wem die Mindestpauschale im Mehrfachtransport zu verrechnen ist; ob
+die SVS den Transportgrund wie die ÖGK gekennzeichnet haben will (die BVAEB
+will es: 26, 30 und 40 Immuntherapie, Auskunft vom 16.11.2026). Nicht geprüft wird, dass ein
 Mehrfachtransport nicht teurer sein darf als die Einzeltransporte — dafür wären
 die Einzelstrecken nötig.
 
