@@ -13,9 +13,10 @@ import { EldaError } from './errors';
  * BVAEB ist rückwirkend mit 1.1.2024 österreichweit dem neuen ÖGK-Gesamtvertrag
  * beigetreten" (WKO Niederösterreich, „Krankenbeförderung – Verrechnung mit
  * Krankenkassen"). Die SVS hat eine eigene Vereinbarung vom 17.12.2024 mit
- * denselben Grundbeträgen (Anlage 1 „Tarifvereinbarung", Tarife ab 01.01.2025),
- * aber ohne Positionsnummern und ohne ausgerechnete Beträge für Rollstuhl und
- * Mehrfachtransport — für die SVS ist dieses Modul deshalb nicht belegt.
+ * denselben Grundbeträgen (Anlage 1 „Tarifvereinbarung", Tarife ab 01.01.2025);
+ * ihre Tarifliste „Taxi Tarife ab 01.01.2025" führt 050–071 mit denselben
+ * Beträgen, und laut Auskunft der SVS (17.11.2026) sind die Positionsnummern
+ * „identisch mit denen der ÖGK" — die Liste gilt damit auch für die SVS.
  *
  * Quellen:
  * - „TARIFLISTE Krankenbeförderung durch Vertragstaxi, gültig ab 01.01.2025"
