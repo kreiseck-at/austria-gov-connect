@@ -1,6 +1,6 @@
 {
   "name": "@kreiseck/distanzanzeiger",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Distanzanzeiger der österreichischen Sozialversicherung: Transportkilometer für die Krankenbeförderung",
   "license": "Apache-2.0",
   "author": "Kreiseck",

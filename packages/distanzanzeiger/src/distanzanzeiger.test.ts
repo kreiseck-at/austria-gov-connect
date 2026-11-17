@@ -134,6 +134,25 @@ const ANTWORT_ERGAENZT = {
   },
 };
 
+// Antwort der Testumgebung vom 17.11.2026 (Version 1.34.0) auf „st. pölten,
+// Hausnummer 1" (ohne Straße) → „3100 st. pölten, mariazeller str 79": Nach der
+// Meldung an die ÖGK rechnet der Server ab der Ortschaft, Straße und
+// Hausnummer bleiben leer.
+const ANTWORT_ORTSCHAFT = {
+  success: true,
+  notes: '',
+  version: '1.34.0 Datenstand: 10/26',
+  data: {
+    distance: {
+      ort: [
+        station('3158', '3100', 'Sankt Pölten', '', '', 'N2803E4738', 0),
+        station('3158', '3100', 'Sankt Pölten', 'Mariazeller Straße', '79', 'N2802E4738', 1.2),
+      ],
+    },
+    total: 1.2,
+  },
+};
+
 interface Aufruf {
   url: string;
   init: RequestInit;
@@ -353,6 +372,35 @@ test('Vollständig angefragte Adresse: nur Kennzahlen sind ergänzt, umgeschrieb
   assert.deepEqual(e.stationen[3]!.ergaenzt, ['okz']);
   assert.equal(e.stationen[3]!.angefragt.str, 'mariazeller str');
   assert.equal(e.stationen[3]!.str, 'Mariazeller Straße');
+});
+
+test('Angefragte Hausnummer, die der Server nicht verwendet, steht in verworfen', async () => {
+  const e = await client(attrappe([json(ANTWORT_ORTSCHAFT)])).abfragen([
+    { ort: 'st. pölten', hnr: '1' },
+    { plz: 3100, ort: 'st. pölten', str: 'mariazeller str', hnr: '79' },
+  ]);
+  if (e.art !== 'distanz') return assert.fail('Distanz erwartet');
+  const [start, ziel] = e.stationen;
+  // Gerechnet wird ab der Ortschaft: Die Hausnummer fällt still weg, ergänzt ist nur, was immer dazukommt.
+  assert.deepEqual(start!.ergaenzt, ['plz', 'okz']);
+  assert.deepEqual(start!.verworfen, ['hnr']);
+  assert.equal(start!.hnr, '');
+  assert.equal(start!.einrichtung, false);
+  // Umgeschriebene Schreibweise („mariazeller str" → „Mariazeller Straße") ist nicht verworfen.
+  assert.deepEqual(ziel!.verworfen, []);
+  assert.equal(e.kilometer, 1);
+});
+
+test('Ergänzte Felder sind nie zugleich verworfen', async () => {
+  const e = await client(attrappe([json(ANTWORT_ERGAENZT)])).abfragen([
+    { ort: 'st. pölten', hnr: '1' },
+    { ort: 'melk, kh' },
+  ]);
+  if (e.art !== 'distanz') return assert.fail('Distanz erwartet');
+  assert.deepEqual(
+    e.stationen.map((s) => s.verworfen),
+    [[], []],
+  );
 });
 
 test('Antwort mit anderer Anzahl von Orten als angefragt ist ein Protokollfehler', async () => {

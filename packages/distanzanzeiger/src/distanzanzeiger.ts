@@ -75,6 +75,19 @@ export interface DistanzStation {
    */
   ergaenzt: DistanzFeld[];
   /**
+   * Felder, die in der Anfrage belegt waren und in der Station leer sind — der
+   * Server hat sie nicht verwendet.
+   *
+   * Auf die Meldung der ÖGK hin (Rückfall soll die Ortschaft sein) rechnet die
+   * Testumgebung (Version „1.34.0", 17.11.2026) bei „st. pölten, Hausnummer 1"
+   * ohne Straße nicht mehr ab einer selbst gewählten Straße, sondern ab der
+   * Ortschaft: Straße und Hausnummer bleiben leer, die Hausnummer fällt still
+   * weg, `ergaenzt` meldet nichts Auffälliges. Der Echtbetrieb zieht nach. Wie
+   * bei `ergaenzt` meldet das Paket nur; was daraus folgt, entscheidet der
+   * Aufrufer. Verglichen wird nur leer gegen belegt, nie die Schreibweise.
+   */
+  verworfen: DistanzFeld[];
+  /**
    * Die Station trägt eine siebenstellige Sonder-OKZ („Krankenhäuser etc.",
    * Seite 4) — der Server hat eine Einrichtung erkannt, etwa „kh stockerau".
    * Straße und Hausnummer sind dann die der Einrichtung.
@@ -306,6 +319,7 @@ function liesAntwort(roh: unknown, gefragt: readonly Record<DistanzFeld, string>
         meterAusland: inMeter(o['distance_ausland'], `distance_ausland des Ortes ${i + 1}`, roh),
         angefragt,
         ergaenzt: FELDER.filter((f) => angefragt[f] === '' && adresse[f].trim() !== ''),
+        verworfen: FELDER.filter((f) => angefragt[f].trim() !== '' && adresse[f].trim() === ''),
         einrichtung: /^\d{7}$/.test(adresse.okz),
       };
     });

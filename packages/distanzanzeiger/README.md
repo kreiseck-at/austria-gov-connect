@@ -69,10 +69,16 @@ Jede Station trägt deshalb:
 | `angefragt` | der Standort, wie er gesendet wurde |
 | `plz`, `ort`, `okz`, `str`, `hnr` | die Adresse, die der Server verwendet hat |
 | `ergaenzt` | Felder, die in der Anfrage leer waren und die der Server belegt hat |
+| `verworfen` | Felder, die in der Anfrage belegt waren und in der Station leer sind — der Server hat sie nicht verwendet |
 | `einrichtung` | `true` bei siebenstelliger Sonder-OKZ — der Server hat eine Einrichtung erkannt (z. B. „kh stockerau") und deren Adresse eingesetzt |
 
 Steht `str` oder `hnr` in `ergaenzt` und ist `einrichtung` nicht gesetzt, hat der
-Server eine Straße oder Hausnummer gewählt. Was daraus folgt — anzeigen,
+Server eine Straße oder Hausnummer gewählt. Steht `str` oder `hnr` in `verworfen`,
+hat er eine angefragte Straße oder Hausnummer weggelassen und ab einem gröberen
+Punkt gerechnet: Nach der Meldung an die ÖGK antwortet die Testumgebung (Version
+„1.34.0", 17.11.2026) auf „st. pölten, Hausnummer 1" ohne Straße mit der
+Ortschaft Sankt Pölten — Straße und Hausnummer leer, `ergaenzt` nur `plz` und
+`okz`. Der Echtbetrieb zieht laut ÖGK nach. Was daraus folgt — anzeigen,
 bestätigen lassen, neu anfragen —, entscheidet die Anwendung; dieses Paket meldet
 nur. Felder, die in der Anfrage belegt waren, vergleicht es nicht: Der Server
 schreibt sie um („st. pölten" → „Sankt Pölten", „mariazeller str" → „Mariazeller
@@ -129,11 +135,13 @@ Der API-Key steht in keiner Fehlermeldung.
   Adresse, Trefferliste.
 - Die Tests laufen gegen eine Attrappe mit den Beispielen der Dokumentation und
   den beobachteten Antworten; sie sprechen nie mit dem Server.
+- Gegen die Testumgebung gelaufen am 17.11.2026 (Version „1.34.0 Datenstand:
+  10/26"): Der Key gilt dort seit der Synchronisierung durch die ÖGK; „Ort und
+  Hausnummer ohne Straße" rechnet ab der Ortschaft (`verworfen: ['hnr']`) statt
+  ab einer selbst gewählten Straße. Im Echtbetrieb wird die Korrektur laut ÖGK
+  nachgezogen; bis dahin kann dort weiter `ergaenzt: [..., 'str']` kommen.
 - Offen: Die Ablehnung ohne gültigen Key kommt laut Dokumentation mit HTTP 200,
-  beobachtet wurde 401 — der Client liest den Körper. Dass der Server bei „Ort
-  und Hausnummer ohne Straße" selbst eine Straße wählt, hält die ÖGK für nicht
-  beabsichtigt (Rückfall soll die Ortschaft sein); das Verhalten kann sich
-  ändern.
+  beobachtet wurde 401 — der Client liest den Körper.
 
 ## Quellen
 
